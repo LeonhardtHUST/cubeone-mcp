@@ -1,0 +1,73 @@
+{
+  "mcpServers": {
+    "siyuan": {
+      "url": "https://siyuan.ts.leonhardt.tech/mcp/",
+      "headers": {
+        "Authorization": "***REDACTED***"
+      },
+      "disabled": true
+    },
+    "penpot-official-mcp": {
+      "url": "https://design.penpot.app/mcp/stream?userToken=***REDACTED***",
+      "disabled": true
+    },
+    "hig-doctor": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "hig-mcp"
+      ],
+      "disabled": true
+    },
+    "penpot-api": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@zcubekr/penpot-mcp-server"
+      ],
+      "env": {
+        "PENPOT_API_URL": "https://design.penpot.app",
+        "PENPOT_ACCESS_TOKEN": "***REDACTED***"
+      },
+      "disabled": true
+    },
+    "agentic-hil": {
+      "command": "C:\\Users\\Leon\\.local\\bin\\agentic-hil.exe",
+      "args": [
+        "mcp-stdio"
+      ],
+      "disabled": true
+    },
+    "stm32-stlink": {
+      "command": "C:\\Users\\Leon\\.workbuddy\\binaries\\node\\versions\\22.22.2-6\\node.exe",
+      "args": [
+        "C:\\Users\\Leon\\.workbuddy\\mcp-servers\\stmcp\\dist\\index.js",
+        "serve"
+      ],
+      "env": {
+        "STMCP_GDBSERVER_PATH": "C:/ST/STM32CubeCLT_1.22.0/STLink-gdb-server/bin/ST-LINK_gdbserver.exe",
+        "STMCP_PROGRAMMER_CLI_PATH": "C:/ST/STM32CubeCLT_1.22.0/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe",
+        "STMCP_ARM_GDB_PATH": "C:/ST/STM32CubeCLT_1.22.0/GNU-tools-for-STM32/bin/arm-none-eabi-gdb.exe",
+        "STMCP_LOG_LEVEL": "info"
+      },
+      "disabled": true
+    },
+    "rea": {
+      "command": "C:\\Users\\Leon\\.vite-plus\\js_runtime\\node\\26.13.0\\node.exe",
+      "args": [
+        "E:\\Tools\\rea\\node_modules\\rea-agents\\scripts\\rea.mjs",
+        "mcp"
+      ],
+      "env": {
+        "GHIDRA_INSTALL_DIR": "E:/Tools/ghidra_12.1.4_PUBLIC",
+        "JAVA_HOME": "E:/Tools/jdk-25"
+      }
+    },
+    "lighthouse-ops": {
+      "type": "streamableHttp",
+      "url": "https://lightai.cloud.tencent.com/workbuddy/mcp",
+      "timeout": 30000,
+      "disabled": false
+    }
+  }
+}

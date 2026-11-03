@@ -8,11 +8,22 @@
 # 原仓改动必须发生在原仓自己，这里只是实验靶场。
 /testbeds/
 
-# ── 本机证据日志（Phase 0–3 的命令输出）──────────────────────
-# 体积大、与本机环境强绑定；只在本地留存，路径写进 docs/TASKBOARD.md。
-# 保留 .gitkeep 让目录结构在 clone 后可预期。
-docs/logs/*
+# ── 证据日志（Phase 0–3 的命令输出）──────────────────────────
+# 决策 D8：文本证据入库（L0–L5 声明的唯一可核验凭据，KB 级），
+# 二进制/大件产物忽略（可由源码重建，无入库价值）。
+docs/logs/**/*.elf
+docs/logs/**/*.bin
+docs/logs/**/*.hex
+docs/logs/**/*.map
+docs/logs/**/*.zip
+docs/logs/**/*.tar.gz
 !docs/logs/.gitkeep
+
+# ── 配置文件备份（决策 D11）─────────────────────────────────
+# docs/backups/ 的脱敏快照入库；含明文凭据的原始备份一律留本机，禁止入库。
+docs/backups/*.raw.json
+docs/backups/*.raw
+*.raw.json
 
 # ── Python 产物 ──────────────────────────────────────────────
 __pycache__/

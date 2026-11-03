@@ -1,0 +1,27 @@
+--- docs/backups/mcp.json.bak-20261103-114836	2026-11-01 20:39:52.458848900 +0800
++++ docs/backups/mcp.proposed.json	2026-11-03 11:50:59.760376100 +0800
+@@ -1,5 +1,24 @@
+ {
+   "mcpServers": {
++    "vscode-cube-mcp": {
++      "command": "C:\\Users\\Leon\\.local\\bin\\vscode-cube-mcp.exe",
++      "args": [],
++      "env": {
++        "ST_CUBEMX_EXE": "C:\\ST\\STM32CubeMX\\STM32CubeMX.exe",
++        "ST_CUBEMX_ALLOWED_ROOTS": "D:\\Projects;C:\\Users\\Leon\\WorkBuddy",
++        "ST_CUBEMX_TIMEOUT": "300"
++      }
++    },
++    "platformio.mcp": {
++      "command": "uvx",
++      "args": [
++        "platformio.mcp"
++      ],
++      "env": {
++        "PLATFORMIO_MCP_POLICY": "build_only",
++        "PLATFORMIO_MCP_PIO": "C:\\Users\\Leon\\.platformio\\penv\\Scripts\\pio.exe"
++      }
++    },
+     "siyuan": {
+       "url": "https://siyuan.ts.leonhardt.tech/mcp/",
+       "headers": {
