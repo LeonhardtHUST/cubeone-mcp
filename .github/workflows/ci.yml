@@ -107,7 +107,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # ⚠️ 本 job **故意**拉全历史（fetch-depth: 0），与 pytest / node job 不同：
+      #   看板一致性校验的判据③（发布一致性）依赖 `git tag`——打了 v0.6.*/v0.7.* 的 tag
+      #   就必须能在看板上看到 T3.5 已记账。checkout 默认 fetch-depth: 1 且不拉 tag，
+      #   那样该判据会**静默降级成 note**（等于加了一个在 CI 里从不生效的检查，正是本项目
+      #   反复强调的"静默跳过等于假装检查过"）。代价只有本 job 多克隆一些历史。
+      #   pytest / node job 不需要 tag，故保持默认浅克隆，不跟着全量拉。
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v6
         with:
@@ -147,6 +155,17 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+
+      # ── 看板一致性（M3 / R-E1）──────────────────────────────────────────
+      # 为什么放在"脚本入口冒烟"之前：本步骤验的是**文档账目**（快照数字、证据链接、发布记账），
+      # 它与脚本能否起来无关。先跑它，失败时的定位更直接（不会混在冒烟输出里）。
+      # 三组判据：① 任务表 ↔ §4 快照逐段逐状态 + 小计/合计自算；② 证据路径存在性
+      # （跳过 docs/logs/ 并打印跳过条数，否则 CI 上必然恒红）；③ tag 已存在时 T3.5 不得"待开始"。
+      # 判据③ 依赖 tag ⇒ 本 job 的 checkout 已显式 `fetch-depth: 0`（见上方注释）。
+      # 若有人把它改回浅克隆，判据③ 会退化成 note「仓库内没有可读 tag…该判据无适用对象」，
+      # 而步骤**仍然绿**——所以那条 note 出现在 CI 日志里就是配置被改坏的信号，别当正常输出。
+      - name: 看板一致性校验（TASKBOARD ↔ 快照 ↔ 证据路径）
+        run: python tools/check_taskboard.py
 
       # 冒烟：这几个脚本都是纯标准库、不碰 CubeMX，能在 ubuntu-latest 上真跑通。
       # 目的是防"文件还在但入口坏了"这类只有到用户机器上才发现的退化。
