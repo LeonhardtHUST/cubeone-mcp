@@ -58,6 +58,21 @@ STM32 开发里有一种很难发现的失败：
 工具清单、退出码判据、发布与注册细节见 [`docs/guides/npm-publish-and-codebuddy.md`](docs/guides/npm-publish-and-codebuddy.md)。
 能力边界对 MCP 通道同样适用：**非 GPIO 外设的增改依旧没有工具能力**，核验器仍是唯一安全网。
 
+### 安全默认值：`CUBEONE_ALLOWED_ROOTS` 未设置 = 本次调用没有任何路径限制
+
+这一条必须读，因为它的默认值**不安全**：
+
+| 情形 | 实际行为 |
+|---|---|
+| 设了 `CUBEONE_ALLOWED_ROOTS` | 路径参数不在白名单内 → 拒绝（返回「越界」） |
+| **未设** `CUBEONE_ALLOWED_ROOTS` | ⚠️ **不校验，工具可以访问任意路径**——只在返回文本末尾回显 `allowed_roots=未设置(本次调用无路径限制，见 README 安全节)` |
+
+也就是说"能跑通"不等于"被限制住了"。默认值这样定是为了让第一次 `npx` 不至于处处报错，**不是**因为它安全。
+
+**想让它变成硬要求**：在注册条目里加 `"CUBEONE_REQUIRE_ROOTS": "1"`。启用后若 `CUBEONE_ALLOWED_ROOTS` 为空，server **启动即退出 1** 并在 stderr 打印配置方法——不会静默降级成"无限制"。不设这个 env 时行为与本条之前完全一致（opt-in，不改默认）。
+
+> **计划变更**：0.7.0 会把默认值翻转为 **fail-closed**（未设白名单就拒绝所有路径参数），并保留 `CUBEONE_ALLOW_NO_ROOTS=1` 作为显式逃生门。届时属 BREAKING，release notes 会给迁移方法。
+
 ## 快速开始
 
 依赖：**Python 3.11+**（CI 仅覆盖 3.11 / 3.13，更早版本未验证；脚本全为标准库）、**STM32CubeMX 6.18.1**、**PlatformIO Core**（仅构建/烧录需要）。
@@ -134,7 +149,7 @@ python scripts/verify_generation.py ... \
 
 | 场景 | 内容 | 结果 | 等级 |
 |---|---|---|---|
-| S1 | G474 模板新增一个 GPIO 输出（PB0） | 7 项 pass；构建 10.95 s / 0 告警；**Flash 3 744 → 3 792 B（+48）**、RAM 1 584 B 不变；实质改动仅 `main.c` + `.ioc`，`USER CODE` 块零触碰 | L4 + L3 |
+| S1 | G474 模板新增一个 GPIO 输出（PB0） | 7 项 pass；构建 **12.06 s** / 0 告警；**Flash 3 744 → 3 792 B（+48）**、RAM 1 584 B 不变；实质改动仅 `main.c` + `.ioc`，`USER CODE` 块零触碰 | L4 + L3 |
 | S2 | 真实工程只读审计（F103 数字钟） | 20 引脚逐条核对；**实际主频 8 MHz**（`.ioc` 里的 `HSE_VALUE` 是未启用的残留值）；构建 17.76 s；Flash 4 136 B / RAM 1 680 B | L1 + L3 |
 | S3 | 注入两类错误，验证核验器抓得住 | 有引脚映射但缺白名单 → **日志有 `Cannot map`**；只声明 IP 无引脚映射 → **日志干净，只有 `main_init_present` 能发现** | L2 |
 
@@ -227,11 +242,13 @@ CI 覆盖的是「脚本与核验器的逻辑没退化」，**不覆盖**「某�
 
 | 版本 | 指什么 | 当前值 |
 |---|---|---|
-| **仓库发布标签** | 对外发布的整体快照 | `v0.1.1` |
-| `SKILL.md` 的 `version` | Agent 操作面的文档迭代号 | `0.6.0` |
+| **仓库发布标签** | 对外发布的整体快照 | `v0.6.2`（本次发布后） |
+| `SKILL.md` 的 `version` | Agent 操作面的文档迭代号 | `0.6.2` |
 | `verify_generation.py --version` | 核验器实现 + JSON schema | `1.2.0`（schema `/2`） |
 
-引用时请写明是哪一轴：说「核验器 1.2.0」比说「0.1.0」有用得多，因为前者决定了 `verify.json` 的形状。
+**发布轴规则**：前两轴与 `package.json` 的 `version` 必须**同值同步**——`git tag` = `package.json` = `SKILL.md` frontmatter（如 `v0.6.2` / `0.6.2` / `0.6.2`）；核验器那一轴**故意独立**（它是判据契约号，与包版本解耦）。每次打 tag 必须同时有 **GitHub Release + npm 发布 + 看板回填**，三者缺一视为发布未收口。规则出处与理由见 [`docs/DECISIONS.md`](docs/DECISIONS.md) **D33**。
+
+引用时请写明是哪一轴：说「核验器 1.2.0」比说「0.6.2」有用得多，因为前者决定了 `verify.json` 的形状。
 
 ## License
 
