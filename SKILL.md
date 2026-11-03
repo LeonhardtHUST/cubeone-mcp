@@ -1,7 +1,7 @@
 ---
 name: platform32-mcp
 description: "STM32 工程全流程编排：把 .ioc 改配置 → CubeMX 代码生成 → 生成核验（G1 强制关卡，verify_generation.py）→ PlatformIO 构建 →（接板后）烧录与串口验证 串成一条带 L0–L5 验证等级声明的流水线，并输出符合模板 AGENTS.md 提交规范的 commit。同时提供双通道执行：已注册 MCP（vscode-cube-mcp / platformio.mcp）走工具通道，未注册走 CubeMX CLI + pio CLI 等价通道，两条通道的判据与证据要求完全相同。当用户说「改一下这个 ioc」「加一个 GPIO / UART / ADC 通道」「CubeMX 重新生成代码」「生成完帮我核一遍」「有没有被静默丢弃的外设」「pio 构建一下」「Flash/RAM 占多少」「烧进去看看」「串口有输出吗」「这个模板工程跑不起来」时使用。只读审计不写盘；任何写操作前必须先备份 .ioc 并报告将改动的对象，生成后必须跑核验器并如实声明验证等级；不替用户提交未经核验的代码，不碰 testbeds/ 之外的模板原仓。"
-version: 0.3.0
+version: 0.3.1
 agent_created: true
 license: MIT
 compatibility: Python 3.8+（核验器只依赖标准库）；CubeMX 6.18.1（路径不固定，见 §0.2）；PlatformIO Core 6.x；MCP 通道可选，未注册时用 §0.4 的 CLI 等价命令
@@ -48,8 +48,8 @@ compatibility: Python 3.8+（核验器只依赖标准库）；CubeMX 6.18.1（�
 | `cubemx_help`、`pio_system_info` 调用成功 | **MCP 通道** | 优先用，省掉手搓命令行 |
 | 上述调用不存在 / 报"未知工具" | **CLI 等价通道** | 用 §0.4 的命令，判据照旧 |
 
-注册方法见 `docs/guides/mcp-registration.md`（⚠️ 该文件截至 2026-11-03 尚未落盘，
-落盘后本链接自动生效；在此之前以 `docs/DECISIONS.md` D12 为范围依据）。
+注册方法见 `docs/guides/mcp-registration.md`（✅ 已落盘；注册属用户自己的选择，
+**本仓不替用户改 `~/.workbuddy/mcp.json`**，见 `docs/DECISIONS.md` D12）。
 
 **两条通道都不可用时停手报错**，不许降级成"手改 `.ioc` 文本"绕过核验（理由见 §2 第 5 步）。
 
@@ -175,8 +175,11 @@ python scripts/verify_generation.py \
 > `log_cannot_map` 的 detail 会附带说明：另有 `OptionalMessage_ERROR`（如 G474 的
 > `VP_RIF_VS_RIF1`，D8）**不计入判定**。看到它不算失败，也不要为它删外设。
 
-**契约已定、v1.0.0 尚未实现（3 项）** —— ⚠️ **在 verifier-dev 交付前不要依赖，
-也不要在命令里传下表中的新参数**：
+**书面契约之外的扩展需求（3 项，v1.0.0 未实现）** —— ⚠️ 注意：这 3 项**不在**
+`docs/reports/t1.2-verifier-contract.md` 的契约里（该文档 §1.4 只定义 5 个 check id），
+是 lead 在 T1.4 派活时提出的**扩展意向**。要在 v1.1 加上，得**先改契约文档**再改实现，
+否则下游（本文、S1–S3 场景、CI）会按不同版本的行为各自假设。
+**在实现并写入契约之前，不要依赖，也不要在命令里传下表中的新参数**：
 
 | id | 阻塞？ | 拟判据 | 需要的入参 |
 |---|---|---|---|
@@ -184,7 +187,7 @@ python scripts/verify_generation.py \
 | `ioc_ask_for_migrate` | 是 | `.ioc` 含 `AskForMigrate=true` → 非交互生成会**阻塞到超时**（P1）；不传则 `skip` | `--ioc <工程根/xxx.ioc>` |
 | `ioc_version_stamp` | 否 | `.ioc` 的 `MxCube.Version` 与锁定 6.18.1 不一致 → 重新生成会产生噪音 diff（P2） | `--ioc` |
 
-**这 3 项实现之前的替代做法**（写进 §2 第 5 步，别当成实现了）：
+**这 3 项落地之前的替代做法**（写进 §2 第 5 步，别当成实现了）：
 
 ```bash
 grep -rn "project path" --include='*.mx' <工程根> | grep -Ei '[A-Za-z]:' # 应为空（P4）
@@ -265,8 +268,15 @@ grep -n "AskForMigrate" <工程根>/*.ioc     # true → 先处理迁移，别�
 另两个已知坑：`project path` 会再追加一层工程名（📄 `TOOLING-cubemx.md` §3.1）；
 `syscalls.c` / `sysmem.c` 叠加路径会让这两个文件不更新（D9，不阻塞）。
 
-一行命令同时做完"备份 + 生成 + 核验 + 失败回滚"的封装是 `regen.sh`
-（`-e GPIO,TIM4 --out <证据目录>`；`--dry-run` 先看命令、`--skip-generate` 只重跑核验）。
+一行命令同时做完"备份 + 生成 + 核验 + 失败回滚"的封装是 `regen.sh`：
+
+- `-e, --expect` **可省略**——省略时它从 `.ioc` 的 `Mcu.IP*` **自动推导**（滤掉
+  `NVIC/RCC/SYS/DBGMCU` 再补 `GPIO`）。自动推导是"全量"语义，**不等于**"你本次期望的"；
+  要精确控制就显式传 `-e`（例：`regen.sh <工程> -e GPIO,TIM4 --out <证据目录>`）。
+- `--out` 默认落 `${TMPDIR:-/tmp}/platform32-regen`，**故意不落在工程里**，避免污染 `git status`。
+  但当次证据要入库时，显式 `--out docs/logs/phaseN/<场景>/`。
+- 还有 `--dry-run`（先看命令）、`--skip-generate`（只重跑核验）、
+  `--allow-dirty-ioc`（放行有未提交改动的 `.ioc`，默认拒绝）。
 
 ### 第 5 步 · **生成核验（G1，硬关卡）**
 
@@ -287,7 +297,8 @@ python scripts/verify_generation.py \
   静默丢弃的外设**能构建成功**，这正是它危险的地方（H-6）。
 - 退出码 2 = 我们自己的输入错了（路径写错/文件不存在），**不是**"配置有问题"，别误报给用户。
 - `syscalls_path` 报 warn **不阻塞**，但要写进汇报（D9）。
-- **1.4 里那 3 项未实现的检查，用 1.4 末的三条 `grep` 手工补**，结果一并贴进汇报。
+- **1.4 里那 3 项扩展检查（v1.1 才可能落地）当前必须手工补**，
+  用 1.4 末的三条 `grep`，结果一并贴进汇报——**不要**因为"核验器过了"就跳过这三条。
 
 **核验器不可用时不许开工**（第 0 步已查）。它的唯一职责就是抓 H-6 那种"返回成功但什么都没做"，
 没有它这条流水线等于没有安全网。
@@ -454,7 +465,7 @@ P1–P4 是本项目 Phase 1 的**实跑记录**（✅）。
 - 模板仓关键文档的**链接**（不复制内容）：`references/README.md`。
 - 任务与进度真源：`docs/TASKBOARD.md`；已确认决策（含 D1–D12）：`docs/DECISIONS.md`。
 - 执行计划与调研报告：`docs/2026-11-03-agent-team-plan.md`、`docs/2026-11-03-execution-research.md`。
-- MCP 注册方法：`docs/guides/mcp-registration.md`（⚠️ 截至 2026-11-03 尚未落盘）。
+- MCP 注册方法：`docs/guides/mcp-registration.md`（✅ 已落盘）。
 - 单写者边界（计划 §0.2-1）：`scripts/`、`tests/` → verifier-dev；
   `SKILL.md`、`docs/`、`README.md`、`references/` → skill-author；`testbeds/` → scenario-tester；
   `.github/` → ci-agent。**本文件只由 skill-author 改**，别人要改请走 lead 转派。
@@ -468,6 +479,7 @@ P1–P4 是本项目 Phase 1 的**实跑记录**（✅）。
 | 0.1.0 | 2026-11-03 | 建骨架：frontmatter + 章节大纲 + TODO 标记 | T1.1 |
 | 0.2.0 | 2026-11-03 | 初稿：§0 硬前提、§2 八步流程、§3 L0–L5、§4 提交模板、§5 D/H 速查；§1 留 `TODO(T1.2)` | T1.4 |
 | 0.3.0 | 2026-11-03 | §0 改双通道（MCP / CLI 等价，D12）；§1 按 T1.2 实现回填（契约 + 5 项已实现判据 + 3 项待实现）；§2 第 3 步标"方案待 T1.6"不再写死工具名；§2 第 5 步改为真实核验器调用；§5 增 P1–P4 | T1.4 |
+| 0.3.1 | 2026-11-03 | 勘误：`docs/guides/mcp-registration.md` 已落盘（取消"尚未落盘"）；那 3 项检查改为"书面契约之外的扩展意向"（`t1.2-verifier-contract.md` 只定义 5 项）；补 `regen.sh` 的 `-e` 自动推导与 `--out` 默认值 | T1.4 |
 | 待定 | — | 同行评审（lead 逐条对照 `docs/reports/t1.2-verifier-contract.md`） | T1.4 |
 | 待定 | — | 定稿（吸收 S1–S3 实测教训 + `cubemx_configure` 定论） | T1.9 |
 | 待定 | — | 合并 Phase 2 串口/烧录增量 + L 等级自查清单 | T3.3 |
