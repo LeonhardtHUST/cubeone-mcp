@@ -13,7 +13,9 @@
 ``test_vp_rif_noise_allowlisted``        D8 噪音白名单 → warn 且 verdict 仍 pass
 ``test_vp_rif_without_allowlist_fails``  未开白名单时不得被默认放过
 ``test_mxproject_abs_path_*``            ``.mxproject`` 盘符绝对路径 → fail
+``test_mx_script_*``                     ``.mx`` 脚本绝对路径三态（自指/指别处/占位符）
 ``test_syscalls_overlay_warning_only``   D9 叠加路径 → 仅 warning，不阻塞
+``test_blocking_field_semantics``        ``blocking`` 是"检查性质"，不随 status 漂移
 ``test_main_init_call_commented``        注释掉的调用不算"被调用"
 ``test_dead_definition_in_comment``      注释里的定义不算"有定义"
 ``test_usart2_resolves_uart_suffix``     ``USART2`` → ``MX_USART2_UART_Init`` 容错
@@ -74,11 +76,12 @@ def run_verify(
     main_c: Path = MAIN_G474,
     mxproject: Path = MXP_RELATIVE,
     expect: str = "GPIO",
+    project_root: Path | None = None,
     extra: tuple[str, ...] = (),
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
     """跑一次 CLI 并返回 (进程结果, JSON 报告)。"""
     json_out = tmp_path / "report.json"
-    result = run_cli(
+    args: list[str] = [
         "--log",
         str(log),
         "--main-c",
@@ -89,8 +92,11 @@ def run_verify(
         expect,
         "--json-out",
         str(json_out),
-        *extra,
-    )
+    ]
+    if project_root is not None:
+        args.extend(["--project-root", str(project_root)])
+    args.extend(extra)
+    result = run_cli(*args)
     assert json_out.is_file(), f"CLI 未生成 JSON 报告：{result.stderr}"
     report = json.loads(json_out.read_text(encoding="utf-8"))
     assert isinstance(report, dict)
@@ -130,6 +136,8 @@ def test_positive_g474_template(tmp_path: Path) -> None:
         vg.CHECK_MAIN_INIT_PRESENT: "pass",
         vg.CHECK_MAIN_INIT_CALLED: "pass",
         vg.CHECK_MXPROJECT_ABS_PATH: "pass",
+        # 未传 --project-root → .mx 扫描 skip（向后兼容，不报 fail）
+        vg.CHECK_MX_SCRIPT_ABS_PATH: "skip",
         vg.CHECK_SYSCALLS_PATH: "pass",
     }
     summary = report["summary"]
@@ -137,6 +145,8 @@ def test_positive_g474_template(tmp_path: Path) -> None:
     assert summary["errors"] == 0
     assert summary["warnings"] == 0
     assert summary["checked_peripherals"] == ["GPIO"]
+    # skip 的原因必须写进 summary.notes，不能只躺在 check detail 里
+    assert any("project-root" in str(note) for note in summary["notes"])
 
     # detail 必须写清实际匹配到的符号名（下游文档/S1 场景要靠它写证据）。
     present = check_of(report, vg.CHECK_MAIN_INIT_PRESENT)
@@ -147,6 +157,8 @@ def test_positive_g474_template(tmp_path: Path) -> None:
     assert inputs["log"].endswith("log_clean.txt")
     assert inputs["main_c"].endswith("main_g474_template.c")
     assert inputs["mxproject"].endswith("mxproject_relative.txt")
+    assert inputs["project_root"] is None
+    assert inputs["effective_allow_signals"] == []
 
 
 def test_positive_multi_peripheral(tmp_path: Path) -> None:
@@ -173,7 +185,7 @@ def test_h6_missing_s_prefix_fails_cannot_map(tmp_path: Path) -> None:
     assert report["verdict"] == "fail"
     cannot_map = check_of(report, vg.CHECK_LOG_CANNOT_MAP)
     assert cannot_map["status"] == "fail"
-    assert cannot_map["level"] == "error"
+    assert cannot_map["blocking"] is True
     detail = str(cannot_map["detail"])
     assert "TIM4_CH1" in detail
     assert "L4" in detail or "L" in detail  # 报了行号
@@ -222,7 +234,8 @@ def test_tim4_silently_dropped(tmp_path: Path) -> None:
     # 一个外设都没有定义时，"是否被调用"无从核验 → skip（而不是再报一条 fail）。
     called = check_of(report, vg.CHECK_MAIN_INIT_CALLED)
     assert called["status"] == "skip"
-    assert called["level"] == "warning"
+    # blocking 描述的是"该检查失败时是否阻塞"，与本次 status 无关（skip 也是 True）。
+    assert called["blocking"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +255,7 @@ def test_vp_rif_noise_allowlisted(tmp_path: Path) -> None:
     assert report["verdict"] == "pass"
     cannot_map = check_of(report, vg.CHECK_LOG_CANNOT_MAP)
     assert cannot_map["status"] == "warn"
-    assert cannot_map["level"] == "warning"
+    assert cannot_map["blocking"] is True
     assert "VP_RIF_VS_RIF1" in str(cannot_map["detail"])
     summary = report["summary"]
     assert isinstance(summary, dict)
@@ -284,6 +297,142 @@ def test_mxproject_relative_paths_pass() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 6b. CubeMX 脚本（`.mx`）里的绝对路径：三态判据，不是"有盘符就 fail"
+# ---------------------------------------------------------------------------
+def make_fake_project(root: Path, mx_body: str, *, script_name: str = "cubemx-init.mx") -> Path:
+    """在临时目录里造一个最小工程骨架 + 一份 .mx 脚本。"""
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True, exist_ok=True)
+    (scripts / script_name).write_text(mx_body, encoding="utf-8")
+    return root
+
+
+def test_mx_script_absolute_path_pointing_to_self_passes(tmp_path: Path) -> None:
+    """指向本工程的绝对路径**是合规的**（模板 A1：CubeMX 脚本不支持变量）。"""
+    project = make_fake_project(
+        tmp_path / "board",
+        f"load STM32G474VETx\nproject path {tmp_path / 'board'}\nproject generate\nexit\n",
+    )
+    result, report = run_verify(tmp_path, project_root=project)
+
+    check = check_of(report, vg.CHECK_MX_SCRIPT_ABS_PATH)
+    assert check["status"] == "pass", check["detail"]
+    assert check["blocking"] is True
+    assert result.returncode == vg.EXIT_PASS
+    assert "指向本工程" in str(check["detail"])
+
+
+def test_mx_script_absolute_path_pointing_elsewhere_fails(tmp_path: Path) -> None:
+    """指向**别的工程**才是缺陷：生成会写进另一处，克隆到新机器必踩。"""
+    project = make_fake_project(
+        tmp_path / "board",
+        "# 从裸 MCU 建工程（A1）\nproject path D:\\Projects\\GitHub\\other-board\nproject generate\nexit\n",
+    )
+    result, report = run_verify(tmp_path, project_root=project)
+
+    check = check_of(report, vg.CHECK_MX_SCRIPT_ABS_PATH)
+    assert check["status"] == "fail"
+    assert check["blocking"] is True
+    assert result.returncode == vg.EXIT_FAIL
+    detail = str(check["detail"])
+    assert "other-board" in detail
+    assert "cubemx-init.mx:2:" in detail  # 报相对路径 + 行号
+    assert "in_comment=false" in detail
+
+
+def test_mx_script_placeholder_warns_not_fails(tmp_path: Path) -> None:
+    """``__PROJECT_DIR__`` 未替换 = 脚本没配好 → warn（不阻塞，A1 的占位形态）。"""
+    project = make_fake_project(
+        tmp_path / "board",
+        "load STM32G474VETx\nproject path __PROJECT_DIR__\nproject generate\nexit\n",
+    )
+    result, report = run_verify(tmp_path, project_root=project)
+
+    check = check_of(report, vg.CHECK_MX_SCRIPT_ABS_PATH)
+    assert check["status"] == "warn"
+    assert result.returncode == vg.EXIT_PASS
+    detail = str(check["detail"])
+    assert "占位符" in detail
+    assert "__PROJECT_DIR__" in detail
+
+
+def test_mx_script_comment_hit_is_marked_as_comment(tmp_path: Path) -> None:
+    """写在注释里的绝对路径照样报出来，但标 ``in_comment=true`` 供人判断。"""
+    project = make_fake_project(
+        tmp_path / "board",
+        "# project path D:\\Projects\\GitHub\\other-board\nproject generate\nexit\n",
+    )
+    _, report = run_verify(tmp_path, project_root=project)
+
+    check = check_of(report, vg.CHECK_MX_SCRIPT_ABS_PATH)
+    assert check["status"] == "fail"
+    assert "in_comment=true" in str(check["detail"])
+
+
+def test_mx_script_without_any_script_is_skip(tmp_path: Path) -> None:
+    """传了 --project-root 但工程里没有 .mx → skip（本项不适用，不是 fail）。"""
+    project = tmp_path / "no-scripts"
+    project.mkdir()
+    _, report = run_verify(tmp_path, project_root=project)
+
+    check = check_of(report, vg.CHECK_MX_SCRIPT_ABS_PATH)
+    assert check["status"] == "skip"
+    assert check["blocking"] is True
+
+
+def test_mx_script_relative_ioc_is_not_flagged(tmp_path: Path) -> None:
+    """``config load <相对 .ioc>``（cubemx-generate.mx 的正常形态）不得误报。"""
+    project = make_fake_project(
+        tmp_path / "board",
+        "config load stm32-g474-template.ioc\nSetStructure Advanced\nproject generate\nexit\n",
+        script_name="cubemx-generate.mx",
+    )
+    _, report = run_verify(tmp_path, project_root=project)
+    assert check_of(report, vg.CHECK_MX_SCRIPT_ABS_PATH)["status"] == "pass"
+
+
+def test_project_root_missing_is_input_error(tmp_path: Path) -> None:
+    """``--project-root`` 指向不存在的目录 → 退出码 2（输入错误，不是配置问题）。"""
+    result = run_cli(
+        "--log",
+        str(LOG_CLEAN),
+        "--main-c",
+        str(MAIN_G474),
+        "--mxproject",
+        str(MXP_RELATIVE),
+        "--expect",
+        "GPIO",
+        "--project-root",
+        str(tmp_path / "nope"),
+    )
+    assert result.returncode == vg.EXIT_INPUT_ERROR
+    assert "input-error" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# 6c. blocking 字段语义（旧 `level` 字段会让全 pass 的报告看起来"有错"）
+# ---------------------------------------------------------------------------
+def test_blocking_field_semantics(tmp_path: Path) -> None:
+    """``blocking`` 描述"该检查失败时是否阻塞"，不随本次 status 漂移。"""
+    _, report = run_verify(tmp_path, expect="GPIO")
+    checks = report["checks"]
+    assert isinstance(checks, list)
+    flags = {str(item["id"]): item["blocking"] for item in checks}
+    assert flags == {
+        vg.CHECK_LOG_CANNOT_MAP: True,
+        vg.CHECK_MAIN_INIT_PRESENT: True,
+        vg.CHECK_MAIN_INIT_CALLED: True,
+        vg.CHECK_MXPROJECT_ABS_PATH: True,
+        vg.CHECK_MX_SCRIPT_ABS_PATH: True,
+        vg.CHECK_SYSCALLS_PATH: False,
+    }
+    # 全 pass/skip 的报告里不许出现任何像"有错"的字段（level 已删除）
+    for item in checks:
+        assert "level" not in item
+        assert item["status"] in {"pass", "skip"}
+
+
+# ---------------------------------------------------------------------------
 # 7. D9：syscalls/sysmem 叠加路径仅 warning
 # ---------------------------------------------------------------------------
 def test_syscalls_overlay_warning_only(tmp_path: Path) -> None:
@@ -296,7 +445,8 @@ def test_syscalls_overlay_warning_only(tmp_path: Path) -> None:
     assert report["verdict"] == "pass"
     syscalls = check_of(report, vg.CHECK_SYSCALLS_PATH)
     assert syscalls["status"] == "warn"
-    assert syscalls["level"] == "warning"
+    # 唯一的非阻塞检查：失败/告警都不挡交付（D9）
+    assert syscalls["blocking"] is False
     detail = str(syscalls["detail"])
     assert "syscalls.c" in detail and "sysmem.c" in detail
     assert "D9" in detail
@@ -442,6 +592,7 @@ def test_markdown_report_written(tmp_path: Path) -> None:
     assert "| `log_cannot_map`" in text
     for check_id in vg.CHECK_ORDER:
         assert check_id in text
+    assert "失败时阻塞" in text
     assert "FAIL" in text
 
 

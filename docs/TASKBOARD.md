@@ -63,8 +63,8 @@
 | 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
 |---|---|---|---|---|---|---|
 | T1.1 | 建仓库骨架 + `.gitignore`（testbeds、logs 局部）+ GitHub remote push | skill-author | Phase 0 | 已完成 | L0 | commit `9b89a10` `chore: 建仓骨架与 .gitignore`（12 files/+842）；remote `https://github.com/LeonhardtHUST/platform32-mcp`（Public，default `main`） |
-| T1.2 | **核验器 v1** `scripts/verify_generation.py`：① 日志无 `Cannot map`（白名单容忍 `VP_RIF_VS_RIF1`，调研报告 D8）② 期望外设均有 `MX_xxx_Init()` 定义**且**在 `main()` 被调用 ③ `.mxproject` 无盘符绝对路径 ④ `syscalls.c`/`sysmem.c` 叠加路径降级为 warning；输出 JSON | verifier-dev | T1.1 | 待开始 | L2 | 待补：正/负样本 ≥5 例 + `pytest` 全绿输出 → `docs/logs/phase1/` |
-| T1.3 | `scripts/regen.sh`：备份 `.ioc` → `cubemx_generate` → 核验；失败即 `git checkout .ioc` 回滚 | verifier-dev | T1.2 | 待开始 | L3 | 待补：G474 testbed 成功一次 + 失败回滚一次的输出 |
+| T1.2 | **核验器 v1.1** `scripts/verify_generation.py`：6 个固定 check id（`log_cannot_map` / `main_init_present` / `main_init_called` / `mxproject_abs_path` / `mx_script_abs_path` / `syscalls_path`），字段 `blocking` 取代 `level`，`--project-root` 扫 `.mx` 三态判据，`--expect ""` 可只查路径 | verifier-dev | T1.1 | 已完成 | L2 | commit `d875fa7`（v1.0）+ 本轮 v1.1 commit；`pytest 54 passed / 0 failed` → `docs/logs/phase1/t1.2-pytest.log`；契约 `docs/reports/t1.2-verifier-contract.md` |
+| T1.3 | `scripts/regen.sh`：备份 `.ioc` → **生成前检查**（脏 `.ioc` / `AskForMigrate` 硬拦 / 版本戳告警）→ CubeMX 生成（cwd=工程根，timeout≥240s）→ 核验 → 失败 `git checkout` 回滚 → 成功后复位 `AskForMigrate` | verifier-dev | T1.2 | 已完成 | L4（生成核验，未跑 pio） | 4 次真跑：`docs/logs/phase1/regen-v1.1-success/`（rc=0）、`regen-v1.1-rollback/`（rc=1，回滚后 `.ioc`/`.mxproject` sha256 与生成前一致）、`regen-v1.1-preflight/`（rc=2，未调 CubeMX）、`regen-dirty-guard/`（rc=2） |
 | T1.4 | **SKILL.md 初稿**：流程编排知识（双通道调用、G1 核验强制、L 等级声明、提交文案模板、陷阱速查 D1–D9/P1–P4/H-1–H-6） | skill-author | T1.2 | 进行中 | L0 | `SKILL.md` v0.3.0（§1 已按 T1.2 实现回填；§0 双通道；§5 含 P1–P4）；**同行评审未做**（lead 逐条对照 `docs/reports/t1.2-verifier-contract.md`） |
 | T1.5 | 建 `testbeds/`：克隆三个模板仓 + `stm32-digital-clock` 副本（本地路径 clone，不碰原仓） | scenario-tester | T1.1 | 已完成 | L1 | `docs/logs/phase1/t1.5-testbeds.log`（4 副本就绪；原仓快照一致） |
 | T1.6 | **场景 S1（改配置）**：G474 testbed 加 GPIO 输出/改 PinState：审计 → 备份 → 改配置 → 生成 → 核验 → `pio run` → `git diff` 汇报 → 按规范 commit | scenario-tester | T1.3、T1.4、T1.5 | 进行中 | L3 | 基线构建已落盘 `docs/logs/phase1/t1.6-s1-baseline-build.log`；改配置方案待定论（`cubemx_configure` 已证为脚本透传） |
@@ -128,14 +128,15 @@
 | 阶段 | 任务数 | 已完成 | 进行中 | 挂起 | 待开始 |
 |---|---|---|---|---|---|
 | Phase 0 | 5 | 2（T0.1、T0.5） | 2（T0.2、T0.3） | 0 | 1（T0.4） |
-| Phase 1 | 9 | 3（T1.1、T1.5、T1.7） | 2（T1.4、T1.6） | 0 | 4（T1.2、T1.3、T1.8、T1.9） |
+| Phase 1 | 9 | 5（T1.1、T1.2、T1.3、T1.5、T1.7） | 2（T1.4、T1.6） | 0 | 2（T1.8、T1.9） |
 | Phase 2 | 6 | 0 | 0 | 6 | 0 |
 | Phase 3 | 5 | 0 | 0 | 0 | 5 |
-| **合计** | **25** | **5** | **4** | **6** | **10** |
+| **合计** | **25** | **7** | **4** | **6** | **8** |
 
-> ⚠️ **看板滞后提醒**：T1.2 / T1.3 行仍显示"待开始"，但仓内已存在
-> `scripts/verify_generation.py`、`scripts/regen.sh`、`tests/` 与 `docs/logs/phase1/regen-{success,rollback}/` 证据。
-> 按单写者原则这两行由 **verifier-dev** 自行更新，skill-author 不代改。
+> **T1.2 / T1.3 已由 verifier-dev 回填**：核验器 v1.1（6 个 check id、`blocking` 字段、
+> `--project-root` 扫 `.mx`）+ `regen.sh`（生成前硬拦 `AskForMigrate`、失败回滚、成功后复位）。
+> 证据：`docs/logs/phase1/t1.2-pytest.log`（54 passed）、`docs/logs/phase1/regen-v1.1-*/`；
+> 契约：`docs/reports/t1.2-verifier-contract.md`（v1.1）。**GATE-1.1 可触发。**
 
 GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/platform32-mcp`（Public），由 T1.1 创建。
 
@@ -148,3 +149,4 @@ GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/platform32
 | 2026-11-03 | 建板：Phase 0–3 共 25 条任务 + GATE 状态表 + 证据目录约定（T0.5） | skill-author |
 | 2026-11-03 | T1.1 已完成（commit `9b89a10` + Public remote）；T0.5 已完成；T1.4 转进行中（SKILL.md v0.2.0 初稿落盘，§1 待 T1.2 回填） | skill-author |
 | 2026-11-03 | T1.5、T1.7 置已完成；T1.6 置进行中；T1.4 → SKILL.md v0.3.0（§0 双通道 D12、§1 按实现回填、§5 增 P1–P4），待同行评审 | skill-author |
+| 2026-11-03 | T1.2、T1.3 置已完成（核验器 v1.1：6 check id / `blocking` / `--project-root`；regen.sh：`AskForMigrate` 生成前硬拦 + 失败回滚 + 成功后复位）；Phase 1 进度同步 | verifier-dev |
