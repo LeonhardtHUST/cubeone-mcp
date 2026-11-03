@@ -1,0 +1,23 @@
+===== uvx platformio.mcp --help  2026-11-03T11:48:44+08:00 =====
+uv: uv 0.11.29 (901092ee1 2026-07-15 x86_64-pc-windows-msvc)
+Downloading pydantic-core (2.1MiB)
+Downloading cryptography (3.6MiB)
+Downloading pywin32 (6.7MiB)
+ Downloaded pydantic-core
+ Downloaded cryptography
+ Downloaded pywin32
+Installed 31 packages in 1.82s
+usage: platformio.mcp [-h] [--version] {serve,install,doctor} ...
+
+MCP server for PlatformIO. With no subcommand it serves over stdio.
+
+positional arguments:
+  {serve,install,doctor}
+    serve               run the MCP server on stdio (default)
+    install             register this server with an MCP client
+    doctor              print pio_system_info as JSON
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
+===== EXIT: 0 =====

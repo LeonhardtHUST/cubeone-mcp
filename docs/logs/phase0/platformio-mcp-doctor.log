@@ -1,0 +1,25 @@
+===== uvx platformio.mcp doctor  2026-11-03T11:49:10+08:00 =====
+--- env: PLATFORMIO_MCP_POLICY=build_only
+--- env: PLATFORMIO_MCP_PIO=C:/Users/Leon/.platformio/penv/Scripts/pio.exe
+--- version:
+platformio.mcp 0.2.0
+--- doctor output:
+{
+  "ok": true,
+  "summary": "PlatformIO Core 6.2.0 at C:\\Users\\Leon\\.platformio\\penv\\Scripts\\platformio.exe (python 3.11.7-final.0, 2 platforms installed). Policy: build_only.",
+  "server_version": "0.2.0",
+  "policy": "build_only",
+  "pio_command": [
+    "C:/Users/Leon/.platformio/penv/Scripts/pio.exe"
+  ],
+  "core_version": "6.2.0",
+  "python": "3.11.7-final.0",
+  "system": "windows_amd64",
+  "core_dir": "C:\\Users\\Leon\\.platformio",
+  "installed_platforms": 2,
+  "installed_tools": 27,
+  "obsolete_core_warning": false,
+  "log_dir": "C:\\Users\\Leon\\.platformio-mcp\\logs",
+  "open_monitor_sessions": []
+}
+===== EXIT: 0 =====

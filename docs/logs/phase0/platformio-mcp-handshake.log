@@ -1,0 +1,50 @@
+===== platformio.mcp MCP 协议级握手自检 (T0.3) =====
+time   : 2026-11-03T11:51:38
+entry  : {"command": "uvx", "args": ["platformio.mcp"], "env": {"PLATFORMIO_MCP_POLICY": "build_only", "PLATFORMIO_MCP_PIO": "C:\\Users\\Leon\\.platformio\\penv\\Scripts\\pio.exe"}}
+mcp_sdk: 2.2.0
+
+OK protocol_version : 2025-11-25
+OK server_info      : platformio 0.2.0
+OK tools_count      : 40
+   - pio_board_info
+   - pio_build
+   - pio_check
+   - pio_clean
+   - pio_coredump
+   - pio_debug_cmd
+   - pio_debug_list
+   - pio_debug_start
+   - pio_debug_stop
+   - pio_decode_backtrace
+   - pio_deps_check
+   - pio_flash_and_verify
+   - pio_list_boards
+   - pio_list_devices
+   - pio_list_targets
+   - pio_memory_watch
+   - pio_monitor_capture
+   - pio_monitor_list
+   - pio_monitor_read
+   - pio_monitor_start
+   - pio_monitor_stop
+   - pio_monitor_write
+   - pio_partition_table
+   - pio_pkg_install
+   - pio_pkg_list
+   - pio_pkg_outdated
+   - pio_pkg_search
+   - pio_pkg_uninstall
+   - pio_pkg_update
+   - pio_port_diagnose
+   - pio_power_profile
+   - pio_project_envs
+   - pio_project_init
+   - pio_project_metadata
+   - pio_run_target
+   - pio_size_report
+   - pio_system_info
+   - pio_test
+   - pio_upload
+   - pio_upload_ota
+
+VERDICT: HANDSHAKE PASS

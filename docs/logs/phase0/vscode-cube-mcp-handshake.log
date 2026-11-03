@@ -1,0 +1,20 @@
+===== vscode-cube-mcp MCP 协议级握手自检 (T0.2/T0.3 前置验证) =====
+time     : 2026-11-03T11:51:21
+entry    : {"command": "C:\\Users\\Leon\\.local\\bin\\vscode-cube-mcp.exe", "args": [], "env": {"ST_CUBEMX_EXE": "C:\\ST\\STM32CubeMX\\STM32CubeMX.exe", "ST_CUBEMX_ALLOWED_ROOTS": "D:\\Projects;C:\\Users\\Leon\\WorkBuddy", "ST_CUBEMX_TIMEOUT": "300"}}
+mcp_sdk  : 2.2.0
+
+OK protocol_version : 2025-11-25
+OK server_info.name : Vscode_cube_mcp
+OK server_version   : ''
+OK tools_count      : 9
+   - cubemx_add_source | 把自定义源文件加入工程的 CMake 源列表(stm32cubemx/CMakeLists.txt)。
+   - cubemx_configure | 加载 .ioc,依次执行 set 命令,最后 saveas 写回原文件。
+   - cubemx_export_pinout | 加载 .ioc 并导出当前引脚配置 CSV(只读,CSV 写系统临时目录后读回)。
+   - cubemx_generate | 加载 .ioc 并执行 project generate 生成 HAL 代码。
+   - cubemx_help | 内置帮助:返回本 server 的使用指南、可用模板与各外设配置方法。
+   - cubemx_load | 加载 .ioc 工程并回读关键配置(只读,不修改任何文件)。
+   - cubemx_new_project | 从零生成一个新的 HAL 工程(基于内置模板改造)。
+   - cubemx_remove_peripheral | 从 .ioc 中移除一个外设(文本方式)。
+   - cubemx_script | 执行任意 CubeMX 脚本命令序列(原始脚本接口,原样传给 -q)。
+
+VERDICT: HANDSHAKE PASS
