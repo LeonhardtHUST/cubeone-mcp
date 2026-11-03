@@ -20,20 +20,52 @@
 //    （只读查询 / 策略门禁 / 中文编码），不该被"没配白名单"顺手拦掉而变成假红。
 //    这**不是**为了让冒烟变绿去放水：T9（界外拦截）与 T11（无白名单被拒）反过来守默认值。
 //
-// 运行：node tools/npm_mcp_handshake.mjs
-// 证据：docs/logs/phase1/npm-mcp/handshake.log（同内容落盘）
+// ── 素材（C1.2，2026-11-04）───────────────────────────────────────────────────
+// 有的用例需要"真实工程的素材"，而素材来源分两类：
+//   ① `testbeds/`（本机克隆的模板工程，**被 .gitignore 忽略**）—— CI 上不存在；
+//   ② `tests/fixtures/e2e/`（入库的极小样本，只有一只 `board.ioc`）—— CI 上有。
+// 素材缺失时**不能判红**（那会把"这台机器没有 testbeds"误报成"工具坏了"），
+// 但**更不能静默跳过**——所以引入第三个计数 `skip`：`[SKIP]` 行写清缺什么、为什么缺，
+// 汇总行 `pass=/fail=/skip=` 三数并列，缺素材的项一眼可见，绝不会被读成"通过"。
+//
+// 两种模式：
+//   node tools/npm_mcp_handshake.mjs                      # 宽松：缺素材记 SKIP，退出码只看 fail
+//   node tools/npm_mcp_handshake.mjs --require-materials   # 严格：SKIP 即失败（本地/发版前用它）
+//   node tools/npm_mcp_handshake.mjs --ci                  # CI：等同宽松 + 不落盘证据文件
+//
+// 运行：node tools/npm_mcp_handshake.mjs [--require-materials] [--ci]
+// 证据：docs/logs/phase1/npm-mcp/handshake.log（同内容落盘；`--ci` 下不写）
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { writeFileSync, mkdirSync, readdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const BIN = path.join(ROOT, "bin", "cubeone-mcp.mjs");
-const G474 = path.join(ROOT, "testbeds", "_verifier-regen", "g474");
+
+// 素材目录候选：先 testbeds（真实工程，含 .mxproject / main.c），再入库的 fixtures。
+// 顺序即优先级：本机有 testbeds 时用真实素材（T6 也能跑），CI 上自然落到 fixtures。
+const MATERIAL_DIRS = [
+  path.join(ROOT, "testbeds", "_verifier-regen", "g474"),
+  path.join(ROOT, "testbeds", "stm32-g474-template"),
+  path.join(ROOT, "tests", "fixtures", "e2e"),
+];
 const LOG_PATH = path.join(ROOT, "docs", "logs", "phase1", "regen-success", "cubemx-generate.log");
 const EVIDENCE_DIR = path.join(ROOT, "docs", "logs", "phase1", "npm-mcp");
+
+// ── 开关 ──
+const argv = process.argv.slice(2);
+const KNOWN_FLAGS = new Set(["--require-materials", "--ci"]);
+for (const flag of argv) {
+  if (!KNOWN_FLAGS.has(flag)) {
+    console.error(`[usage] 未知参数：${flag}（支持 --require-materials / --ci）`);
+    process.exit(2);
+  }
+}
+const requireMaterials = argv.includes("--require-materials");
+const ciMode = argv.includes("--ci");
 
 const logLines = [];
 function log(line = "") {
@@ -77,6 +109,9 @@ function textOf(res) {
 
 let pass = 0;
 let fail = 0;
+let skip = 0;
+const skippedIds = [];
+
 function check(id, ok, detail) {
   if (ok) {
     pass += 1;
@@ -87,23 +122,71 @@ function check(id, ok, detail) {
   }
 }
 
-async function main() {
-  // ── 素材定位 ──
-  let iocPath = null;
-  for (const dir of [G474, path.join(ROOT, "testbeds", "stm32-g474-template")]) {
+/**
+ * 记录一条"因为缺素材而没验"的项。
+ *
+ * 默认记 SKIP 并计数（不入 fail）；`--require-materials` 下**转为 FAIL** —— 发版前
+ * 必须在本机把 12 项全跑过，缺素材就是没验，不能带着 SKIP 发版。
+ */
+function skipCheck(id, detail) {
+  if (requireMaterials) {
+    check(id, false, `${detail}（--require-materials 下 SKIP 即失败）`);
+    return;
+  }
+  skip += 1;
+  skippedIds.push(id);
+  log(`[SKIP] ${id} — ${detail}`);
+}
+
+/** 在候选目录里找第一只 `.ioc`；返回 `{ iocPath, projectDir }`。 */
+function locateIoc() {
+  for (const dir of MATERIAL_DIRS) {
     try {
       const hit = readdirSync(dir).find((f) => f.endsWith(".ioc"));
-      if (hit) {
-        iocPath = path.join(dir, hit);
-        break;
-      }
+      if (hit) return { iocPath: path.join(dir, hit), projectDir: dir };
     } catch {
-      /* 目录不存在则跳过 */
+      /* 目录不存在则试下一个候选 */
     }
   }
+  return { iocPath: null, projectDir: null };
+}
+
+/**
+ * T6 需要的"三者自洽"素材：原始日志 + `main.c` + `.mxproject`。
+ *
+ * **为什么要三者齐全才跑**：`verify_generation` 的判据之一是 `.mxproject` 里不得出现
+ * 盘符绝对路径，另几项要从 `main.c` 抓 `MX_*_Init` 定义/调用。手工拼一套"看起来像"的
+ * 假素材极容易拼出 `verdict=pass` 的**假绿**（例如日志为空 → `log_cannot_map` 只给 warn）。
+ * 所以 T6 宁可 SKIP 也不造假素材——这是**有意的取舍**，不是偷懒。
+ */
+function verifyMaterialsOf(projectDir) {
+  if (!projectDir) return null;
+  const mainC = path.join(projectDir, "Core", "Src", "main.c");
+  const mxproject = path.join(projectDir, ".mxproject");
+  if (!existsSync(LOG_PATH) || !existsSync(mainC) || !existsSync(mxproject)) return null;
+  return { mainC, mxproject };
+}
+
+/**
+ * T9 用的"界外路径"。
+ *
+ * ⚠️ 不能写死 `C:\Windows\win.ini`：在 Linux 上 `path.resolve("C:\\Windows\\win.ini")`
+ * 会变成 `<仓库根>/C:\Windows\win.ini`，**落在白名单内**，T9 于是会因为"文件不存在"
+ * 而不是"越界"失败——一个只在 Windows 上成立的用例，进了 CI 就是假红。
+ * 统一取"仓库根的上一级 + 一个不存在的名字"，两平台都必然在界外。
+ */
+function outsidePath() {
+  return path.join(path.dirname(ROOT), "__cubeone_outside_probe__.ioc");
+}
+
+async function main() {
+  log(`# mode=${ciMode ? "ci" : "local"}${requireMaterials ? " require-materials" : ""}`);
+  const { iocPath, projectDir } = locateIoc();
+  const verifyMaterials = verifyMaterialsOf(projectDir);
   log(`# ioc=${iocPath}`);
-  log(`# g474=${G474}`);
+  log(`# project=${projectDir}`);
   log(`# log=${LOG_PATH}`);
+  log(`# verify-materials=${verifyMaterials ? "ok" : "缺（T6 记 SKIP）"}`);
   log("");
 
   // T1 + T2 + T3
@@ -143,38 +226,49 @@ async function main() {
         `value=${get.structuredContent?.value}`,
       );
     } else {
-      check("T4 ioc_field get", false, "找不到 .ioc 素材");
+      skipCheck("T4 ioc_field get", `缺 .ioc 素材（候选：${MATERIAL_DIRS.map((d) => path.relative(ROOT, d)).join(" / ")}）`);
     }
 
     // T5 ioc_backup list（只读）
-    const ls = await c.callTool({
-      name: "ioc_backup",
-      arguments: { project: G474, action: "list" },
-    });
-    check("T5 ioc_backup list", !ls.isError && textOf(ls).includes("exit=0"), "");
+    if (projectDir) {
+      const ls = await c.callTool({
+        name: "ioc_backup",
+        arguments: { project: projectDir, action: "list" },
+      });
+      check("T5 ioc_backup list", !ls.isError && textOf(ls).includes("exit=0"), path.relative(ROOT, projectDir));
+    } else {
+      skipCheck("T5 ioc_backup list", "缺工程目录素材（需一个含 *.ioc 的目录）");
+    }
 
-    // T6 verify_generation（真实素材）
-    const verify = await c.callTool({
-      name: "verify_generation",
-      arguments: {
-        log: LOG_PATH,
-        main_c: path.join(G474, "Core", "Src", "main.c"),
-        mxproject: path.join(G474, ".mxproject"),
-        expect: "GPIO",
-        project_root: G474,
-      },
-    });
-    check(
-      "T6 verify_generation",
-      !verify.isError && verify.structuredContent?.verdict === "pass",
-      `verdict=${verify.structuredContent?.verdict} exit 文本含 exit=${(verify.structuredContent && "0") || "?"}`,
-    );
+    // T6 verify_generation（真实素材，三者自洽；缺则不造假素材，见 verifyMaterialsOf 注释）
+    if (verifyMaterials) {
+      const verify = await c.callTool({
+        name: "verify_generation",
+        arguments: {
+          log: LOG_PATH,
+          main_c: verifyMaterials.mainC,
+          mxproject: verifyMaterials.mxproject,
+          expect: "GPIO",
+          project_root: projectDir,
+        },
+      });
+      check(
+        "T6 verify_generation",
+        !verify.isError && verify.structuredContent?.verdict === "pass",
+        `verdict=${verify.structuredContent?.verdict}`,
+      );
+    } else {
+      skipCheck(
+        "T6 verify_generation",
+        "缺素材（需 CubeMX 原始日志 + 真实工程的 main.c/.mxproject；不造假素材以免拼出 verdict=pass 的假绿）",
+      );
+    }
 
     // T7 写策略：read_only 拒绝 set
     const denied = await c.callTool({
       name: "ioc_field",
       arguments: {
-        ioc: iocPath || path.join(G474, "x.ioc"),
+        ioc: iocPath || path.join(projectDir || ROOT, "x.ioc"),
         action: "set",
         key: "ProjectManager.AskForMigrate",
         value: "false",
@@ -190,12 +284,14 @@ async function main() {
     // 写管道、JS 按 utf8 解码 → "指向的文件不存在" 变成乱码；本项就是这条的守卫。
     // 只看 structuredContent 是老冒烟的盲区：那里是 JSON（脚本自己按 utf8 写的），
     // 永远不乱，乱的是 stdout/stderr 文本 —— 所以必须断言**文本**。
+    // 输入校验按 --log → --main-c → --mxproject 的顺序，`--log` 不存在就先报，
+    // 所以另两个参数随便给（本项验的是编码，不是文件存在性）。
     const zh = await c.callTool({
       name: "verify_generation",
       arguments: {
         log: path.join(ROOT, "no-such-dir", "no-such.log"),
-        main_c: path.join(G474, "Core", "Src", "main.c"),
-        mxproject: path.join(G474, ".mxproject"),
+        main_c: path.join(projectDir || ROOT, "Core", "Src", "main.c"),
+        mxproject: path.join(projectDir || ROOT, ".mxproject"),
         expect: "GPIO",
       },
     });
@@ -224,20 +320,22 @@ async function main() {
       });
       check("T8 full+dry_run 放行", !dry.isError && textOf(dry).includes("exit=0"), "");
     });
-
-    // T9 白名单拦截
-    await withClient({ CUBEONE_ALLOWED_ROOTS: ROOT }, async (c) => {
-      const blocked = await c.callTool({
-        name: "ioc_field",
-        arguments: { ioc: "C:\\Windows\\win.ini", action: "get", key: "x" },
-      });
-      check(
-        "T9 白名单拦截",
-        blocked.isError === true && textOf(blocked).includes("越界"),
-        textOf(blocked).split("\n")[0],
-      );
-    });
+  } else {
+    skipCheck("T8 full+dry_run 放行", "缺 .ioc 素材（dry_run 也要真实文件）");
   }
+
+  // T9 白名单拦截（界外路径见 outsidePath() 注释）
+  await withClient({ CUBEONE_ALLOWED_ROOTS: ROOT }, async (c) => {
+    const blocked = await c.callTool({
+      name: "ioc_field",
+      arguments: { ioc: outsidePath(), action: "get", key: "x" },
+    });
+    check(
+      "T9 白名单拦截",
+      blocked.isError === true && textOf(blocked).includes("越界"),
+      textOf(blocked).split("\n")[0],
+    );
+  });
 
   // T11 fail-closed（R-C1）：完全不配白名单、也不开逃生门 → 调用必须被拒，
   // 且文案点名 CUBEONE_ALLOWED_ROOTS —— 只说"越界"会让人去改路径，
@@ -253,7 +351,11 @@ async function main() {
     async (c) => {
       const noRoots = await c.callTool({
         name: "ioc_field",
-        arguments: { ioc: iocPath || path.join(G474, "x.ioc"), action: "get", key: "MxCube.Version" },
+        arguments: {
+          ioc: iocPath || path.join(projectDir || ROOT, "x.ioc"),
+          action: "get",
+          key: "MxCube.Version",
+        },
       });
       const noRootsText = textOf(noRoots);
       check(
@@ -265,21 +367,32 @@ async function main() {
   );
 
   log("");
-  log(`VERDICT: ${fail === 0 ? "HANDSHAKE SMOKE PASS" : "HANDSHAKE SMOKE FAIL"} (pass=${pass} fail=${fail})`);
+  if (skip > 0) {
+    // 单独一行点名，避免"skip 数"被读成"通过的另一种写法"
+    log(`SKIPPED (未验证，不代表通过)：${skippedIds.join(", ")} —— 缺素材，本机跑 --require-materials 可补齐`);
+  }
+  log(
+    `VERDICT: ${fail === 0 ? "HANDSHAKE SMOKE PASS" : "HANDSHAKE SMOKE FAIL"} ` +
+      `(pass=${pass} fail=${fail} skip=${skip})`,
+  );
   return fail === 0 ? 0 : 1;
 }
 
 try {
   const code = await main();
-  mkdirSync(EVIDENCE_DIR, { recursive: true });
-  writeFileSync(path.join(EVIDENCE_DIR, "handshake.log"), logLines.join("\n") + "\n", "utf8");
+  if (!ciMode) {
+    mkdirSync(EVIDENCE_DIR, { recursive: true });
+    writeFileSync(path.join(EVIDENCE_DIR, "handshake.log"), logLines.join("\n") + "\n", "utf8");
+  }
   process.exit(code);
 } catch (err) {
   log(`[FATAL] ${err?.stack || err}`);
   log("VERDICT: HANDSHAKE SMOKE FAIL (exception)");
   try {
-    mkdirSync(EVIDENCE_DIR, { recursive: true });
-    writeFileSync(path.join(EVIDENCE_DIR, "handshake.log"), logLines.join("\n") + "\n", "utf8");
+    if (!ciMode) {
+      mkdirSync(EVIDENCE_DIR, { recursive: true });
+      writeFileSync(path.join(EVIDENCE_DIR, "handshake.log"), logLines.join("\n") + "\n", "utf8");
+    }
   } catch {
     /* 忽略落盘失败 */
   }

@@ -1,18 +1,20 @@
+# mode=local require-materials
 # ioc=D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc
-# g474=D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474
+# project=D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474
 # log=D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-success\cubemx-generate.log
+# verify-materials=ok
 
 [PASS] T1 握手 — server=cubeone-mcp v0.7.1
 [PASS] T2 tools/list — ioc_backup, ioc_field, verify_generation
 [PASS] T3 resources/list — 7 个资源
 [PASS] T3b 读 SKILL.md — text/markdown
 [PASS] T4 ioc_field get — value=6.18.1
-[PASS] T5 ioc_backup list
-[PASS] T6 verify_generation — verdict=pass exit 文本含 exit=0
+[PASS] T5 ioc_backup list — testbeds\_verifier-regen\g474
+[PASS] T6 verify_generation — verdict=pass
 [PASS] T7 read_only 拒绝 set — [cubeone-mcp][策略拦截] CUBEONE_POLICY=read_only 下 ioc_field set 仅允许 dry_run=true。如需真实写盘，把 env.CUBEONE_POLICY 改为 "full" 并重启客户端。
 [PASS] T10 中文报错可读 — [platform32][input-error] --log 指向的文件不存在：D:\Projects\GitHub\cubeone-mcp\no-such-dir\no-suc
 [PASS] T8 full+dry_run 放行
-[PASS] T9 白名单拦截 — [cubeone-mcp][越界] 参数 ioc=C:\Windows\win.ini 不在 CUBEONE_ALLOWED_ROOTS 内。
+[PASS] T9 白名单拦截 — [cubeone-mcp][越界] 参数 ioc=D:\Projects\GitHub\__cubeone_outside_probe__.ioc 不在 CUBEONE_ALLOWED_ROOTS 内。
 [PASS] T11 无白名单默认拒绝 — [cubeone-mcp][策略拦截] 未配置 CUBEONE_ALLOWED_ROOTS，0.7.0 起默认拒绝所有路径参数。
 
-VERDICT: HANDSHAKE SMOKE PASS (pass=12 fail=0)
+VERDICT: HANDSHAKE SMOKE PASS (pass=12 fail=0 skip=0)
