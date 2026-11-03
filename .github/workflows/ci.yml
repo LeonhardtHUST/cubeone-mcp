@@ -1,0 +1,126 @@
+# platform32-mcp / CI
+#
+# 定位：守住"不依赖 STM32CubeMX 的那部分质量"。
+#
+# 不做什么（有意为之，不是遗漏）：
+#   1. 不在 CI 里跑 CubeMX 生成。CubeMX 是 Windows GUI 应用，需要交互式接受
+#      厂商许可，本仓锁定 6.18.1（D1），GitHub Actions 的 runner 上装不起来。
+#      ⇒ 端到端（改 .ioc → 生成 → 核验）不在此流水线内，也别指望用 mock 伪装。
+#   2. 不装 PlatformIO、不 clone 三个模板仓。成本高，且在没有 CubeMX 的前提下
+#      验证不了"生成物是否正确"这个本项目的核心命题。
+#      ⇒ L3（pio run）与 L5（实板）证据不来自 CI。
+#
+# 做什么：单元测试（pytest 矩阵）+ 脚本静态检查 + 脚本可执行性冒烟。
+# 本流水线全绿只说明"脚本与核验器的逻辑没退化"，不说明"某个 .ioc 改对了"。
+# 验证等级见 README「验证等级」一节。
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支/PR 上只保留最新一次运行，旧的直接取消（省 runner 额度，也免得
+# 上一轮的红灯在已经修好之后还在页面上挂着）。
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── 单元测试：74 个用例覆盖核验器、.ioc 读写、regen.sh 前置检查 ──────────
+  pytest:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      # 一个版本红了不要掐掉另一个 —— 需要同时看到 3.11 与 3.13 的结果。
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # tests/ 只用 pytest 一个第三方依赖（scripts/ 全部是标准库）。
+      # 版本钉死到本机实测通过的 9.2.0，避免 pytest 大版本升级把用例判据改掉。
+      - name: 安装测试依赖
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pytest==9.2.0"
+
+      # conftest.py 已把 scripts/ 加进 sys.path，工作目录用仓库根即可，不需要 PYTHONPATH。
+      - name: 运行单元测试
+        run: python -m pytest tests/ -q
+
+  # ── 静态检查 + 冒烟：脚本连语法都不对时，上面的用例可能压根没跑起来 ──────
+  lint:
+    name: 脚本检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: bash 语法检查（regen.sh）
+        run: bash -n scripts/regen.sh
+
+      - name: Python 字节码编译（scripts/*.py）
+        run: python -m py_compile scripts/*.py
+
+      # shellcheck 的处置方式：**只报告，不判红**。
+      #   理由：scripts/ 的 owner 是 verifier-dev，本流水线的职责不是让上游脚本
+      #   为风格问题返工；一旦判红，一次与本次改动无关的脚本风格调整就会挡住所有 PR。
+      #   但"不判红"不等于"静默忽略"：结果会以 GitHub annotation 的形式挂在 PR 的
+      #   diff 上，并写进 Job Summary，评审时看得见。
+      #   降级是显式写出来的（if/else + ::warning::），不是 `|| true` 掩耳盗铃。
+      - name: shellcheck（warning 及以上，非阻塞）
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            echo "::notice::未找到 shellcheck，跳过（ubuntu-latest 通常预装）"
+            exit 0
+          fi
+          if shellcheck -S warning scripts/regen.sh; then
+            echo "shellcheck: 无 warning 及以上问题" >> "$GITHUB_STEP_SUMMARY"
+          else
+            rc=$?
+            echo "::warning title=shellcheck::scripts/regen.sh 有 warning 及以上问题（非阻塞，见步骤日志）"
+            {
+              echo "### shellcheck：warning 及以上（非阻塞）"
+              echo ""
+              echo "shellcheck 退出码：\`${rc}\`。详见本步骤日志。"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+      # 冒烟：这几个脚本都是纯标准库、不碰 CubeMX，能在 ubuntu-latest 上真跑通。
+      # 目的是防"文件还在但入口坏了"这类只有到用户机器上才发现的退化。
+      - name: 脚本入口冒烟（不依赖 CubeMX）
+        run: |
+          # 核验器必须仍是 schema /2（`--version` 输出里带 "/2"）；换了 schema 这条先红。
+          python scripts/verify_generation.py --version | tee /tmp/vg-version.txt
+          grep -q "/2" /tmp/vg-version.txt
+
+          python scripts/ioc_backup.py --help > /dev/null
+          python scripts/ioc_field.py --help > /dev/null
+
+          # regen.sh 缺参数必须退 2（"压根没跑"），退别的码说明前置检查语义变了。
+          # 这里显式捕获退出码 —— 让 `set -e` 不把"预期内的 2"当失败。
+          set +e
+          bash scripts/regen.sh > /tmp/regen-noargs.log 2>&1
+          rc=$?
+          set -e
+          cat /tmp/regen-noargs.log
+          if [ "$rc" -ne 2 ]; then
+            echo "::error::regen.sh 缺参数应以 2 退出（未执行），实际 ${rc}"
+            exit 1
+          fi
