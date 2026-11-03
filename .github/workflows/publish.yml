@@ -47,16 +47,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org/
 
       # 发布前先过一遍与本仓 CI 相同版本的 pytest —— 发布是信任时刻，
       # 不允许"逻辑已退化但版本号新鲜"的包出去（对齐 ci.yml 的 pytest==9.2.0 钉版）。
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
