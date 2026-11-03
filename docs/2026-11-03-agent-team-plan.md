@@ -1,4 +1,4 @@
-# platform32-mcp 多 Agent 团队执行计划
+# cubeone-mcp 多 Agent 团队执行计划
 
 > 生成时间：2026-11-03 · 生成者：计划 Agent
 > 上游文档：`docs/2026-11-03-execution-research.md`（执行前调研报告，下称"调研报告"）
@@ -18,7 +18,7 @@
 | `platform-lead` | 编排（Team Lead） | 维护共享任务列表、拆派任务、把关验收关卡、唯一面向用户的发言人（AskUserQuestion/汇报）、集成合并 | 0–3 全程 |
 | `env-agent` | 环境装配 | MCP 注册、工具安装、doctor/冒烟、固件包管理；**唯一有权改 `~/.workbuddy/mcp.json` 和动 `C:\ST` 相关环境的角色** | 0、2 |
 | `verifier-dev` | 核验器开发 | `verify_generation.py` 及单测（Gap-G1），后续所有生成核验的维护者 | 1（主力）、2 |
-| `skill-author` | Skill/文档工程 | platform32-mcp 仓库骨架、SKILL.md、references、README | 1、3 |
+| `skill-author` | Skill/文档工程 | cubeone-mcp 仓库骨架、SKILL.md、references、README | 1、3 |
 | `scenario-tester` | 端到端场景 | 在克隆副本上跑全链场景与负路径测试（Phase 1 无硬件；Phase 2 转 HIL） | 1、2 |
 | `hil-agent` | 硬件在环 | 烧录、串口、实板验证、探针排障 | 2（专有） |
 | `ci-agent` | CI 工程 | GitHub Actions workflow、产物归档 | 3（专有） |
@@ -47,7 +47,7 @@
 | D2 | platformio.mcp 用外部包？ | 是，装；CLI 回退通道保留 | T0.3、Phase 1 构建 |
 | D3 | CMake 流砍出 MVP？ | 是（Phase 3 评估） | T3.4 |
 | D4 | FW_H7 何时装？ | Phase 2 顺手装 | T2.2 |
-| D5 | GitHub remote 现在建？ | 是（`LeonhardtHUST/platform32-mcp`） | T1.1 |
+| D5 | GitHub remote 现在建？ | 是（`LeonhardtHUST/cubeone-mcp`） | T1.1 |
 | D6 | 烧录默认探针 ST-Link/SWD？ | 是（X Pulse 板接板日确认） | T2.1 |
 
 ---
@@ -83,13 +83,13 @@ scenario-tester:                └───► T0.4（冒烟）
 
 ## 2. Phase 1 子计划：MVP 无硬件闭环（2–3 天）
 
-**目标**：打通"改 .ioc → 生成 → 核验 → 构建 → 汇报"全链（无需硬件），产出 platform32-mcp 主体。
+**目标**：打通"改 .ioc → 生成 → 核验 → 构建 → 汇报"全链（无需硬件），产出 cubeone-mcp 主体。
 **团队**：`platform-lead` + `verifier-dev` + `skill-author` + `scenario-tester`（4 人）。
 
 ### 2.1 仓库分工快照
 
 ```
-platform32-mcp/
+cubeone-mcp/
 ├── SKILL.md                    ← skill-author
 ├── scripts/
 │   ├── verify_generation.py    ← verifier-dev
@@ -181,7 +181,7 @@ skill-author:                     T2.4 的文档增量 ──► SKILL.md 更新
 
 | ID | 任务 | Owner | 依赖 | DoD（含 L 等级） |
 |---|---|---|---|---|
-| T3.1 | GitHub Actions workflow 模板（`.github/workflows/build.yml`）：checkout → `pio run` matrix（G474VE + F103C8 环境）→ 主机 gcc 回归（模板 §3 命令）→ 上传 ELF/HEX/map 产物；**CubeMX 不进 CI**，原因注释写明（ST 专有软件许可 + JVM 镜像成本） | ci-agent | T1.6 | workflow 在 platform32-mcp 或模板仓 fork 上跑绿；matrix 两环境都有构建数字；L3 |
+| T3.1 | GitHub Actions workflow 模板（`.github/workflows/build.yml`）：checkout → `pio run` matrix（G474VE + F103C8 环境）→ 主机 gcc 回归（模板 §3 命令）→ 上传 ELF/HEX/map 产物；**CubeMX 不进 CI**，原因注释写明（ST 专有软件许可 + JVM 镜像成本） | ci-agent | T1.6 | workflow 在 cubeone-mcp 或模板仓 fork 上跑绿；matrix 两环境都有构建数字；L3 |
 | T3.2 | README 定稿：架构图（三 server 职责 + 编排层）、快速上手（注册 MCP → 跑 S1 场景）、已知限制 | skill-author | T1.9、T2.5 | 同行评审过；L1 |
 | T3.3 | SKILL.md 终版：合并 Phase 2 的串口/烧录增补；附 L 等级自查清单 | skill-author | T2.4 | 定稿 commit；L1 |
 | T3.4 | 选做评估（产出报告不改代码）：① CubeMX 2.1.1 兼容性（同一 .ioc 双版本生成 diff 对比）② CMake 流可行性（CLT CMake + 模板源码）③ strtt RTT 是否值得引入 | evaluator | 各自独立 | 评估报告落 `docs/evaluations/`，每项给"做/不做/推迟"结论；L1 |

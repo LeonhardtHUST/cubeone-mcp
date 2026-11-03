@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# platform32-mcp / scripts/regen.sh
+# cubeone-mcp / scripts/regen.sh
 #
 # 「备份 .ioc → 前置检查 → CubeMX 生成 → 生成核验 → 失败回滚」封装。
 #
@@ -56,7 +56,7 @@ log_err()  { printf '[regen][error] %s\n' "$*" >&2; }
 
 usage() {
   cat <<'USAGE'
-platform32-mcp / scripts/regen.sh —— 备份 → 前置检查 → CubeMX 生成 → 核验 → 失败回滚
+cubeone-mcp / scripts/regen.sh —— 备份 → 前置检查 → CubeMX 生成 → 核验 → 失败回滚
 
 用法：
   scripts/regen.sh <工程目录> [选项]

@@ -1,4 +1,4 @@
-# platform32-mcp 执行前调研报告
+# cubeone-mcp 执行前调研报告
 
 > 生成时间：2026-11-03 · 生成者：计划 Agent
 > 用途：交给执行 Agent 作为《STM32 全链路自动化平台 MCP》立项报告的**执行前调研结论**。
@@ -95,9 +95,9 @@
 | `HUSTRadio/stm32-digital-clock/` | F103 实际项目（`.ioc` + `.ioc.bak` 备份惯例） | — |
 | `hust-sti-measure-2026` | HAL-PITFALLS 的故障来源工程（频率计） | — |
 | `esp-sdr/` | **CMake 流的本地参照**（ESP-IDF CMake，多 target sdkconfig 矩阵）；非 STM32，仅借架构 | `CMakeLists.txt`、`firmware-targets.json` |
-| `leonskill-easyeda-*` | 用户自己的 Skill 仓**结构惯例**：`SKILL.md` + `scripts/` + `tests/` + `references/` + `research/` + `skill-dependencies.json` | platform32-mcp 产出的 Skill 应沿用此结构 |
+| `leonskill-easyeda-*` | 用户自己的 Skill 仓**结构惯例**：`SKILL.md` + `scripts/` + `tests/` + `references/` + `research/` + `skill-dependencies.json` | cubeone-mcp 产出的 Skill 应沿用此结构 |
 
-三个模板仓 remote 均在 `github.com/LeonhardtHUST/...`；`platform32-mcp` 本身**只有 Initial commit、无 remote**。
+三个模板仓 remote 均在 `github.com/LeonhardtHUST/...`；`cubeone-mcp` 本身**只有 Initial commit、无 remote**。
 
 ### 3.3 官方/外部事实（已核对）
 
@@ -113,8 +113,8 @@
 
 | Gap | 描述 | 建议归属 | 优先级 |
 |---|---|---|---|
-| **G1 生成核验器** | `.ioc` 改动后强制核验：① 日志扫描 `Cannot map` / 相关 `OptionalMessage_ERROR`（容忍 G474 已知的 `VP_RIF_VS_RIF1` 噪音，见模板 D8）；② `Core/Src/main.c` 存在对应 `MX_xxx_Init()`；③ `.mxproject` 无盘符绝对路径（模板实测 §3.2）。现有任何 MCP 都不做这件事 | platform32-mcp 自研脚本（Python），作为 Skill 流水线的**必经关卡** | P0 |
-| **G2 编排 Skill** | 把"改配置→生成→核验→构建→（烧录）→（串口验证）"串成带 L0–L5 验证等级声明的流程，并输出符合模板 `AGENTS.md` 提交规范的 commit。现有三个 MCP 各管一段，没人管整体 | platform32-mcp 主交付物：WorkBuddy Skill（沿用 leonskill 结构）+ 编排脚本 | P0 |
+| **G1 生成核验器** | `.ioc` 改动后强制核验：① 日志扫描 `Cannot map` / 相关 `OptionalMessage_ERROR`（容忍 G474 已知的 `VP_RIF_VS_RIF1` 噪音，见模板 D8）；② `Core/Src/main.c` 存在对应 `MX_xxx_Init()`；③ `.mxproject` 无盘符绝对路径（模板实测 §3.2）。现有任何 MCP 都不做这件事 | cubeone-mcp 自研脚本（Python），作为 Skill 流水线的**必经关卡** | P0 |
+| **G2 编排 Skill** | 把"改配置→生成→核验→构建→（烧录）→（串口验证）"串成带 L0–L5 验证等级声明的流程，并输出符合模板 `AGENTS.md` 提交规范的 commit。现有三个 MCP 各管一段，没人管整体 | cubeone-mcp 主交付物：WorkBuddy Skill（沿用 leonskill 结构）+ 编排脚本 | P0 |
 | **G3 MCP 注册与安全配置** | `~/.workbuddy/mcp.json` 目前只有 disabled 的 `stm32-stlink`。需新增 `vscode-cube-mcp`（env 内联 `ST_CUBEMX_*`，`ALLOWED_ROOTS=D:\Projects;...`）与 `platformio.mcp`，并启用 `stm32-stlink`；策略默认 `build_only`（烧录需显式升档） | 配置文件改动 + 各 server 的 env 白名单 | P0 |
 | **G4 H723 模板跑通前置** | 无 FW_H7 → H723 模板无法生成/构建。先 `swmgr install` 装 FW_H7，且 PlatformIO 首次构建要联网拉 framework-stm32cubeh7 | 一次性环境操作 | P1 |
 | **G5 CMake 流** | 模板范式是 PlatformIO 单流（CubeMX 生成 `Core/`，HAL/链接脚本/启动文件由 PIO framework 提供，见 AGENTS.md §2.4–2.5）。原报告的"双流同步"是伪需求（用户实际工程全部是 PIO 流）。CLT 自带 CMake/Ninja 可作后备 | **降级为 Phase 3 选做**；MVP 不做 | P2 |
@@ -128,7 +128,7 @@
 ```
 ┌─────────────────────────── WorkBuddy / MCP 客户端 ───────────────────────────┐
 │                                                                              │
-│  platform32-mcp Skill（自建，G2）                                             │
+│  cubeone-mcp Skill（自建，G2）                                             │
 │  ├─ SKILL.md：流程编排知识（L0–L5、提交规范、模板约束、陷阱清单 D1–D9/H-1–H-6） │
 │  ├─ scripts/：verify_generation.py（G1）、regen.sh、ioc_backup.py             │
 │  └─ tests/ + references/（引用三个模板仓文档，不复制内容）                     │
@@ -142,7 +142,7 @@
 ```
 
 关键决策：
-1. **platform32-mcp 仓 = Skill + 编排脚本 + 文档**，不是又一个 MCP server。三个领域 server 已存在，再造轮子违背模板文档的否决结论。
+1. **cubeone-mcp 仓 = Skill + 编排脚本 + 文档**，不是又一个 MCP server。三个领域 server 已存在，再造轮子违背模板文档的否决结论。
 2. **`.ioc` 修改首选 `cubemx_configure`（CLI `set` 命令）**，不做文本注入；手改仅限小改动且必须过 G1 核验。任何修改前自动 `git status` 检查 + `.ioc.bak` 备份。
 3. **生成后必须**：`git diff` 报告给用户（哪些 USER CODE 区之外的东西被动了）+ G1 核验器结果。
 4. 权限三层：MCP server env 白名单（路径）→ `PLATFORMIO_MCP_POLICY`（动作档位）→ Skill 层 L 等级声明（不达标不许提交）。
@@ -157,7 +157,7 @@
 - ✅ 验收：三个 server 在客户端可见，`cubemx_help`、`pio_system_info` 返回正常。
 
 ### Phase 1：MVP 无硬件闭环（2–3 天）
-1. 建 platform32-mcp 骨架（leonskill 结构：SKILL.md/scripts/tests/references）。
+1. 建 cubeone-mcp 骨架（leonskill 结构：SKILL.md/scripts/tests/references）。
 2. 写 G1 `verify_generation.py`：输入 = 生成日志 + `main.c` + `.mxproject`；输出 = 结构化核验报告（pass/fail + 差异）。用 `template-mcu-STM32G474-series` 的已知噪音（D8）做负样本测试。
 3. SKILL.md 编排流程：`cubemx_load`（审计）→ 改前 `git status`/备份 → `cubemx_configure`/`cubemx_generate` → G1 核验 → `pio_build`（解析错误 file:line）→ `git diff` 汇报 → 按模板规范生成 commit 文案。
 4. 实战验收（无硬件，全部可当日完成）：
@@ -203,7 +203,7 @@
 2. **platformio.mcp 用外部包还是 Skill 直调 pio CLI？**（推荐：先装外部包做主力，CLI 做回退；它带错误解析与策略层，值）
 3. **CMake 流是否砍出 MVP？**（推荐砍；用户实际工程全是 PIO 流）
 4. **FW_H7 现在装还是接板时装？**（推荐 Phase 2 顺手装）
-5. **platform32-mcp 的 GitHub remote**：现在建 `LeonhardtHUST/platform32-mcp` 还是先本地？（用户对模板仓都有 remote，建议尽早建）
+5. **cubeone-mcp 的 GitHub remote**：现在建 `LeonhardtHUST/cubeone-mcp` 还是先本地？（用户对模板仓都有 remote，建议尽早建）
 6. **烧录探针默认 ST-Link？**（模板默认 stlink/SWD；X Pulse 板是否同探针 `[待验证]`）
 
 ---
@@ -225,5 +225,5 @@ Programmer CLI    C:\ST\STM32CubeCLT_1.22.0\STM32CubeProgrammer\bin\STM32_Progra
 arm-gdb           C:\ST\STM32CubeCLT_1.22.0\GNU-tools-for-STM32\bin\arm-none-eabi-gdb.exe
 模板仓            D:\Projects\GitHub\template-mcu-{STM32F103C8T6,STM32G474-series,STM32H723-series}
 测试靶            D:\Projects\GitHub\NUEDC_2027\G474\（G474_00~10）、D:\Projects\GitHub\HUSTRadio\stm32-digital-clock
-本报告            D:\Projects\GitHub\platform32-mcp\docs\2026-11-03-execution-research.md
+本报告            D:\Projects\GitHub\cubeone-mcp\docs\2026-11-03-execution-research.md
 ```

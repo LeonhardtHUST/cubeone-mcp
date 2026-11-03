@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""platform32-mcp · ``.ioc`` 备份 / 还原工具。
+"""cubeone-mcp · ``.ioc`` 备份 / 还原工具。
 
 为什么需要
 ----------

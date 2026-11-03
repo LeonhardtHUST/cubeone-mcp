@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""platform32-mcp · G1 生成核验器（CubeMX 静默丢弃检测）。
+"""cubeone-mcp · G1 生成核验器（CubeMX 静默丢弃检测）。
 
 背景
 ----

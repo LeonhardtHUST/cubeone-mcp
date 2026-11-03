@@ -2,13 +2,13 @@
 
 > 产出时间：2026-11-03 · owner：`env-agent` · 验证等级：**L1**
 > 适用对象：想在自己机器上把 `vscode-cube-mcp` / `platformio.mcp` 接到 MCP 客户端的人
-> **重要前提**：`platform32-mcp` 的交付物是仓库本体（Skill + 核验脚本 + 文档 + CI），**不包含**替用户改全局配置。本文档只提供可复现的注册步骤与实测结论，**所有操作由你自己执行**；本仓库不会、也没有修改你的 `~/.workbuddy/mcp.json`。
+> **重要前提**：`cubeone-mcp` 的交付物是仓库本体（Skill + 核验脚本 + 文档 + CI），**不包含**替用户改全局配置。本文档只提供可复现的注册步骤与实测结论，**所有操作由你自己执行**；本仓库不会、也没有修改你的 `~/.workbuddy/mcp.json`。
 
 ---
 
 ## 0. 这份文档为什么存在
 
-原计划里 T0.2 是"由 Agent 修改 `~/.workbuddy/mcp.json` 注册两个 server"。用户在 GATE-0 明确否决：**本项目是开发 platform32-mcp，不是替用户装配本机 MCP 工具链**（见 `docs/DECISIONS.md` D12）。
+原计划里 T0.2 是"由 Agent 修改 `~/.workbuddy/mcp.json` 注册两个 server"。用户在 GATE-0 明确否决：**本项目是开发 cubeone-mcp，不是替用户装配本机 MCP 工具链**（见 `docs/DECISIONS.md` D12）。
 
 于是 T0.2 降级为本文档。已经花掉的实测成本不浪费——下面每条结论都是**实测**出来的，不是抄文档：
 

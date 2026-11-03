@@ -1,4 +1,4 @@
-# platform32-mcp
+# cubeone-mcp
 
 让 AI Agent 安全地驱动 **STM32CubeMX** 改 `.ioc` 配置、生成代码，并判断「改的东西到底有没有真的进生成物」。
 

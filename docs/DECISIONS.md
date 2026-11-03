@@ -22,7 +22,7 @@
 
 | 编号 | 决策 | 值 | 理由 |
 |---|---|---|---|
-| D5-a | `platform32-mcp` 仓库可见性 | **Public** | 用户选定；`gh` 已登录 `LeonhardtHUST`，scopes 含 `repo`/`workflow`，git 走 ssh |
+| D5-a | `cubeone-mcp` 仓库可见性 | **Public** | 用户选定；`gh` 已登录 `LeonhardtHUST`，scopes 含 `repo`/`workflow`，git 走 ssh |
 | D7 | 本次会话是否执行 Phase 2（烧录/串口） | **不执行，整体后移** | 用户确认"暂未接板"。T2.1–T2.6 全部挂起至 GATE-2.0 接板日；本次只做 Phase 0 / Phase 1 / Phase 3 中不依赖硬件的部分 |
 
 ---
@@ -58,7 +58,7 @@
 
 ### D12 · **T0.2 不执行写入**：`mcp.json` 保持原样，注册指引降级为文档交付
 
-- **背景**：lead 在 GATE-0 向用户出示 diff 请求授权写入 `C:\Users\Leon\.workbuddy\mcp.json`，用户明确否决并界定项目范围：**"我在让你开发 platform32-mcp，不是让你帮我装 mcp+skills 能力工具链。"**
+- **背景**：lead 在 GATE-0 向用户出示 diff 请求授权写入 `C:\Users\Leon\.workbuddy\mcp.json`，用户明确否决并界定项目范围：**"我在让你开发 cubeone-mcp，不是让你帮我装 mcp+skills 能力工具链。"**
 - **决策**：`~/.workbuddy/mcp.json` **一个字节都不改**（env-agent 已复核 sha256 与改前一致）。
   - T0.2 的任务性质从"应用配置"改为"**产出一份可复现的注册指引**" → `docs/guides/mcp-registration.md`
   - env-agent 已实测的握手证据（两个 server 能真实拉起、platformio 40 工具 / cube 9 工具）保留，作为指引里的"可复现验证"章节，不再是配置生效的证明
@@ -246,7 +246,7 @@
   2. **`set ip parameters ...` 返回 `OK` 但 `.ioc` 一字未变** —— 这是最危险的形态：**静默空操作**。任何"看返回值判成功"的逻辑都会被骗。根因与 env-agent 的源码结论一致：TIM 伪命令只被 `cubemx_new_project` 调用，纯透传路径无人处理。
   3. **CubeMX 进程退出码恒为 0**，即使回显 `KO` 也返回 0。⇒ **判据只能是回显行 + 生成物，绝不能是退出码或 `ok=True`。**
 - **对产品定位的修正（必须体现到 `SKILL.md` §0 / `README`）**：
-  > `platform32-mcp` 能**可靠代做**的是**普通 GPIO 级改动**（新增/改模式/改上下拉）。
+  > `cubeone-mcp` 能**可靠代做**的是**普通 GPIO 级改动**（新增/改模式/改上下拉）。
   > **非 GPIO 外设（UART/SPI/TIM/ADC…）的增改，本工具链不代做** —— 必须走"手改 `.ioc` 文本（含 `Mcu.IP*`/`IPParameters` 白名单/虚拟引脚三类键）+ G1 强制核验"或 GUI。
   > **`G1` 核验器因此不是辅助工具，而是非 GPIO 改动路径上唯一的安全网** —— 这正是本项目的立项理由。
 - **为什么必须写进文档而不是只留在报告里**：使用者最可能的第一诉求就是"给我加一路串口"。若不写明，他们会用 `configure` 得到 `OK`、生成无错、核验 PASS（外设级检查对"整段外设缺失"之外静默无感），然后上线一个没有串口的固件。
@@ -405,6 +405,25 @@ judge_ok      = False           ← 仅当判据含文本检查时才为 False
 
 #### 31.4 影响面（重要）
 `cubemx_load` / `cubemx_configure` / `cubemx_generate` 失败时都走同一条 `return f"[{'OK' if r['ok'] else 'FAIL'} exit=…]"` 路径，**都不置 `isError`**。所以"看 isError 判成败"这个直觉在 vscode-cube-mcp 上整体不成立，不只是 `cubemx_load`。
+
+### D32 · 项目更名为 `cubeone-mcp`，主分支 `main` → `master`
+
+#### 32.1 变更
+- 仓库名：`platform32-mcp` → **`cubeone-mcp`**
+- 主分支：`main` → **`master`**（远端默认分支同步切换，旧 `main` 删除）
+- CI 触发条件同步改为 `branches: [master]`
+
+#### 32.2 刻意**不**改的地方：`docs/logs/` 与 `docs/reports/`
+这两处共 **444 处**出现旧名（如 `D:\Projects\GitHub\platform32-mcp\...` 的路径、运行时的 `repo_root`）。**一律保留原文**，理由：
+
+> 它们是某次运行的**证据**，记录的是"当时那台机器上的真实路径"。改名后回填，等于让证据与产物不再对应——这正是本项目反复在防的那类问题（见 D31、D29）。
+
+后果是文档里会同时出现两个名字。这是**有意的不一致**，不是遗漏：证据保留历史，契约文档用新名。
+
+#### 32.3 影响
+- 旧的 GitHub 地址会重定向到新仓库名（GitHub 自动行为），已有的 `git remote` 需手动更新
+- 本地克隆目录名仍是 `platform32-mcp`，与仓库名不一致；如需一致，重命名目录后重开工作区
+- 已发布的 `v0.1.0` / `v0.1.1` 两个 tag 与 release 不受影响（tag 与仓库名无关）
 
 ---
 

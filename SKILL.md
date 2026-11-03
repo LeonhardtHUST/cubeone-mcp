@@ -1,5 +1,5 @@
 ---
-name: platform32-mcp
+name: cubeone-mcp
 description: "STM32 工程全流程编排：.ioc 改配置 → CubeMX 生成 → 生成核验（G1 强制关卡）→ PlatformIO 构建 →（接板后）烧录与串口验证，带 L0–L5 验证等级声明与符合模板 AGENTS.md 的 commit。**能力边界（先读）：只能可靠代做普通 GPIO 级改动（新增引脚/改模式/改上下拉）；UART/SPI/TIM/ADC 等非 GPIO 外设的增改没有工具能力，必须手改 .ioc 或走 GUI，并强制过 G1。** 双通道执行：已注册 MCP 走工具通道，未注册走 CubeMX CLI + pio CLI 等价通道，判据与证据要求完全相同。当用户说「改一下这个 ioc」「加一个 GPIO」「加一路串口/SPI/定时器」「CubeMX 重新生成」「生成完帮我核一遍」「有没有被静默丢弃的外设」「pio 构建」「Flash/RAM 多少」「烧进去看看」「串口有输出吗」时使用。只读审计不写盘；写操作前必须备份 .ioc，生成后必须跑核验器并如实声明验证等级；不碰 testbeds/ 之外的模板原仓。"
 version: 0.6.0
 agent_created: true
@@ -7,7 +7,7 @@ license: MIT
 compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证）；CubeMX 6.18.1（路径见 §0.2）；PlatformIO Core 6.x；MCP 可选，未注册用 §0.4
 ---
 
-# platform32-mcp：STM32 生成 / 核验 / 构建 / 烧录编排
+# cubeone-mcp：STM32 生成 / 核验 / 构建 / 烧录编排
 
 > **本文件是操作面，不是手册。** 逐条细则在 `references/`：`capability-boundary.md`（能力边界）·
 > `verify-contract.md`（核验器契约）· `regen-exit-codes.md`（`regen.sh`）· `diff-evidence.md`（取证判据）·

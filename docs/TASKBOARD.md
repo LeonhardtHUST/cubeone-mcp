@@ -62,7 +62,7 @@
 
 | 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
 |---|---|---|---|---|---|---|
-| T1.1 | 建仓库骨架 + `.gitignore`（testbeds、logs 局部）+ GitHub remote push | skill-author | Phase 0 | 已完成 | L0 | commit `9b89a10` `chore: 建仓骨架与 .gitignore`（12 files/+842）；remote `https://github.com/LeonhardtHUST/platform32-mcp`（Public，default `main`） |
+| T1.1 | 建仓库骨架 + `.gitignore`（testbeds、logs 局部）+ GitHub remote push | skill-author | Phase 0 | 已完成 | L0 | commit `9b89a10` `chore: 建仓骨架与 .gitignore`（12 files/+842）；remote `https://github.com/LeonhardtHUST/cubeone-mcp`（Public，default `main`） |
 | T1.2 | **核验器 v1.2** `scripts/verify_generation.py`：**7 个**固定 check id（`log_cannot_map` / `main_init_present` / `main_init_called` / **`pins_present`** / `mxproject_abs_path` / `mx_script_abs_path` / `syscalls_path`），`blocking: bool` 取代 `level`，JSON schema 升 **`/2`**（参数收进 `inputs`），`--project-root` 扫 `.mx` 三态，`--expect-pins` 引脚级 | verifier-dev | T1.1 | 已完成 | L2 | `pytest 69 passed / 0 failed` → `docs/logs/phase1/t1.2-pytest.log`；引脚级正负样本 `docs/logs/phase1/v1.2-pins/`；契约 `docs/reports/t1.2-verifier-contract.md`（v1.2，含 §1.5 保证边界与 §4.1 实测） |
 | T1.3 | `scripts/regen.sh`：备份 `.ioc`+`.mxproject` → 前置检查（`--require-clean` 可选 / 版本戳与迁移提示只读）→ CubeMX 生成（cwd=工程根，timeout≥240s，**查日志整行 `KO`**）→ 核验 → 失败**从备份**回滚并打印 `Core/` 状态 | verifier-dev | T1.2 | 已完成 | L4（生成核验，未跑 pio） | 真跑：`docs/logs/phase1/regen-v1.1-success/`（rc=0）、`regen-v1.1-rollback/`（rc=1，`.ioc`/`.mxproject` 恢复后 sha256 与生成前一致）；KO 判据/脏 `.ioc`/`--require-clean` 由 `tests/test_regen_preflight.py`（11 例）覆盖 |
 | T1.4 | **SKILL.md 初稿**：流程编排知识（双通道调用、G1 核验强制、L 等级声明、提交文案模板、陷阱速查 P/D/H 索引） | skill-author | T1.2 | 已完成 | L0 | `SKILL.md` **v0.6.0**（350 行，对齐核验器 1.2.0：7 项 / schema `/2`）+ 5 个手册页。commit：`4e8f4ee` 拆分 · `944c3e8` 对齐 1.2.0 · `ae9b997` 三段式 · `071b6aa` S3 修正 · `03d6e1d` 评审修正。**同行评审已过**（lead 逐条对照代码与模板 `AGENTS.md:105-110` 抽查 9 项判据，提出 4 处机械层问题并已修复：代码围栏破损、`D1–D26`→`D1–D30`、不存在的 `ci-agent`、`compatibility` 与 CI 矩阵不一致） |
@@ -139,7 +139,7 @@
 > 契约：`docs/reports/t1.2-verifier-contract.md`。**GATE-1.1 可触发。**
 > `pins_present`（引脚级第 7 项）已在 **v1.2** 落地：未改动的 G474 基线 + `--expect-pins PB0=GPIO_Output` → **fail**（外设级全 pass），`PC13=GPIO_Output` → pass。S1 建议在 `regen.sh` 加 `--expect-pins`，并用外部断言做交叉验证。
 
-GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/platform32-mcp`（Public），由 T1.1 创建。
+GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/cubeone-mcp`（Public），由 T1.1 创建。
 
 ---
 

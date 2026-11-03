@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""platform32-mcp · ``.ioc`` 单键读写工具（供 ``regen.sh`` 做字段复位）。
+"""cubeone-mcp · ``.ioc`` 单键读写工具（供 ``regen.sh`` 做字段复位）。
 
 为什么单独做一个工具
 --------------------
