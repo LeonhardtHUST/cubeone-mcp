@@ -1,7 +1,7 @@
 ---
 name: platform32-mcp
 description: "STM32 工程全流程编排：把 .ioc 改配置 → CubeMX 代码生成 → 生成核验（G1 强制关卡，verify_generation.py）→ PlatformIO 构建 →（接板后）烧录与串口验证 串成一条带 L0–L5 验证等级声明的流水线，并输出符合模板 AGENTS.md 提交规范的 commit。同时提供双通道执行：已注册 MCP（vscode-cube-mcp / platformio.mcp）走工具通道，未注册走 CubeMX CLI + pio CLI 等价通道，两条通道的判据与证据要求完全相同。当用户说「改一下这个 ioc」「加一个 GPIO / UART / ADC 通道」「CubeMX 重新生成代码」「生成完帮我核一遍」「有没有被静默丢弃的外设」「pio 构建一下」「Flash/RAM 占多少」「烧进去看看」「串口有输出吗」「这个模板工程跑不起来」时使用。只读审计不写盘；任何写操作前必须先备份 .ioc 并报告将改动的对象，生成后必须跑核验器并如实声明验证等级；不替用户提交未经核验的代码，不碰 testbeds/ 之外的模板原仓。"
-version: 0.3.2
+version: 0.3.3
 agent_created: true
 license: MIT
 compatibility: Python 3.8+（核验器只依赖标准库）；CubeMX 6.18.1（路径不固定，见 §0.2）；PlatformIO Core 6.x；MCP 通道可选，未注册时用 §0.4 的 CLI 等价命令
@@ -72,8 +72,8 @@ compatibility: Python 3.8+（核验器只依赖标准库）；CubeMX 6.18.1（�
 ### 0.3 三条红线（与通道无关）
 
 1. **要烧录就必须显式确认**。MCP 通道下 `PLATFORMIO_MCP_POLICY=build_only` 会拒绝烧录；
-   CLI 通道下**没有任何东西会拦你**，只能靠人不敲 `-t upload`。烧录属于 L5，
-   且需经 `team-lead` 向用户确认（GATE-2.1）。
+   CLI 通道下**没有任何东西会拦你**，只能靠人不敲 `-t upload`（为什么拦不住，见 §0.5）。
+   烧录属于 L5，且需经 `team-lead` 向用户确认（GATE-2.1）。
 2. **只在 `testbeds/` 的克隆副本里做写操作**。`D:\Projects\GitHub\` 下三个 `template-mcu-*`、
    `NUEDC_2027`、`HUSTRadio`、`leonskill-*` **一律只读**（✅ `docs/DECISIONS.md` D9）。
 3. **生成后不核验 = 没做**。CubeMX 对 `.ioc` 的错误是**非致命**的：信号名写错只留一行日志，
@@ -97,6 +97,39 @@ python scripts/verify_generation.py --log <cubemx.log> --main-c "<工程>\Core\S
 
 ⚠️ 以下两条 Phase 2 才用，**本会话未实测**：烧录 `pio run -d <工程> -t upload`；
 串口 `pio device monitor`（参数以接板后实测为准）。
+
+### 0.5 CLI 通道的**技术真空**（安全边界，必读）
+
+这是本文最需要重视的一节。三个 MCP server 的权限模型是三层叠加的：
+
+| 层 | 机制 | 谁提供 | CLI 通道有吗 |
+|---|---|---|---|
+| 路径层 | `ST_CUBEMX_ALLOWED_ROOTS` 白名单，越界报错 | `vscode-cube-mcp` | ❌ **没有** |
+| 动作层 | `PLATFORMIO_MCP_POLICY=build_only/read_only`，越档拒绝执行 | `platformio.mcp` | ❌ **没有** |
+| 流程层 | G1 核验器 + L 等级声明（不达标不许提交） | 本仓 | ✅ 有（同一套脚本） |
+
+**结论：CLI 回退通道上，路径层与动作层是真空的。**
+
+推到极端：在 CLI 通道下，一条
+`pio run -d <某工程> -t upload` 就能把一个未经验证的固件烧进板子，
+而**没有任何技术手段会拦住它**——不越白名单、不越 policy、不触发核验器。
+写坏 `.ioc` 同理：`java -jar ... -q` 可以指向任意路径下的任意脚本。
+
+**所以本仓的正式立场是：**
+
+> **本项目不对 CLI 通道提供任何技术性拦截保障，只提供约定。**
+> 路径白名单与动作档位是 MCP 层的产品特性，本仓既不能复制也不能替代；
+> 不注册 MCP = 自愿放弃这两层保护。G1 核验器是**唯一的**技术性关卡，
+> 且它只在"人主动调用"时才生效。
+
+这意味着 §0.3 第 1、2 条红线在 CLI 通道下**纯粹靠执行者自律**。要补回保护，
+只有两条路：① 注册 MCP（见 `docs/guides/mcp-registration.md`）；
+② 用 `scripts/regen.sh` 封装（它自带"`.ioc` 有未提交改动则拒绝"的前置检查，
+但**不管** `.mx` 脚本指向哪里，也不拦烧录）。
+
+> ⚠️ **不要**把这段理解成"CLI 通道不安全所以别用"。CLI 通道在用户没注册 MCP 时
+> （也就是大多数情况）是唯一可用的执行路径。正确做法是**知道真空在哪，用流程补**：
+> 烧录前走 GATE-2.1 人工确认；改配置只在 `testbeds/` 副本里做；生成后必跑 G1。
 
 ---
 
@@ -504,6 +537,7 @@ P1–P4 是本项目 Phase 1 的**实跑记录**（✅）。
 | 0.3.0 | 2026-11-03 | §0 改双通道（MCP / CLI 等价，D12）；§1 按 T1.2 实现回填（契约 + 5 项已实现判据 + 3 项待实现）；§2 第 3 步标"方案待 T1.6"不再写死工具名；§2 第 5 步改为真实核验器调用；§5 增 P1–P4 | T1.4 |
 | 0.3.1 | 2026-11-03 | 勘误：`docs/guides/mcp-registration.md` 已落盘（取消"尚未落盘"）；那 3 项检查改为"书面契约之外的扩展意向"（`t1.2-verifier-contract.md` 只定义 5 项）；补 `regen.sh` 的 `-e` 自动推导与 `--out` 默认值 | T1.4 |
 | 0.3.2 | 2026-11-03 | 与 verifier-dev 逐条核对后补：`skip` 的两种触发与"skip 不等于通过"、空日志 → warn（不能当"日志干净"）、`syscalls_path` 的双条件判据、JSON 无时间戳；引 `regen-rollback/verify.json` 作失败样本 | T1.4 |
+| 0.3.3 | 2026-11-03 | 新增 §0.5「CLI 通道的技术真空」独立小节：路径层（`ALLOWED_ROOTS`）与动作层（`POLICY`）在 CLI 回退通道上不存在，明写"本项目不对 CLI 通道提供技术性拦截保障，只有约定"；§0.3 红线 1 增加交叉引用 | T1.4 |
 | 待定 | — | 同行评审（lead 逐条对照 `docs/reports/t1.2-verifier-contract.md`） | T1.4 |
 | 待定 | — | 定稿（吸收 S1–S3 实测教训 + `cubemx_configure` 定论） | T1.9 |
 | 待定 | — | 合并 Phase 2 串口/烧录增量 + L 等级自查清单 | T3.3 |
