@@ -25,7 +25,8 @@
     python scripts/ioc_field.py --ioc board.ioc set ProjectManager.AskForMigrate false
     python scripts/ioc_field.py --ioc board.ioc set MxCube.Version 6.18.1 --dry-run
 
-退出码：``0`` 读到/写成；``1`` 键不存在（或有多行同名键）；``2`` 参数/IO 错误。
+退出码：``0`` 读到/写成；``1`` 没有结论可给（键不存在 **或** 同名键多行歧义——两者报文不同，
+前者提示核对键名、后者附出全部行号）；``2`` 参数/IO 错误。
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ import sys
 import tempfile
 from typing import Sequence
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 SCHEMA = "platform32.ioc_field/1"
 
@@ -111,18 +112,34 @@ def split_line_ending(line: str) -> tuple[str, str]:
 def get_value(path: str | os.PathLike[str], key: str) -> tuple[str | None, int]:
     """读取单键的值。
 
+    三种情形**必须给出三种不同的话**（否则人拿到的是同一条消息，得自己去翻文件）：
+
+    * 命中一行      → ``(值, 行号)``
+    * 一行都没有    → ``(None, 0)``（调用方报「不存在」）
+    * 命中多行      → 抛 ``KeyError``，报文里带**全部行号**：这是"同名键多行"的歧义，
+      与"不存在"是两件事——前者说明 ``.ioc`` 被手工改出了重复键（CubeMX 自己不会写重复键），
+      后者说明键名写错。把两者合成一句"不存在"，会让人去改键名，而真正该做的是去修那个 ``.ioc``。
+
     Args:
         path: ``.ioc`` 路径。
         key: 键名。
 
     Returns:
         ``(值 或 None, 命中行号 1 起)``；未命中时行号为 0。
+
+    Raises:
+        KeyError: 同名键出现多行（报文含行号列表）。
     """
     text = read_preserving_newlines(path)
     lines = text.splitlines(keepends=True)
     hits = find_key_lines(lines, key)
-    if len(hits) != 1:
+    if not hits:
         return None, 0
+    if len(hits) > 1:
+        line_list = ", ".join(str(index + 1) for index in hits)
+        raise KeyError(
+            f"{key} 在 {path} 出现 {len(hits)} 次（第 {line_list} 行）：同名键多行歧义，get 不做猜测"
+        )
     content, _ending = split_line_ending(lines[hits[0]])
     return content.split("=", 1)[1] if "=" in content else "", hits[0] + 1
 
@@ -177,7 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
         description=".ioc 单键读写（保留 CRLF/LF 与文件末尾换行，原子写）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "退出码：0=成功 1=键不存在（或同名键多行） 2=参数/IO 错误\n"
+            "退出码：0=成功 1=键不存在 或 同名键多行歧义（报文会区分：后者附全部行号） 2=参数/IO 错误\n"
             "示例：python scripts/ioc_field.py --ioc board.ioc set "
             "ProjectManager.AskForMigrate false"
         ),
@@ -215,9 +232,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     payload: dict[str, object]
     try:
         if args.action == "get":
+            # ⚠️ 标记必须仍是 `[<tool>][not-found]`：`lib/server.mjs` 的 isExecFailure 把它
+            # 当"域内结论"白名单（exit 1 + 无 JSON 也算答案，不报执行层失败）。多行歧义另起一个
+            # 标记词（如 `[ambiguous]`）会让那次调用被报成"执行层失败"，把使用者推去查 Python。
+            # ⇒ 区分靠**报文**（带行号 + 歧义字样），不靠标记；退出码同样是 1（"没有结论可给"）。
             value, lineno = get_value(args.ioc, args.key)
             if value is None:
-                print(f"[ioc_field][not-found] {args.key} 不存在于 {args.ioc}", file=sys.stderr)
+                print(
+                    f"[ioc_field][not-found] {args.key} 不存在于 {args.ioc}（键名核对："
+                    f"区分大小写，完整键名形如 ProjectManager.AskForMigrate）",
+                    file=sys.stderr,
+                )
                 return EXIT_KEY_MISSING
             print(value)
             payload = {"ioc": os.path.abspath(args.ioc), "action": "get", "key": args.key,
@@ -231,7 +256,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"（L{result['line']}, {state}）"
             )
     except KeyError as error:
-        print(f"[ioc_field][not-found] {error}", file=sys.stderr)
+        # `str(KeyError("x"))` 会带上引号（`'x'`）——直接用 args[0] 去掉那层噪音，
+        # 否则 stderr 里会出现 `[ioc_field][not-found] 'Mcu.Name 出现 2 次…'` 这种难读形态。
+        message = error.args[0] if error.args else str(error)
+        print(f"[ioc_field][not-found] {message}", file=sys.stderr)
         return EXIT_KEY_MISSING
     except OSError as error:
         print(f"[ioc_field][input-error] {error}", file=sys.stderr)

@@ -63,7 +63,14 @@ python scripts/verify_generation.py \
   **自检**：`checks` 里有 `skip` 而 `notes` 为空 = 实现退化，**按缺陷报 issue**，不要手写补。
 - **`inputs.effective_allow_signals`**：实际生效的白名单（含 `regen.sh` 预置项）。
   直调时等于 `allow_signals`。存在的唯一目的：消灭"同一份日志、两个入口、两种结论"。
-- **取参一律从 `inputs` 读**。`/1` 的顶层 `expect` / `allow_signals` 在 `/2` 不再是契约字段。
+- **取参一律从 `inputs` 读**。`/1` 的顶层 `expect` / `allow_signals` 在 `/2` **不再是契约字段**，
+  但**不是被删了**：v1.x 全程保留这两个顶层键作兼容输出（`summary.notes` 会带一条 `deprecated:` 说明），
+  **v2.0 才移除**。
+  - 为什么不在 1.x 里删：已经发出去的报告消费方（含 Skill 与 CI 判据）按顶层键读过 `.json`，
+    在 1.x 轴上删字段等于让它们静默拿到 `KeyError`/`undefined`，属于"悄悄破坏"；
+    删字段是**破坏版**才允许做的事，破坏版的号已经留给 2.0。
+  - 迁移动作：新代码只读 `inputs.expect` / `inputs.allow_signals`；看到顶层键还在属正常（兼容期），
+    不要当成实现没改完。
 - **`tool`** 保持对象（不用字符串），便于将来扩展 `driver` 等字段。
 
 ## 4. 七项检查的判定细则

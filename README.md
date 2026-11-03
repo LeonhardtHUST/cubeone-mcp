@@ -226,6 +226,17 @@ PLATFORMIO_BUILD_DIR=.pio/build-ci pio run -d path/to/project
 
 这条与 CubeMX、PlatformIO、模板本身无关，是**运行环境的删除保护**导致的。
 
+**pytest 的临时目录也会被安全软件拦住**：`python -m pytest tests/` 默认把每个用例的临时根堆在
+系统 `%TEMP%\pytest-of-<user>\` 下，跑得多了会累积上千个目录；某些安全软件/agent 沙箱的**批量删除
+保护**会在 pytest 清理旧临时根时拦截（表现为 `PermissionError`、`[SAFE_DELETE_*]` 之类的钩子消息，
+或干脆挂起等确认）。规避方式是每轮换一个干净目录，跑完不清理也无所谓：
+
+```bash
+python -m pytest tests/ -q --basetemp="$TEMP/pytest-run-$(date +%s)"
+```
+
+`--basetemp` 给的是一个**本次专用**的临时根，pytest 不再去动历史那堆目录。CI 上不需要（runner 是一次性的）。
+
 ## 文档索引
 
 | 文档 | 什么时候看 |

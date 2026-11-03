@@ -34,6 +34,12 @@ STM32CubeMX 对 ``.ioc`` 的错误是**静默非致命**的：
                                           ``MX_<PERIPH>[_<FUNC>]_Init`` **定义**
 ``main_init_called``          blocking    这些 ``MX_..._Init`` 在 ``main()`` 体内
                                           **被调用**（注释掉的调用不算）
+``pins_present``              blocking    每个 ``--expect-pins PIN=SIGNAL``：
+                                          ``.ioc`` 的 ``<PIN>.Signal`` 大小写不敏感
+                                          一致，**且** ``main.c`` 有对应端口的
+                                          ``__HAL_RCC_GPIOx_CLK_ENABLE()``
+                                          （不传 ``--expect-pins`` 或没给 ``--ioc``
+                                          → ``skip``，不冒充通过）
 ``mxproject_abs_path``        blocking    ``.mxproject`` 无盘符绝对路径
 ``mx_script_abs_path``        blocking    ``<project-root>/**/*.mx`` 的绝对路径
                                           **指向本工程**（三态：占位符 warn /
@@ -1224,8 +1230,8 @@ def verify_documents(
     report_inputs["effective_allow_signals"] = list(allow_signals)
 
     notes.append(
-        "deprecated: 顶层 expect / allow_signals 已迁入 inputs（同名键），将于 v1.2 删除，"
-        "请改读 inputs.expect / inputs.allow_signals"
+        "deprecated: 顶层 expect / allow_signals 已迁入 inputs（同名键）；v1.x 保留兼容，"
+        "schema /2 起请读 inputs.expect / inputs.allow_signals，v2.0 移除顶层字段"
     )
 
     report: dict[str, object] = {
@@ -1239,7 +1245,9 @@ def verify_documents(
             "notes": notes,
         },
         "inputs": report_inputs,
-        # ↓↓ 以下两个顶层键是 v1.1 的兼容让步（deprecated），v1.2 删除
+        # ↓↓ 以下两个顶层键是 v1.1 的兼容让步（deprecated）：
+        #    **v1.x 全程保留**（不在这条 1.x 轴上删，否则已发出去的消费者会静默拿到 KeyError），
+        #    **v2.0 移除**（破坏版才允许删字段）。口径见 references/verify-contract.md §3。
         "expect": list(expect),
         "allow_signals": list(allow_signals),
     }

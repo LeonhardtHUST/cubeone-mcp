@@ -2,6 +2,14 @@
 # -*- coding: utf-8 -*-
 """MCP 工具调用冒烟自检（T0.4）：真实调用工具并把证据落盘。
 
+⚠️ **归属说明（先读，别搞混冒烟对象）**
+   本脚本冒烟的是 **`vscode-cube-mcp`（外部第三方 MCP server）**——即 T0.2/T0.3 注册的
+   `cubemx_*` / `pio_*` 工具族；它**不是**本仓 `cubeone-mcp` 包自己的 MCP 通道。
+   - 本包（`cubeone-mcp`，`bin/cubeone-mcp.mjs`）自己的冒烟在 **`tools/npm_mcp_handshake.mjs`**（Node 写的）。
+   - 两者判据不同：本包通道验的是路径白名单 / 写策略 / 退出码映射（`lib/server.mjs` 的门禁），
+     `vscode-cube-mcp` 冒烟验的是"外部 server 的工具调用通不通"。
+   - 所以：本脚本红**不等于**本包通道红；本包改动的回归证据一律看 `npm_mcp_handshake.mjs`。
+
 与 T0.2/T0.3 的「协议级握手」不同，本脚本不满足于 ``initialize`` + ``tools/list``，
 而是**真的发起 tools/call**，验证工具能返回结果，从而证明「调用通道」可用。
 

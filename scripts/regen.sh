@@ -21,6 +21,10 @@
 set -uo pipefail
 
 # Git Bash 下 PATH 常缺 coreutils（timeout/find/sed/…），统一补齐。
+# ⚠️ 本机便利项，**他机无害可删**：这一行只把某个人的 PortableGit 路径前置，路径不存在时
+#    export 一个不存在的目录不会报错，脚本照常用系统 PATH 里的同名工具。
+#    已知边界：macOS 的 BSD `sort` 没有 `-V`（版本排序），`version_lt()` 在那里会静默判错
+#    ⇒ 本脚本按 Git Bash / GNU coreutils 设计，macOS 未验证（不要读成"跨平台"）。
 export PATH="/c/Users/Leon/.workbuddy/binaries/PortableGit/versions/1.2.0/usr/bin:/c/Users/Leon/.workbuddy/binaries/PortableGit/versions/1.2.0/bin:$PATH"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
