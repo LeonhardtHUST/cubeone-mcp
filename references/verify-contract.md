@@ -85,19 +85,39 @@ python scripts/verify_generation.py \
 - **空日志/纯空白 → `warn`**（"无法确认生成是否真的跑过"），`verdict` 仍可能是 pass。
   **"日志干净"必须由真实日志证明，不能由空文件证明。**
 
-#### 证据现状：该检查目前没有真实样本
+#### 证据现状：**有真实实例**（1 例，可复现）
 
-`docs/logs/` 里所有 `Cannot map` 命中均来自**核验器自己的报告文本**，负样本是构造 fixture
-（`tests/fixtures/log_cannot_map_missing_s_prefix.txt`）。**原因已查明**——失败被提前拦截在不同层：
+> ✅ `docs/logs/phase1/s3b-regen/cubemx-generate.log:321`
+> `(OptionalMessage_ERROR) Cannot map signal (VP_TIM4_VS_ClockSourceINT) on pin (VP_TIM4_VS_ClockSourceINT)`
 
-| 路线 | 命令层 | 生成日志层 |
+**触发条件是手改 `.ioc`**：声明了外设与引脚映射、但映射无法完成（该例：加 `Mcu.IP3=TIM4` +
+`VP_TIM4_VS_ClockSourceINT` 虚拟引脚，故意省略 `TIM4.IPParameters`）。
+
+**但 CLI 路径不可达**——同类错误被前移到命令层，不是核验器覆盖不足：
+
+| 路径 | 结果 | 能打到哪 |
 |---|---|---|
-| `set pin` 写非法信号名 | `KO` | 根本没走到生成 |
-| 手改 `.ioc` 写坏信号名 | — | **可能出现 `Cannot map`** |
-| 手改 `.ioc` 漏白名单 | — | 日志干净什么都不报 |
+| `set pin <pin> <外设信号>`（写坏信号名 / 去 `S_` 前缀） | **命令层 `KO`**、`.ioc` 一字未变、日志无 `Cannot map` | **不可达**（工具链前移拦截） |
+| **手改 `.ioc`**（上述 S3b 注入） | ✅ **真实 `Cannot map`** | **可达** |
 
-⇒ **该检查的定位是"防 D5 回归的守卫"，不是高频命中项。**
-S3 的任务是给出真实样本，**或者证明该路径在本机不可达——"证明不可达"本身就是交付结论。**
+⇒ 定位措辞：**"该检查有可复现的真实触发场景（手改 `.ioc` 路径）；而 CLI 路径已把同类错误提前
+拦在命令层"**——两者都对，只是入口不同。不要写成"纯回归守卫"，也不要写成"这坑现在会踩到"。
+
+要引用"CLI 路径不可达"的实测：4 种语法全部被拦——`set pin PB0 S_TIM2_CH1_ETR`、
+`set pin PA0-WKUP S_TIM2_CH1_ETR`、`set pin PA1 USART2_TX` 全 `KO`；`set ip parameters TIM2 …`
+回 **`OK` 但 `.ioc` 一字未变**（静默空操作）。证据 `docs/logs/phase1/s3-probe2-raw.log:587-601`。
+
+#### 两道独立防线的对照（S3 的两组证据）
+
+| 证据目录 | 注入 | 判定 |
+|---|---|---|
+| `docs/logs/phase1/s3b-regen/` | `Mcu.IP3=TIM4` **+** 虚拟引脚，省略 `TIM4.IPParameters` | **响亮**：`log_cannot_map` **fail**（真实 `Cannot map`）+ `main_init_present` fail → rc=1 |
+| `docs/logs/phase1/s3b2-regen/` | **仅** `Mcu.IP3=TIM4`（无虚拟引脚、无 IPParameters） | **静默**：`log_cannot_map` **pass**（日志干净）+ `main_init_present` **fail**（`TIM4(missing)`）→ rc=1 |
+
+**`s3b2` 才是"核验器不可替代"的铁证**：日志干净、编译通过、CubeMX 退出码 0，
+只有查 `main.c` 才发现 TIM4 没了（实测 `MX_TIM4_Init` 出现 **0** 次、`TIM4` 字样 **0** 次）。
+⇒ 核验器有**两条独立防线**：读日志（`log_cannot_map`）与读生成物（`main_init_present`），
+**任一单独存在都会漏掉另一类**。
 
 ### 4.2 `main_init_present`（`blocking: true`）
 

@@ -27,8 +27,8 @@ compatibility: Python 3.8+；CubeMX 6.18.1（路径见 §0.2）；PlatformIO Cor
 → 人工过 H-6 清单**（§2 路径 B）。**因此：G1 核验器不是辅助工具，而是非 GPIO 路径上唯一的安全网。**
 
 失败被拦截的层次不同，抓法也不同（详见 `references/capability-boundary.md` §4）：`set pin` 写错信号名 →
-命令层 `KO`（`KO` 判据 + diff）｜手改 `.ioc` 写坏信号名 → **可能出 `Cannot map`**（`log_cannot_map`）｜
-手改漏 `IPParameters` → **日志干净什么都不报**（只有 `main_init_present`）。
+命令层 `KO`｜手改 `.ioc` 写坏信号名 → **可能出 `Cannot map`**｜手改漏 `IPParameters` → **日志干净什么都不报**
+（只有 `main_init_present` 能抓）。
 
 **四层优先级**：能力层（能不能做）> 路径层（`ALLOWED_ROOTS`）> 动作层（`POLICY`）> 流程层（G1 + L 等级）。
 **能力层失败=做不了，权限层失败=不让做，流程层失败=做错了**——加白名单不会让你能配串口。
@@ -71,10 +71,10 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
 
 #### 🔴 `--log` 只接受 CubeMX 原始 stdout 重定向文件，**禁止传任何 MCP 工具返回值**
 
-两个独立理由，任一成立就够：① MCP 的 `NOISE_RE` 删掉 `INFO`/`WARN`/`DEBUG`/`TRACE` 行
-（`[ERROR]` 保留），`Cannot map` 若带此类前缀在 MCP 返回文本里**根本不存在** → **假阴性**且 `verdict` 仍 PASS；
-② `syscalls.c`/`sysmem.c` 的叠加路径异常**只在 stdout 的 `NoEcho` 行** ⇒ 即使不走 MCP、
-**只要"只读文件"也会错过它**。
+两个独立理由，任一成立就够：① MCP 的 `NOISE_RE` 删掉 `INFO`/`WARN`/`DEBUG`/`TRACE` 行（`[ERROR]` 保留），
+而**实测真实 `Cannot map` 行就是 `[INFO]` 级别**（`s3b-regen/cubemx-generate.log:321`）⇒ 它在 MCP 返回
+文本里**必然不存在** → **假阴性**且 `verdict` 仍 PASS；② `syscalls.c`/`sysmem.c` 的叠加路径异常**只在 stdout
+的 `NoEcho` 行** ⇒ 即使不走 MCP、**只要"只读文件"也会错过它**。
 
 > **自检**：手上只有 MCP 返回文本 → **先别跑核验**，换 CLI 重定向重跑一遍生成。
 
@@ -136,10 +136,10 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
 | 6 | `mx_script_abs_path` | `true` | **三态**：占位符未替换→`warn`；归一化==工程根→`pass`；≠→`fail` |
 | 7 | `syscalls_path` | **`false`** | `syscalls.c`/`sysmem.c` + 同行异常关键字 → `warn`，**不阻塞**（D9） |
 
-- **`skip` ≠ 通过 ≠ 失败**：`--expect ""` 使 2/3 都 `skip`；外设全无定义时 3 也 `skip`（同根因只在 2
-  报一次 fail）；**4 默认 `skip`，必须显式传 `--expect-pins` + `--ioc` 才有结论**；**写证据必须解释原因**
-  （读 `summary.notes`）。**G474 上第 6 项稳定出现 1 条 `warn`**（`cubemx-init.mx:5` 的 `__PROJECT_DIR__`
-  占位符），`verdict` 仍 `pass`——**预期条数恒为 1，≥2 条 = 异常必须查**。
+- **`skip` ≠ 通过 ≠ 失败**：`--expect ""` 使 2/3 都 `skip`；外设全无定义时 3 也 `skip`（同根因只在 2 报一次
+  fail）；**4 默认 `skip`，须显式传 `--expect-pins`（直调时还需 `--ioc`）才有结论**；**写证据必须解释原因**
+  （读 `summary.notes`）。**G474 上第 6 项稳定出现 1 条 `warn`**（`cubemx-init.mx:5` 的 `__PROJECT_DIR__` 占位符），`verdict` 仍 `pass`——**预期条数恒为 1，≥2 条 = 异常必须查**。
+- `log_cannot_map` 的**真实实例**与"CLI 路径不可达"的对照（S3 两组证据）见 `references/verify-contract.md` §4.1。
 - 两项没有 check 是**有意的**：`ioc_ask_for_migrate`（核验器跑在生成之后，等它看见人已白等 → 归 `regen.sh` 告警）、`ioc_version_stamp`（提交卫生 → 归 P2）。
 
 #### 🔴 保证边界（最重要的一条免责声明）
@@ -214,8 +214,8 @@ SHA-256 就是"确实还原了原件"的凭据。**路径 B 额外要求**：手
 存在 `Mcu.Pin\d+=PB0`、`Mcu.Pin1..N` 连续无空洞。
 ❌ **不要断言 `Mcu.Pin5=PB0`**——新增引脚会插入 `Mcu.Pin1` 位置、原 1–5 整体后移（✅ D24.3）。
 
-**让第 4 项真正生效**：G1 必须加 `--expect-pins PB0=GPIO_Output --ioc <工程>/*.ioc`，
-否则 `pins_present` 直接 `skip`、引脚增量仍是真空（§1.4 保证边界）。
+**让第 4 项真正生效**：加 `--expect-pins PB0=GPIO_Output`。⚠️ **直调 `verify_generation.py` 时**还要同传
+`--ioc`，否则该项 `skip`、引脚增量仍是真空；**走 `regen.sh` 无需关心（`--ioc` 由脚本自动传）**。
 
 ### 第 3B 步 · 改配置（非 GPIO，**无透传能力**）
 

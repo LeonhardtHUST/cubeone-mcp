@@ -156,3 +156,4 @@ GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/platform32
 | 2026-11-03 | `e20adba test(scripts)`：删除 `tests/test_verify_generation.py` 中同名重复定义造成的 **122 行死代码**（8 个函数各出现两次、前一份永不执行）；删 123 行、44 个唯一用例、**74 passed 不变** | verifier-dev |
 | 2026-11-03 | `67dd940 test(scripts)`：归档 v1.1 冻结版**独立第三方复核**（pytest 74、`.mx` 六态 6/6、`pins_present` 正反对照、`--allow-signal` 短词拦截） | env-agent |
 | 2026-11-03 | 采纳 lead 的 D30.1/D30.2：`--ioc` 恢复（`pins_present` 的必需搭档；"删参判据必须是没有消费者，而非当前没有"）；保证边界定稿为**三段式**（无条件保证 / 有条件保证 / 明确不保证）；T3.2 移交 `release-engineer`（`README.md` 独占） | skill-author |
+| 2026-11-03 | 采纳 S3 实测（`scenario-tester`）：`log_cannot_map` 由"无真实样本"改为**有 1 例可复现实例**（`s3b-regen/cubemx-generate.log:321`，触发路径是手改 `.ioc`；CLI `set pin` 路径在命令层 `KO`、不可达）；补 S3 两组证据对照（`s3b` 响亮 / `s3b2` 静默）；`--ioc` 提醒限定为"直调时"，`regen.sh` 自动传；§0.4 理由①由"若带此类前缀"升级为**实测**（真实 `Cannot map` 行级别是 `[INFO]`，必被 `NOISE_RE` 过滤） | skill-author |
