@@ -2,61 +2,25 @@
 # =============================================================================
 # platform32-mcp / scripts/regen.sh
 #
-# 「备份 .ioc → CubeMX 生成 → 生成核验」三步封装 + 失败回滚。
+# 「备份 .ioc → 前置检查 → CubeMX 生成 → 生成核验 → 失败回滚」封装。
 #
 # 为什么需要这层封装
 # ------------------
 # CubeMX 对 .ioc 的错误是**静默非致命**的（调研报告 C2、模板 D5、HAL-PITFALLS H-6）：
 # 信号名写错 / 参数没进 IPParameters 白名单，`project generate` 依然返回"成功"，
-# 外设被静默丢弃。所以"生成完了"这句话只有在核验器过了之后才成立。
-# 本脚本保证：任何一步失败，都回到生成前的 .ioc，绝不把未核验的配置留在工作区。
+# 外设被静默丢弃。更糟的是 CubeMX **退出码恒为 0**（脚本层回 KO 也返回 0，D25），
+# 所以"退出码 0"根本不是成功判据。
+# 本脚本的判据是两条：① 日志里没有整行 KO；② 核验器 verdict=pass。
+# 任何一步不过，都用**生成前备份**恢复 .ioc / .mxproject，绝不把未核验的配置留在工作区。
 #
 # 用法
 # ----
 #   scripts/regen.sh <工程目录> [选项]
 #
-#   -e, --expect <list>        期望外设清单（如 GPIO,TIM4,USART2）
-#                              默认：从 .ioc 的 Mcu.IP* 推导（滤掉 NVIC/RCC/SYS）+ 补 GPIO
-#   -l, --log <path>           CubeMX 生成日志路径（默认 <out>/cubemx-generate.log）
-#   -m, --mx <script.mx>       CubeMX 脚本（默认 <工程>/scripts/cubemx-generate.mx）
-#   -o, --out <dir>            证据输出目录（默认 ${TMPDIR:-/tmp}/platform32-regen）
-#       --java <path>          java 可执行（默认取 $ST_CUBEMX_JRE 或 C:/ST/STM32CubeMX/jre/bin/java.exe）
-#       --cube <path>          CubeMX 可执行（默认取 $ST_CUBEMX_EXE 或 C:/ST/STM32CubeMX/STM32CubeMX.exe）
-#       --timeout <sec>        生成超时，最小 240（默认 300；单次生成实测约 60s）
-#       --allow-signal <sig>   传给核验器的 Cannot map 白名单（默认已含 VP_RIF_VS_RIF1，D8 噪音）
-#       --no-default-allow     不预置 D8 白名单
-#       --allow-dirty-ioc      允许 .ioc 处于未提交改动时继续（默认拒绝，避免回滚丢用户改动）
-#       --keep-ask-for-migrate 生成成功后**不**把 ProjectManager.AskForMigrate 复位为 false
-#       --skip-generate        跳过生成，只做备份 + 核验（重跑核验用）
-#       --dry-run              只打印将执行的命令，不落盘
-#   -h, --help
-#
-# 生成前强制前置检查（provenance：实测 `stm32-digital-clock` 的 .ioc 就是 true）
-# ---------------------------------------------------------------------------
-# `ProjectManager.AskForMigrate=true` 会让 `-q` 非交互生成**卡在迁移对话框**直到
-# 超时（300s 白等，且从超时现象看不出根因）。所以命中即 **退出 2，不进生成**。
-# 生成成功后本脚本会把该行复位成 `false`（用 scripts/ioc_field.py 精确改单行），
-# 否则下一次生成必被这条前置拦死。想观察 CubeMX 原始行为用 `--keep-ask-for-migrate`。
-#
-# 退出码
-# ------
-#   0 = 生成 + 核验全部通过（允许 warning，如 D9 的 syscalls/sysmem 叠加路径）
-#   1 = 生成失败或核验 fail（已回滚）
-#   2 = 参数/IO/环境错误，或前置检查拒绝（.ioc 脏 / AskForMigrate=true / 缺 .mx）
-#
-# 约定
-# ----
-# * **不做配置类文本注入**：改引脚/外设/参数一律走 CubeMX CLI（set 命令）或 MCP。
-#   唯一的写盘例外是 `AskForMigrate` 这个**弹窗开关**（非配置项）的复位，见上。
-# * **CubeMX 的 cwd 必须是工程根**：`cubemx-generate.mx` 里 `config load` 用的是相对
-#   `.ioc` 路径，而 CubeMX 默认 cwd 是安装目录。本脚本在子 shell 里 cd 进工程根，
-#   并在执行前断言 cwd 正确，不满足直接退出 2。
-# * 回滚优先用 git（调研报告 C5：回滚粒度是 git），非 git 工程退化为 .ioc.bak。
-# * 工程目录由参数传入，脚本内不写死任何工程路径。
 # =============================================================================
 set -uo pipefail
 
-# Git Bash 下 PATH 常缺 coreutils（timeout/cp/…），统一补齐。
+# Git Bash 下 PATH 常缺 coreutils（timeout/find/sed/…），统一补齐。
 export PATH="/c/Users/Leon/.workbuddy/binaries/PortableGit/versions/1.2.0/usr/bin:/c/Users/Leon/.workbuddy/binaries/PortableGit/versions/1.2.0/bin:$PATH"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -66,22 +30,23 @@ PYTHON="${PYTHON:-python}"
 DEFAULT_JAVA="${ST_CUBEMX_JRE:-C:/ST/STM32CubeMX/jre/bin/java.exe}"
 DEFAULT_CUBE="${ST_CUBEMX_EXE:-C:/ST/STM32CubeMX/STM32CubeMX.exe}"
 MIN_TIMEOUT=240
-#: 本机锁定的 CubeMX 基线版本（决策 D1）；`.ioc` 版本戳不一致只告警，不阻塞。
+#: 本机锁定的 CubeMX 基线版本（决策 D1）。只用于版本戳/迁移提示，不阻塞。
 EXPECTED_CUBEMX_VERSION="${EXPECTED_CUBEMX_VERSION:-6.18.1}"
 
 PROJECT_DIR=""
 EXPECT=""
 GEN_LOG=""
 MX_SCRIPT=""
+MAIN_C=""
+MXPROJECT=""
 OUT_DIR="${TMPDIR:-/tmp}/platform32-regen"
 JAVA_BIN="${DEFAULT_JAVA}"
 CUBE_BIN="${DEFAULT_CUBE}"
 TIMEOUT_SEC=300
 SKIP_GENERATE=0
 DRY_RUN=0
-ALLOW_DIRTY_IOC=0
+REQUIRE_CLEAN=0
 DEFAULT_ALLOW=1
-RESET_ASK_FOR_MIGRATE=1
 ALLOW_SIGNALS=()
 
 log_info() { printf '[regen] %s\n' "$*" >&2; }
@@ -89,13 +54,58 @@ log_warn() { printf '[regen][warn] %s\n' "$*" >&2; }
 log_err()  { printf '[regen][error] %s\n' "$*" >&2; }
 
 usage() {
-  sed -n '2,50p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  cat <<'USAGE'
+platform32-mcp / scripts/regen.sh —— 备份 → 前置检查 → CubeMX 生成 → 核验 → 失败回滚
+
+用法：
+  scripts/regen.sh <工程目录> [选项]
+
+选项：
+  -e, --expect <list>        期望外设清单（如 GPIO,TIM4,USART2）
+                             默认：从 .ioc 的 Mcu.IP* 推导（滤掉 NVIC/RCC/SYS）+ 补 GPIO
+  -l, --log <path>           CubeMX 生成日志路径（默认 <out>/cubemx-generate.log）
+  -m, --mx <script.mx>       CubeMX 脚本（默认 <工程>/scripts/cubemx-generate.mx）
+  -o, --out <dir>            证据输出目录（默认 ${TMPDIR:-/tmp}/platform32-regen）
+      --main-c <path>        覆盖 main.c 路径（默认 <工程>/Core/Src/main.c）
+      --mxproject <path>     覆盖 .mxproject 路径（默认 <工程>/.mxproject）
+      --java <path>          java 可执行（默认 $ST_CUBEMX_JRE 或 C:/ST/STM32CubeMX/jre/bin/java.exe）
+      --cube <path>          CubeMX 可执行（默认 $ST_CUBEMX_EXE 或 C:/ST/STM32CubeMX/STM32CubeMX.exe）
+      --timeout <sec>        生成超时，最小 240（默认 300；单次生成实测约 60s）
+      --allow-signal <sig>   传给核验器的 Cannot map 白名单（默认已含 VP_RIF_VS_RIF1，D8）
+      --no-default-allow     不预置 D8 白名单
+      --require-clean        .ioc 有未提交内容改动时直接退出 2（默认**允许**脏，失败从备份恢复）
+      --skip-generate        跳过生成，只做备份 + 核验（重跑核验用）
+      --dry-run              只打印将执行的命令，不落盘、不宣称通过
+  -h, --help
+
+退出码：
+  0 = 生成 + 核验全部通过（允许 warning，如 D9 的 syscalls/sysmem 叠加路径）
+  1 = 跑过了但错了（生成阶段失败 / 核验 fail），**已从备份回滚**
+  2 = 压根没跑（参数/IO/环境错误，或缺 .mx、--require-clean 命中脏 .ioc）
+
+约定：
+  * 不做**配置类**文本注入：改引脚/外设/参数一律走 CubeMX CLI（set 命令）或 MCP。
+  * 不修改 ProjectManager.AskForMigrate：它是 CubeMX 的弹窗开关，`config save`/`saveas`
+    之后的稳态，纯 `project generate` 不写回。仅当「.ioc 版本低于本机 + 值为 true」
+    时打一条 warn（真实迁移需求），**不拦、不改**。
+  * CubeMX 的 cwd 必须是工程根：.mx 里 `config load` 用的是相对 .ioc 路径，
+    而 CubeMX 默认 cwd 是安装目录。脚本在子 shell 里 cd 进工程根并断言。
+  * 失败回滚从**备份**恢复（.ioc.bak / .mxproject.bak），不是 git checkout ——
+    因为默认允许 .ioc 处于未提交改动，git checkout 会抹掉用户正在验证的编辑。
+  * `Core/**` 不自动回滚（局部回滚更容易看清"生成动了什么"），失败时只打印其 git 状态。
+USAGE
 }
 
 die() {
   local code="$1"; shift
   log_err "$*"
   exit "$code"
+}
+
+# 版本比较：$1 < $2 ?（用 sort -V，coreutils 已在上方 PATH 中）
+version_lt() {
+  [ -n "$1" ] && [ -n "$2" ] && [ "$1" != "$2" ] \
+    && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n 1)" = "$1" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -107,13 +117,14 @@ while [ "$#" -gt 0 ]; do
     -l|--log)           GEN_LOG="${2:-}"; shift 2 ;;
     -m|--mx)            MX_SCRIPT="${2:-}"; shift 2 ;;
     -o|--out)           OUT_DIR="${2:-}"; shift 2 ;;
+    --main-c)           MAIN_C="${2:-}"; shift 2 ;;
+    --mxproject)        MXPROJECT="${2:-}"; shift 2 ;;
     --java)             JAVA_BIN="${2:-}"; shift 2 ;;
     --cube)             CUBE_BIN="${2:-}"; shift 2 ;;
     --timeout)          TIMEOUT_SEC="${2:-}"; shift 2 ;;
     --allow-signal)     ALLOW_SIGNALS+=("${2:-}"); shift 2 ;;
     --no-default-allow) DEFAULT_ALLOW=0; shift ;;
-    --allow-dirty-ioc)  ALLOW_DIRTY_IOC=1; shift ;;
-    --keep-ask-for-migrate) RESET_ASK_FOR_MIGRATE=0; shift ;;
+    --require-clean)    REQUIRE_CLEAN=1; shift ;;
     --skip-generate)    SKIP_GENERATE=1; shift ;;
     --dry-run)          DRY_RUN=1; shift ;;
     -h|--help)          usage; exit 0 ;;
@@ -126,11 +137,10 @@ done
 
 [ -n "$PROJECT_DIR" ] || die 2 "缺少工程目录参数（--help 看用法）"
 [ -d "$PROJECT_DIR" ] || die 2 "工程目录不存在：$PROJECT_DIR"
-PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd -P)"
 
 command -v "$PYTHON" >/dev/null 2>&1 || die 2 "找不到 python 解释器：$PYTHON（可用 PYTHON=... 覆盖）"
 
-# 超时阈值不得低于 240s（单次生成约 60s，JVM 启动 + CMSIS 拷贝占大头）。
 case "$TIMEOUT_SEC" in
   ''|*[!0-9]*) die 2 "--timeout 必须是整数秒：$TIMEOUT_SEC" ;;
 esac
@@ -140,7 +150,7 @@ if [ "$TIMEOUT_SEC" -lt "$MIN_TIMEOUT" ]; then
 fi
 
 if [ "$DEFAULT_ALLOW" -eq 1 ]; then
-  # 注意 set -u 下空数组的展开要写法保护（老 bash 会报 unbound variable）。
+  # set -u 下空数组展开要写法保护（老 bash 会报 unbound variable）。
   ALLOW_SIGNALS=("VP_RIF_VS_RIF1" ${ALLOW_SIGNALS[@]+"${ALLOW_SIGNALS[@]}"})
 fi
 
@@ -155,6 +165,8 @@ for _sig in ${ALLOW_SIGNALS[@]+"${ALLOW_SIGNALS[@]}"}; do
   [ "$_dup" -eq 0 ] && DEDUPED_SIGNALS+=("$_sig")
 done
 ALLOW_SIGNALS=(${DEDUPED_SIGNALS[@]+"${DEDUPED_SIGNALS[@]}"})
+ALLOW_DISPLAY="（空：任何 Cannot map 都会 fail）"
+[ "${#ALLOW_SIGNALS[@]}" -gt 0 ] && ALLOW_DISPLAY="${ALLOW_SIGNALS[*]}"
 
 # ---------------------------------------------------------------------------
 # 前置检查：.ioc / .mxproject / main.c / .mx 脚本 / git 状态
@@ -164,13 +176,15 @@ while IFS= read -r line; do
   [ -n "$line" ] && IOC_FILES+=("$line")
 done < <(find "$PROJECT_DIR" -maxdepth 1 -name '*.ioc' -type f | sort)
 [ "${#IOC_FILES[@]}" -gt 0 ] || die 2 "工程目录下没有 .ioc：$PROJECT_DIR"
-#: 主 .ioc（多 .ioc 的工程取字典序第一个；工程范式里只会有一个）
+#: 主 .ioc（工程范式里只会有一个；多 .ioc 时取字典序第一个）
 IOC_FILE="${IOC_FILES[0]}"
+IOC_BAK="${IOC_FILE}.bak"
+MXPROJECT_BAK="${PROJECT_DIR}/.mxproject.bak"
 
-MAIN_C="${PROJECT_DIR}/Core/Src/main.c"
-MXPROJECT="${PROJECT_DIR}/.mxproject"
-[ -f "$MAIN_C" ] || die 2 "缺少生成物 Core/Src/main.c：$MAIN_C（先生成一次再核验）"
-[ -f "$MXPROJECT" ] || die 2 "缺少 .mxproject：$MXPROJECT（先生成一次再核验）"
+[ -n "$MAIN_C" ] || MAIN_C="${PROJECT_DIR}/Core/Src/main.c"
+[ -n "$MXPROJECT" ] || MXPROJECT="${PROJECT_DIR}/.mxproject"
+[ -f "$MAIN_C" ] || die 2 "缺少生成物 main.c：$MAIN_C（先生成一次再核验；用 --main-c 覆盖）"
+[ -f "$MXPROJECT" ] || die 2 "缺少 .mxproject：$MXPROJECT（先生成一次再核验；用 --mxproject 覆盖）"
 
 if [ -z "$MX_SCRIPT" ]; then
   if [ -f "${PROJECT_DIR}/scripts/cubemx-generate.mx" ]; then
@@ -182,40 +196,40 @@ fi
 [ -n "$MX_SCRIPT" ] || die 2 "找不到 CubeMX 脚本（默认找 <工程>/scripts/cubemx-generate.mx）；用 --mx 指定"
 [ -f "$MX_SCRIPT" ] || die 2 "CubeMX 脚本不存在：$MX_SCRIPT"
 
+# ---- git：默认允许脏 .ioc（失败从备份恢复），--require-clean 才严格 ----
 IN_GIT=0
+DIRTY_IOC=""
 if ( cd "$PROJECT_DIR" && git rev-parse --is-inside-work-tree ) >/dev/null 2>&1; then
   IN_GIT=1
-  DIRTY_IOC="$( cd "$PROJECT_DIR" && git status --porcelain -- '*.ioc' 2>/dev/null )"
-  if [ -n "$DIRTY_IOC" ] && [ "$ALLOW_DIRTY_IOC" -eq 0 ]; then
-    log_err ".ioc 存在未提交改动，回滚（git checkout -- *.ioc）会丢掉这些改动，已中止："
-    printf '%s\n' "$DIRTY_IOC" >&2
-    log_err "若这些改动**就是本次要验证的改动**（刚用 CLI set 改完），加 --allow-dirty-ioc 重跑："
-    log_err "  bash scripts/regen.sh \"$PROJECT_DIR\" --allow-dirty-ioc -o <证据目录>"
-    log_err "若是与本任务无关的 WIP，先 git stash / 提交，再重跑。"
-    die 2 "拒绝在 .ioc 脏的工作区生成（见上方两条处置）"
+  # 用 `git diff HEAD --name-only` 而不是 `git status --porcelain`：
+  # status 按工作区字节判脏，CubeMX 把 .ioc 写成 CRLF 会产生"内容没变但判脏"的假阳性
+  # （实测 i/lf w/crlf）；diff 会应用 .gitattributes 的 text=auto eol=lf 归一化。
+  DIRTY_IOC="$( cd "$PROJECT_DIR" && git diff HEAD --name-only -- '*.ioc' 2>/dev/null )"
+  if [ -n "$DIRTY_IOC" ]; then
+    if [ "$REQUIRE_CLEAN" -eq 1 ]; then
+      log_err "--require-clean 命中：以下 .ioc 有未提交的内容改动："
+      printf '%s\n' "$DIRTY_IOC" >&2
+      die 2 "先提交/stash 再跑，或去掉 --require-clean（默认允许脏，失败从备份恢复）"
+    fi
+    log_warn ".ioc 有未提交的内容改动（行尾差异不算），将按现状生成："
+    printf '%s\n' "$DIRTY_IOC" | sed 's/^/    /' >&2
+    log_warn "备份将存到 ${IOC_BAK}；**失败时从备份恢复，不用 git checkout**，不会丢你的编辑"
   fi
 else
-  log_warn "工程不在 git 仓库内，回滚将退化为 .ioc.bak（无法回滚 Core/ 生成物）"
+  log_warn "工程不在 git 仓库内：回滚退化为 .ioc.bak，且无法报告 Core/ 的改动"
 fi
 
-# ---- 生成前强制前置：AskForMigrate=true 会让 -q 非交互生成卡在迁移对话框 ----
-# 依据：TOOLING-cubemx.md §3.3（每次生成都会写回 true）、模板 D7；
-# 真实样本：stm32-digital-clock.ioc 就是 true（由 CubeMX 6.17.0 生成）。
-if grep -qE '^ProjectManager\.AskForMigrate=true' "$IOC_FILE" 2>/dev/null; then
-  log_err "前置检查未通过：$IOC_FILE 含 ProjectManager.AskForMigrate=true"
-  log_err "  → CubeMX 的 -q 非交互模式会停在迁移对话框，一直阻塞到超时（会白等 ${TIMEOUT_SEC}s）；"
-  log_err "    而且从'超时'这个现象看不出根因，是最难排查的一类失败。"
-  log_err "  处置（任选其一，本脚本不做配置注入）："
-  log_err "    1) 用 CubeMX GUI 打开该 .ioc 并保存一次（会把该行写回 false）；"
-  log_err "    2) 精确改这一行：python scripts/ioc_field.py --ioc \"$IOC_FILE\" set ProjectManager.AskForMigrate false"
-  die 2 "AskForMigrate=true，已在生成前拦下（未调用 CubeMX）"
-fi
-
-# ---- 版本戳：只告警（提交卫生问题，不是正确性门）----
+# ---- 版本戳 / 迁移提示：只读，不拦、不改 ----
 IOC_VERSION="$(grep -m1 -E '^MxCube\.Version=' "$IOC_FILE" 2>/dev/null | sed -E 's/^MxCube\.Version=//' | tr -d '\r')"
+IOC_MIGRATE="$(grep -m1 -E '^ProjectManager\.AskForMigrate=' "$IOC_FILE" 2>/dev/null | sed -E 's/^ProjectManager\.AskForMigrate=//' | tr -d '\r')"
 if [ -n "$IOC_VERSION" ] && [ "$IOC_VERSION" != "$EXPECTED_CUBEMX_VERSION" ]; then
   log_warn ".ioc 版本戳 MxCube.Version=${IOC_VERSION} ≠ 锁定版本 ${EXPECTED_CUBEMX_VERSION}（P2）："
-  log_warn "  重新生成会把整份 .ioc 重写成新版本格式（本机实测 619 增/106 删），建议拆成独立提交。"
+  log_warn "  重新生成会把 .ioc 重写成新版本格式（本机实测 619 增/106 删），建议拆独立提交。"
+fi
+if [ "$IOC_MIGRATE" = "true" ] && version_lt "$IOC_VERSION" "$EXPECTED_CUBEMX_VERSION"; then
+  log_warn "AskForMigrate=true 且 .ioc 由旧版 CubeMX（${IOC_VERSION} < ${EXPECTED_CUBEMX_VERSION}）生成："
+  log_warn "  存在真实迁移需求，-q 非交互生成**可能**停在迁移对话框。"
+  log_warn "  注：本机多次实跑（含 .ioc 为 true 的稳态）均未卡死，**无实测卡死证据**；仅作提示，不拦不改。"
 fi
 
 # 期望外设：默认从 .ioc 的 Mcu.IP* 推导，滤掉 NVIC/RCC/SYS，再补 GPIO。
@@ -237,57 +251,56 @@ BACKUP_JSON="${OUT_DIR}/ioc-backup.json"
 log_info "工程：${PROJECT_DIR}"
 log_info "期望外设：${EXPECT}"
 log_info "证据输出：${OUT_DIR}"
-ALLOW_DISPLAY="（空：任何 Cannot map 都会 fail）"
-[ "${#ALLOW_SIGNALS[@]}" -gt 0 ] && ALLOW_DISPLAY="${ALLOW_SIGNALS[*]}"
-# 生效的白名单必须显式打印：verify 直调（无默认）与 regen.sh（预置 D8）默认值不同，
-# 不打出来就会出现"同一份日志、两个入口、两种结论"。
 log_info "生效 allowlist：${ALLOW_DISPLAY}（同时写进 verify.json 的 inputs.effective_allow_signals）"
 
 # ---------------------------------------------------------------------------
-# 回滚
+# 回滚：优先从备份恢复（默认允许脏 .ioc，git checkout 会抹掉用户编辑）
 # ---------------------------------------------------------------------------
 rollback_project() {
-  log_warn "开始回滚到生成前状态 ..."
-  if [ "$IN_GIT" -eq 1 ]; then
-    if ( cd "$PROJECT_DIR" && git checkout -- '*.ioc' ) 2>/dev/null; then
-      log_info "已 git checkout -- '*.ioc'"
-    else
-      log_warn "git checkout .ioc 失败，改用 .ioc.bak"
-      "$PYTHON" "${SCRIPT_DIR}/ioc_backup.py" --project "$PROJECT_DIR" --restore >&2 || true
-    fi
-    if ( cd "$PROJECT_DIR" && git ls-files --error-unmatch -- '.mxproject' ) >/dev/null 2>&1; then
-      ( cd "$PROJECT_DIR" && git checkout -- '.mxproject' ) 2>/dev/null \
-        && log_info "已 git checkout -- '.mxproject'（避免盘符绝对路径留在工作区）"
-    fi
-    log_info "回滚后 git status："
-    ( cd "$PROJECT_DIR" && git status --porcelain ) >&2 || true
+  log_warn "开始回滚到生成前状态（从备份恢复，不动 git 历史）..."
+  if "$PYTHON" "${SCRIPT_DIR}/ioc_backup.py" --project "$PROJECT_DIR" --restore >&2; then
+    log_info "已从 ${IOC_BAK} 恢复 .ioc"
   else
-    if "$PYTHON" "${SCRIPT_DIR}/ioc_backup.py" --project "$PROJECT_DIR" --restore >&2; then
-      log_info "已从 .ioc.bak 还原"
-    else
-      log_warn "无 .ioc.bak 可还原；请人工检查 ${PROJECT_DIR}"
-    fi
+    log_warn "没有 .ioc.bak 可恢复，退化为 git checkout"
+    ( cd "$PROJECT_DIR" && git checkout -- '*.ioc' ) 2>/dev/null \
+      && log_info "已 git checkout -- '*.ioc'" \
+      || log_warn "git checkout 也失败；请人工检查 ${IOC_FILE}"
+  fi
+  if [ -f "$MXPROJECT_BAK" ]; then
+    cp -p "$MXPROJECT_BAK" "$MXPROJECT" 2>/dev/null \
+      && log_info "已从 ${MXPROJECT_BAK} 恢复 .mxproject" \
+      || log_warn "恢复 .mxproject 失败"
+  fi
+  if [ "$IN_GIT" -eq 1 ]; then
+    log_warn "Core/ 未自动回滚（局部回滚更容易看清生成动了什么）。当前状态："
+    ( cd "$PROJECT_DIR" && git status --porcelain -- Core/ ) >&2 || true
+    log_warn "如需丢弃本次生成产物：git -C \"$PROJECT_DIR\" checkout -- Core/"
   fi
 }
 
 # ---------------------------------------------------------------------------
-# 步骤 1：备份
+# 步骤 1：备份 .ioc 与 .mxproject
 # ---------------------------------------------------------------------------
 run_backup() {
-  log_info "步骤 1/3：备份 .ioc → .ioc.bak"
+  log_info "步骤 1/4：备份 .ioc → .ioc.bak、.mxproject → .mxproject.bak"
   if [ "$DRY_RUN" -eq 1 ]; then
     printf '  (dry-run) %s %s --project %s --json-out %s\n' \
       "$PYTHON" "${SCRIPT_DIR}/ioc_backup.py" "$PROJECT_DIR" "$BACKUP_JSON"
     return 0
   fi
-  "$PYTHON" "${SCRIPT_DIR}/ioc_backup.py" --project "$PROJECT_DIR" --json-out "$BACKUP_JSON" >&2
+  "$PYTHON" "${SCRIPT_DIR}/ioc_backup.py" --project "$PROJECT_DIR" --json-out "$BACKUP_JSON" >&2 || return 1
+  if [ -f "$MXPROJECT" ]; then
+    cp -p "$MXPROJECT" "$MXPROJECT_BAK" || return 1
+    log_info ".mxproject 备份：${MXPROJECT_BAK}"
+  fi
+  return 0
 }
 
 # ---------------------------------------------------------------------------
 # 步骤 2：CubeMX 生成
 # ---------------------------------------------------------------------------
 run_generate() {
-  log_info "步骤 2/3：CubeMX 无头生成（timeout ${TIMEOUT_SEC}s，日志 ${GEN_LOG}）"
+  log_info "步骤 2/4：CubeMX 无头生成（timeout ${TIMEOUT_SEC}s，日志 ${GEN_LOG}）"
   [ -f "$JAVA_BIN" ] || die 2 "找不到 java：$JAVA_BIN（用 --java 或 ST_CUBEMX_JRE 覆盖）"
   [ -f "$CUBE_BIN" ] || die 2 "找不到 CubeMX：$CUBE_BIN（用 --cube 或 ST_CUBEMX_EXE 覆盖）"
 
@@ -304,25 +317,29 @@ run_generate() {
     return 0
   fi
 
-  # 前置不变量：CubeMX 的 cwd 必须是工程根。
-  # 依据：cubemx-generate.mx 里 `config load <相对 .ioc>`，而 CubeMX 默认 cwd 是
-  # 安装目录 —— cwd 不对就会去 C:\ST\STM32CubeMX\ 下找死 .ioc。
+  # 前置不变量：CubeMX 的 cwd 必须是工程根 —— .mx 里 `config load <相对 .ioc>`，
+  # 而 CubeMX 默认 cwd 是安装目录，cwd 不对就会去 C:\ST\STM32CubeMX\ 下找死 .ioc。
   local cwd_now
   cwd_now="$( cd "$PROJECT_DIR" && pwd -P )" || die 2 "无法进入工程目录：$PROJECT_DIR"
   [ "$cwd_now" = "$PROJECT_DIR" ] || die 2 "工程根解析不一致（$cwd_now ≠ $PROJECT_DIR），拒绝生成"
-  log_info "CubeMX 工作目录：${cwd_now}（脚本内相对 .ioc 路径依赖此 cwd）"
+  log_info "CubeMX 工作目录：${cwd_now}（.mx 里的相对 .ioc 依赖此 cwd）"
 
   ( cd "$PROJECT_DIR" && "${cmd[@]}" ) >"$GEN_LOG" 2>&1
-  local rc=$?
-  log_info "CubeMX 退出码：${rc}（日志 ${GEN_LOG}）"
-  return "$rc"
+  return $?
+}
+
+#: CubeMX 退出码恒为 0（D25：脚本层回 KO 也返回 0），所以必须查日志里的整行 KO。
+count_generate_ko() {
+  local count
+  count="$(grep -cE '^[[:space:]]*KO[[:space:]]*$' "$GEN_LOG" 2>/dev/null || true)"
+  printf '%s' "${count:-0}" | tr -d '\r'
 }
 
 # ---------------------------------------------------------------------------
-# 步骤 3：核验
+# 步骤 3：生成核验
 # ---------------------------------------------------------------------------
 run_verify() {
-  log_info "步骤 3/3：生成核验（expect=${EXPECT}，allowlist=${ALLOW_DISPLAY}）"
+  log_info "步骤 3/4：生成核验（expect=${EXPECT}，allowlist=${ALLOW_DISPLAY}）"
   local -a args=(
     --log "$GEN_LOG"
     --main-c "$MAIN_C"
@@ -353,39 +370,38 @@ run_backup || die 2 "备份 .ioc 失败，未做任何改动"
 if [ "$SKIP_GENERATE" -eq 1 ]; then
   log_warn "--skip-generate：跳过 CubeMX 生成，仅核验现有生成物"
 else
-  if run_generate; then
-    :
-  else
-    GEN_RC=$?
-    log_err "CubeMX 生成失败（退出码 ${GEN_RC}）"
+  run_generate
+  GEN_RC=$?          # 先存再判，避免中间命令覆盖 $?
+  if [ "$GEN_RC" -ne 0 ]; then
+    log_err "[regen] 生成阶段失败：CubeMX 退出码 ${GEN_RC}（进程级失败，如超时/崩溃）"
     rollback_project
-    die 1 "生成失败，已回滚。先看日志：${GEN_LOG}"
+    die 1 "生成阶段失败，已回滚。日志：${GEN_LOG}"
+  fi
+  if [ "$DRY_RUN" -eq 0 ]; then
+    KO_COUNT="$(count_generate_ko)"
+    if [ "${KO_COUNT:-0}" -gt 0 ]; then
+      log_err "[regen] 生成阶段失败：日志里有 ${KO_COUNT} 行 KO（脚本层被 CubeMX 拒绝）"
+      log_err "  注意：CubeMX 的**退出码是 0**，只有查日志才能发现这类失败（D25）。"
+      rollback_project
+      die 1 "生成阶段失败（KO），已回滚。日志：${GEN_LOG}"
+    fi
+    log_info "生成阶段：退出码 0 且无 KO。**无 KO 只是必要条件，不是成功证明** ——"
+    log_info "  'set ip parameters' 这类命令会回 OK、无 KO，却静默空操作；最终以核验为准。"
   fi
 fi
 
 run_verify
 VERIFY_RC=$?
-
 if [ "$VERIFY_RC" -ne 0 ]; then
-  log_err "生成核验未通过（退出码 ${VERIFY_RC}）：外设可能被静默丢弃，或工程路径不可复现"
+  log_err "[regen] 核验阶段失败（退出码 ${VERIFY_RC}）：生成跑完了，但产物不对"
+  log_err "  → 外设可能被静默丢弃、路径不可复现，或输入参数有误；先看 ${VERIFY_JSON}"
   rollback_project
   exit "$VERIFY_RC"
 fi
 
-# ---------------------------------------------------------------------------
-# 收尾：把 AskForMigrate 复位为 false
-# ---------------------------------------------------------------------------
-# CubeMX 每次生成/保存都会把该行写回 true（TOOLING §3.3 / D7）。留 true 会让**下一次**
-# 生成被上面的前置检查拦死，所以成功路径上必须复位。它只是弹窗开关、不是配置项，
-# 用 ioc_field.py 精确改单行（保留 CRLF），不改任何其它字节。
-if [ "$RESET_ASK_FOR_MIGRATE" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
-  if [ "$("$PYTHON" "${SCRIPT_DIR}/ioc_field.py" --ioc "$IOC_FILE" get ProjectManager.AskForMigrate 2>/dev/null || true)" = "true" ]; then
-    log_info "复位 ProjectManager.AskForMigrate → false（否则下一次无头生成会卡在迁移对话框）"
-    "$PYTHON" "${SCRIPT_DIR}/ioc_field.py" --ioc "$IOC_FILE" \
-      set ProjectManager.AskForMigrate false \
-      --json-out "${OUT_DIR}/ioc-normalization.json" >&2 \
-      || log_warn "复位 AskForMigrate 失败；下次生成前请手动改成 false"
-  fi
+if [ "$DRY_RUN" -eq 1 ]; then
+  printf '\n[regen] (dry-run) 未执行生成与核验，不做通过判定\n'
+  exit 0
 fi
 
 cat <<EOF
@@ -397,6 +413,6 @@ cat <<EOF
   备份快照   : ${BACKUP_JSON}
 下一步      : pio run（构建，L3）→ 需要实板再烧录（L5）；提交前按模板 AGENTS.md 写清验证等级
 提醒        : 核验器只保证**外设级**（整只外设没被丢）。引脚级增量（如多加一个 PB0）
-              不在核验范围，需另加断言：Mcu.PinsNb / __HAL_RCC_GPIOx_CLK_ENABLE() / HAL_GPIO_Init(GPIOx
+              不在 v1 核验范围，需另加断言：Mcu.PinsNb / __HAL_RCC_GPIOx_CLK_ENABLE() / HAL_GPIO_Init(GPIOx
 EOF
 exit 0

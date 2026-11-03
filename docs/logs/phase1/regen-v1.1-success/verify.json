@@ -1,5 +1,5 @@
 {
-  "schema": "platform32.verify_generation/1",
+  "schema": "platform32.verify_generation/2",
   "verdict": "pass",
   "checks": [
     {
@@ -45,13 +45,26 @@
     "checked_peripherals": [
       "GPIO"
     ],
-    "notes": []
+    "notes": [
+      "deprecated: 顶层 expect / allow_signals 已迁入 inputs（同名键），将于 v1.2 删除，请改读 inputs.expect / inputs.allow_signals"
+    ]
   },
   "inputs": {
     "log": "D:\\Projects\\GitHub\\platform32-mcp\\docs\\logs\\phase1\\regen-v1.1-success\\cubemx-generate.log",
     "main_c": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474\\Core\\Src\\main.c",
     "mxproject": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474\\.mxproject",
     "project_root": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474",
+    "expect": [
+      "GPIO"
+    ],
+    "expect_pins": [],
+    "allow_signals": [
+      "VP_RIF_VS_RIF1"
+    ],
+    "tool": {
+      "name": "verify_generation.py",
+      "version": "1.1.0"
+    },
     "effective_allow_signals": [
       "VP_RIF_VS_RIF1"
     ]
@@ -61,9 +74,5 @@
   ],
   "allow_signals": [
     "VP_RIF_VS_RIF1"
-  ],
-  "tool": {
-    "name": "verify_generation.py",
-    "version": "1.1.0"
-  }
+  ]
 }

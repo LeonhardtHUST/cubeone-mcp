@@ -2,7 +2,7 @@
   "schema": "platform32.ioc_backup/1",
   "action": "backup",
   "project": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474",
-  "timestamp": "2026-11-03T12:14:37+08:00",
+  "timestamp": "2026-11-03T12:27:50+08:00",
   "files": [
     {
       "ioc": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474\\stm32-g474-template.ioc",

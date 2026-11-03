@@ -79,7 +79,7 @@ from typing import Iterable, Sequence
 __version__ = "1.1.0"
 
 #: 报告 schema 版本号；结构变更时必须递增（下游 T1.4 文档与 S1 场景按此消费）。
-SCHEMA = "platform32.verify_generation/1"
+SCHEMA = "platform32.verify_generation/2"
 
 #: 退出码。
 EXIT_PASS = 0
@@ -1007,17 +1007,27 @@ def verify_documents(
         if item.status == STATUS_SKIP:
             notes.append(f"{item.check_id}: {item.detail}")
 
-    report_inputs: dict[str, str | None] = {
+    report_inputs: dict[str, object] = {
         "log": "",
         "main_c": "",
         "mxproject": "",
         "project_root": project_root,
+        "expect": list(expect),
+        # v1.2 预留：引脚级检查（`--expect-pins`）落地后这里才会非空。
+        "expect_pins": [],
+        "allow_signals": list(allow_signals),
+        "tool": {"name": "verify_generation.py", "version": __version__},
     }
     if inputs:
         report_inputs.update(inputs)
     # 生效的 allowlist 必须落盘：不同入口（直调 vs regen.sh）默认值不同，
     # 不写进报告就会出现"同一份日志、两个入口、两种结论"。
     report_inputs["effective_allow_signals"] = list(allow_signals)
+
+    notes.append(
+        "deprecated: 顶层 expect / allow_signals 已迁入 inputs（同名键），将于 v1.2 删除，"
+        "请改读 inputs.expect / inputs.allow_signals"
+    )
 
     report: dict[str, object] = {
         "schema": SCHEMA,
@@ -1030,9 +1040,9 @@ def verify_documents(
             "notes": notes,
         },
         "inputs": report_inputs,
+        # ↓↓ 以下两个顶层键是 v1.1 的兼容让步（deprecated），v1.2 删除
         "expect": list(expect),
         "allow_signals": list(allow_signals),
-        "tool": {"name": "verify_generation.py", "version": __version__},
     }
     return report
 

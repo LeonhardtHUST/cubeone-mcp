@@ -161,6 +161,50 @@ def test_positive_g474_template(tmp_path: Path) -> None:
     assert inputs["effective_allow_signals"] == []
 
 
+def test_schema_v2_shape(tmp_path: Path) -> None:
+    """schema /2：请求参数全部收进 ``inputs``，顶层只留 4 个键 + 2 个 deprecated 兼容键。"""
+    _, report = run_verify(
+        tmp_path, expect="GPIO", extra=("--allow-signal", "VP_RIF_VS_RIF1")
+    )
+
+    assert report["schema"] == "platform32.verify_generation/2"
+    # 顶层：4 个契约键 + 2 个 v1.1 兼容让步（v1.2 删除）
+    assert set(report) == {
+        "schema",
+        "verdict",
+        "checks",
+        "summary",
+        "inputs",
+        "expect",
+        "allow_signals",
+    }
+
+    inputs = report["inputs"]
+    assert isinstance(inputs, dict)
+    assert set(inputs) == {
+        "log",
+        "main_c",
+        "mxproject",
+        "project_root",
+        "expect",
+        "expect_pins",
+        "allow_signals",
+        "effective_allow_signals",
+        "tool",
+    }
+    # tool 保持对象（可扩展），不是字符串
+    assert inputs["tool"] == {"name": "verify_generation.py", "version": vg.__version__}
+    assert inputs["expect"] == ["GPIO"]
+    assert inputs["expect_pins"] == []  # v1.2 预留
+    assert inputs["allow_signals"] == ["VP_RIF_VS_RIF1"]
+    assert inputs["effective_allow_signals"] == ["VP_RIF_VS_RIF1"]
+
+    summary = report["summary"]
+    assert isinstance(summary, dict)
+    # 迁移动线必须显式告知（.get() 取不到会静默返回 None，比报错更危险）
+    assert any("deprecated" in str(note) for note in summary["notes"])
+
+
 def test_positive_multi_peripheral(tmp_path: Path) -> None:
     """多外设正样本：GPIO + TIM4 + USART2 全部定义且调用 → pass。"""
     result, report = run_verify(

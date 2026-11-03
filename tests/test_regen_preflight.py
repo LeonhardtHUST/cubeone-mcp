@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
-"""``scripts/regen.sh`` 的**生成前**行为（不跑 CubeMX，秒级）。
+"""``scripts/regen.sh`` 的**不调真 CubeMX** 行为测试（秒级）。
 
-重点验证 lead 定的那条结构性判断：``ProjectManager.AskForMigrate=true`` 的危害
-发生在**生成时**（``-q`` 会卡在迁移对话框直到超时），所以它必须是 ``regen.sh``
-的**前置硬拦**（退出码 2），而不是生成后才跑的 check —— 等核验器看到它，人已经
-白等了。这里断言两件事：**退出码 2** 且 **CubeMX 根本没被调用**（无生成日志）。
+覆盖 v1.1 定稿后的四条关键语义：
 
-另外两个用例覆盖同一层的其它拒绝路径：``.ioc`` 脏工作区、环境缺失。
+1. **生成判据查 KO**：CubeMX 退出码恒为 0（D25），脚本层回 ``KO`` 也只返回 0
+   → 必须靠日志里的整行 ``KO`` 判定"生成阶段失败"，并退出 ``1``（已回滚）。
+2. **``AskForMigrate`` 不拦、不改**：``true`` 单独存在是稳态，不告警；只有
+   「``.ioc`` 版本低于本机 + ``=true``」才 warn，且**永远不改文件**。
+3. **脏 ``.ioc`` 默认放行**（失败从备份恢复，不用 ``git checkout``），
+   ``--require-clean`` 才是显式严格模式（退出 2）。
+4. **``--dry-run`` 不得宣称通过**。
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -37,6 +41,28 @@ ProjectManager.AskForMigrate={migrate}
 ProjectManager.ProjectName=fake-board
 """
 
+MAIN_C = """#include "main.h"
+
+static void MX_GPIO_Init(void);
+
+int main(void)
+{
+  HAL_Init();
+  MX_GPIO_Init();
+  while (1)
+  {
+  }
+}
+
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+}
+"""
+
 
 def find_bash() -> str | None:
     """找一个可用的 bash（Git Bash）。找不到就跳过这些用例。"""
@@ -47,7 +73,9 @@ def find_bash() -> str | None:
         Path(r"C:\Program Files\Git\bin\bash.exe"),
         Path(r"C:\Program Files (x86)\Git\bin\bash.exe"),
     ]
-    guesses.extend(sorted(Path.home().glob(".workbuddy/binaries/PortableGit/versions/*/bin/bash.exe")))
+    guesses.extend(
+        sorted(Path.home().glob(".workbuddy/binaries/PortableGit/versions/*/bin/bash.exe"))
+    )
     for guess in guesses:
         if guess.is_file():
             return str(guess)
@@ -58,25 +86,34 @@ BASH = find_bash()
 pytestmark = pytest.mark.skipif(BASH is None, reason="没有可用的 bash（Git Bash）")
 
 
-def make_project(tmp_path: Path, *, migrate: str = "true", version: str = "6.18.1") -> Path:
+def make_project(tmp_path: Path, *, migrate: str = "false", version: str = "6.18.1") -> Path:
     """造一个足以通过前置检查的最小工程（.ioc + main.c + .mxproject + .mx）。"""
     project = tmp_path / "fake-board"
     (project / "Core" / "Src").mkdir(parents=True)
     (project / "scripts").mkdir(parents=True)
     (project / "fake-board.ioc").write_text(
-        IOC_TEMPLATE.format(migrate=migrate, version=version), encoding="utf-8"
+        IOC_TEMPLATE.format(migrate=migrate, version=version), encoding="utf-8", newline="\n"
     )
-    (project / "Core" / "Src" / "main.c").write_text(
-        "int main(void)\n{\n  MX_GPIO_Init();\n  while (1) {}\n}\n", encoding="utf-8"
-    )
+    (project / "Core" / "Src" / "main.c").write_text(MAIN_C, encoding="utf-8", newline="\n")
     (project / ".mxproject").write_text(
-        "[PreviousUsedMakefileFiles]\nSourceFiles=Core\\Src\\main.c;\n", encoding="utf-8"
+        "[PreviousUsedMakefileFiles]\nSourceFiles=Core\\Src\\main.c;\n",
+        encoding="utf-8",
+        newline="\n",
     )
     (project / "scripts" / "cubemx-generate.mx").write_text(
         "config load fake-board.ioc\nSetStructure Advanced\nproject generate\nexit\n",
         encoding="utf-8",
+        newline="\n",
     )
     return project
+
+
+def make_fake_java(tmp_path: Path, body: str) -> Path:
+    """造一个假的"java"：把给定内容写到 stdout 后退出 0（模拟 CubeMX 恒返回 0）。"""
+    script = tmp_path / "fake-java.sh"
+    script.write_text("#!/usr/bin/env bash\n" + body, encoding="utf-8", newline="\n")
+    os.chmod(script, 0o755)
+    return script
 
 
 def run_regen(project: Path, *args: str, timeout: int = 120) -> subprocess.CompletedProcess[str]:
@@ -91,110 +128,206 @@ def run_regen(project: Path, *args: str, timeout: int = 120) -> subprocess.Compl
         cwd=str(REPO_ROOT),
         timeout=timeout,
         check=False,
-        env={**__import__("os").environ, "PYTHON": sys.executable},
+        env={**os.environ, "PYTHON": sys.executable},
     )
 
 
-def test_ask_for_migrate_blocks_before_generation(tmp_path: Path) -> None:
-    """``AskForMigrate=true`` → 退出码 2，且**没有**产生 CubeMX 生成日志。
+# ---------------------------------------------------------------------------
+# 1. 生成判据：退出码 0 但有 KO → 生成阶段失败，退出 1 并回滚
+# ---------------------------------------------------------------------------
+def test_ko_in_log_fails_generation_with_exit_1(tmp_path: Path) -> None:
+    """CubeMX 回 ``KO`` 但退出码 0 → 必须判"生成阶段失败"（退出 1，已回滚）。
 
-    这是"防白等 300 秒"的关键：脚本必须在调用 CubeMX 之前就退出。
+    这是 D25 的直接后果：只看 `returncode` 会把这类失败当成功。
     """
-    project = make_project(tmp_path, migrate="true")
+    project = make_project(tmp_path)
     out_dir = tmp_path / "evidence"
-
-    result = run_regen(project, "-o", str(out_dir))
-
-    assert result.returncode == 2, result.stdout + result.stderr
-    combined = result.stdout + result.stderr
-    assert "AskForMigrate" in combined
-    assert "前置检查未通过" in combined
-    # 关键断言：CubeMX 压根没被调用 → 不可能有生成日志
-    assert not (out_dir / "cubemx-generate.log").exists()
-    # 也不该有任何备份动作（前置检查在备份之前）
-    assert not (project / "fake-board.ioc.bak").exists()
-
-
-def test_ask_for_migrate_passes_when_false(tmp_path: Path) -> None:
-    """``AskForMigrate=false`` 时前置通过，失败点是环境（这里故意给不存在的 CubeMX）。"""
-    project = make_project(tmp_path, migrate="false")
-    out_dir = tmp_path / "evidence"
+    cube = tmp_path / "STM32CubeMX.exe"
+    cube.write_text("not-a-real-cube", encoding="utf-8")
+    fake_java = make_fake_java(
+        tmp_path,
+        "echo 'set pin PA0 S_TIM2_CH1_ETR'\necho 'KO'\necho 'exit'\n",
+    )
 
     result = run_regen(
-        project,
-        "-o",
-        str(out_dir),
-        "--java",
-        sys.executable,  # 存在即可，本用例不会真的执行
-        "--cube",
-        str(tmp_path / "no-such-STM32CubeMX.exe"),
+        project, "-o", str(out_dir), "--java", str(fake_java), "--cube", str(cube)
     )
-
-    combined = result.stdout + result.stderr
-    assert result.returncode == 2, combined
-    assert "找不到 CubeMX" in combined
-    assert "AskForMigrate" not in combined  # 前置已放行
-    assert (out_dir / "ioc-backup.json").is_file()  # 说明确实进到了备份步骤
-
-
-def test_dirty_ioc_refused_with_next_step_hint(tmp_path: Path) -> None:
-    """``.ioc`` 脏且没带 ``--allow-dirty-ioc`` → 退出码 2，并直接给出下一步命令。"""
-    git = shutil.which("git")
-    if git is None:
-        pytest.skip("没有 git，跳过脏工作区用例")
-
-    project = make_project(tmp_path, migrate="false")
-    subprocess.run([git, "init", "-q"], cwd=project, check=True, timeout=60)
-    subprocess.run([git, "add", "."], cwd=project, check=True, timeout=60)
-    subprocess.run(
-        [git, "-c", "user.email=t@example.com", "-c", "user.name=tester", "commit", "-qm", "init"],
-        cwd=project,
-        check=True,
-        timeout=60,
-    )
-    # 模拟"刚用 CLI set 改完 .ioc"
-    ioc = project / "fake-board.ioc"
-    ioc.write_text(ioc.read_text(encoding="utf-8") + "PA0.Signal=GPIO_Output\n", encoding="utf-8")
-
-    result = run_regen(project, "-o", str(tmp_path / "evidence"))
     combined = result.stdout + result.stderr
 
-    assert result.returncode == 2, combined
-    assert "--allow-dirty-ioc" in combined
-    assert "拒绝在 .ioc 脏的工作区生成" in combined
+    assert result.returncode == 1, combined
+    assert "[regen] 生成阶段失败" in combined
+    assert "KO" in combined
+    # 生成失败也要留日志证据，并且不能进到核验阶段
+    assert (out_dir / "cubemx-generate.log").is_file()
+    assert not (out_dir / "verify.json").exists()
+    # 回滚：备份存在且 .ioc 内容与生成前一致
+    assert (project / "fake-board.ioc.bak").is_file()
+    assert (project / "fake-board.ioc").read_text(encoding="utf-8") == (
+        IOC_TEMPLATE.format(migrate="false", version="6.18.1")
+    )
 
 
-def test_version_stamp_mismatch_warns_only(tmp_path: Path) -> None:
-    """版本戳与锁定版本不一致 → 只告警（P2 提交卫生），不改变前置结论。"""
-    project = make_project(tmp_path, migrate="false", version="6.17.0")
+def test_clean_log_without_ko_proceeds_to_verify(tmp_path: Path) -> None:
+    """日志无 KO → 进到核验阶段（这里没生成产物，所以核验必然给非 0，但阶段要对）。"""
+    project = make_project(tmp_path)
     out_dir = tmp_path / "evidence"
+    cube = tmp_path / "STM32CubeMX.exe"
+    cube.write_text("not-a-real-cube", encoding="utf-8")
+    fake_java = make_fake_java(tmp_path, "echo 'Code generation finished successfully'\n")
 
     result = run_regen(
-        project,
-        "-o",
-        str(out_dir),
-        "--java",
-        sys.executable,
-        "--cube",
-        str(tmp_path / "no-such-STM32CubeMX.exe"),
+        project, "-o", str(out_dir), "--java", str(fake_java), "--cube", str(cube)
     )
     combined = result.stdout + result.stderr
 
-    assert "6.17.0" in combined
-    assert "锁定版本 6.18.1" in combined
-    # 仍然是因为环境缺失而失败（不是被版本戳拦下）
-    assert result.returncode == 2
-    assert "找不到 CubeMX" in combined
+    # 空日志 → log_cannot_map warn；main.c 里 GPIO 正常 → 核验大概能过，但不管结果，
+    # 关键是"生成阶段"通过、进了"核验阶段"。
+    assert "生成阶段：退出码 0 且无 KO" in combined
+    assert "[regen] 生成阶段失败" not in combined
 
 
-def test_effective_allowlist_is_announced(tmp_path: Path) -> None:
-    """生效白名单必须打印出来（两个入口默认值不同，不打印就会出现两种结论）。"""
-    project = make_project(tmp_path, migrate="false")
+# ---------------------------------------------------------------------------
+# 2. AskForMigrate：只读、不改、条件告警
+# ---------------------------------------------------------------------------
+def test_ask_for_migrate_true_is_silent_when_version_matches(tmp_path: Path) -> None:
+    """稳态：``=true`` 且版本一致 → 不告警、不拦、**不改文件**。"""
+    project = make_project(tmp_path, migrate="true", version="6.18.1")
+    before = (project / "fake-board.ioc").read_bytes()
 
     result = run_regen(project, "-o", str(tmp_path / "evidence"), "--dry-run")
     combined = result.stdout + result.stderr
 
     assert result.returncode == 0, combined
+    assert "AskForMigrate" not in combined
+    assert (project / "fake-board.ioc").read_bytes() == before  # 一个字节都没动
+
+
+def test_ask_for_migrate_true_warns_only_when_version_is_older(tmp_path: Path) -> None:
+    """``=true`` + 旧版本戳 → 一条 warn（含"无实测卡死证据"），仍不拦不改。"""
+    project = make_project(tmp_path, migrate="true", version="6.17.0")
+    before = (project / "fake-board.ioc").read_bytes()
+
+    result = run_regen(project, "-o", str(tmp_path / "evidence"), "--dry-run")
+    combined = result.stdout + result.stderr
+
+    assert result.returncode == 0, combined
+    assert "AskForMigrate=true" in combined
+    assert "无实测卡死证据" in combined
+    assert (project / "fake-board.ioc").read_bytes() == before
+
+
+def test_ask_for_migrate_false_never_warns(tmp_path: Path) -> None:
+    """``=false`` + 旧版本戳 → 只有版本戳告警，不该提 AskForMigrate。"""
+    project = make_project(tmp_path, migrate="false", version="6.17.0")
+    result = run_regen(project, "-o", str(tmp_path / "evidence"), "--dry-run")
+    combined = result.stdout + result.stderr
+
+    assert result.returncode == 0, combined
+    assert "AskForMigrate" not in combined
+    assert "锁定版本 6.18.1" in combined
+
+
+# ---------------------------------------------------------------------------
+# 3. 脏 .ioc：默认放行（从备份恢复），--require-clean 才严格
+# ---------------------------------------------------------------------------
+def _init_git_with_commit(project: Path) -> None:
+    """把假工程提交进一个临时 git 仓库（--require-clean 用例需要）。"""
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("没有 git，跳过脏工作区用例")
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "tester",
+        "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "tester",
+        "GIT_COMMITTER_EMAIL": "t@example.com",
+    }
+    subprocess.run([git, "init", "-q"], cwd=project, check=True, timeout=60, env=env)
+    subprocess.run([git, "add", "-A"], cwd=project, check=True, timeout=60, env=env)
+    subprocess.run(
+        [git, "commit", "-qm", "init"], cwd=project, check=True, timeout=60, env=env
+    )
+
+
+def test_dirty_ioc_allowed_by_default_and_restores_from_backup(tmp_path: Path) -> None:
+    """默认允许脏 .ioc，并明确告知"从备份恢复、不用 git checkout"。"""
+    project = make_project(tmp_path)
+    _init_git_with_commit(project)
+    ioc = project / "fake-board.ioc"
+    dirty_body = ioc.read_text(encoding="utf-8") + "PB0.Signal=GPIO_Output\n"
+    ioc.write_text(dirty_body, encoding="utf-8", newline="\n")
+
+    result = run_regen(project, "-o", str(tmp_path / "evidence"), "--dry-run")
+    combined = result.stdout + result.stderr
+
+    assert result.returncode == 0, combined
+    assert "将按现状生成" in combined
+    assert "不用 git checkout" in combined
+    # 用户未提交的编辑不能被抹掉（dry-run 也不该动 git）
+    assert ioc.read_text(encoding="utf-8") == dirty_body
+
+
+def test_require_clean_refuses_dirty_ioc(tmp_path: Path) -> None:
+    """``--require-clean`` + 脏 .ioc → 退出 2（压根没跑）。"""
+    project = make_project(tmp_path)
+    _init_git_with_commit(project)
+    ioc = project / "fake-board.ioc"
+    ioc.write_text(
+        ioc.read_text(encoding="utf-8") + "PB0.Signal=GPIO_Output\n", encoding="utf-8", newline="\n"
+    )
+
+    result = run_regen(project, "-o", str(tmp_path / "evidence"), "--require-clean")
+    combined = result.stdout + result.stderr
+
+    assert result.returncode == 2, combined
+    assert "--require-clean 命中" in combined
+    assert not (tmp_path / "evidence" / "cubemx-generate.log").exists()
+
+
+def test_removed_flag_is_rejected(tmp_path: Path) -> None:
+    """``--allow-dirty-ioc`` 已删除：不做 no-op 别名（那是语义陷阱），直接报未知选项。"""
+    project = make_project(tmp_path)
+    result = run_regen(project, "--allow-dirty-ioc")
+    assert result.returncode == 2
+    assert "未知选项" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# 4. dry-run 不得宣称通过 / 白名单可见
+# ---------------------------------------------------------------------------
+def test_dry_run_never_claims_pass(tmp_path: Path) -> None:
+    """dry-run 没跑生成也没跑核验 → 不得打印"全部通过"。"""
+    project = make_project(tmp_path)
+    result = run_regen(project, "-o", str(tmp_path / "evidence"), "--dry-run")
+    combined = result.stdout + result.stderr
+
+    assert result.returncode == 0, combined
+    assert "全部通过" not in combined
+    assert "(dry-run) 未执行生成与核验" in combined
+
+
+def test_effective_allowlist_is_announced(tmp_path: Path) -> None:
+    """生效白名单必须打印（两个入口默认值不同，不打印会出现两种结论）。"""
+    project = make_project(tmp_path)
+    result = run_regen(project, "-o", str(tmp_path / "evidence"), "--dry-run")
+    combined = result.stdout + result.stderr
     assert "生效 allowlist：VP_RIF_VS_RIF1" in combined
-    # dry-run 不该落任何证据文件
-    assert not (tmp_path / "evidence" / "verify.json").exists()
+
+
+def test_help_does_not_leak_shell_code(tmp_path: Path) -> None:
+    """``--help`` 只打印用法，不得泄漏 `set -uo pipefail` / `export PATH` 之类的代码行。"""
+    assert BASH is not None
+    result = subprocess.run(
+        [BASH, str(REGEN), "--help"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(REPO_ROOT),
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "用法" in result.stdout
+    assert "set -uo pipefail" not in result.stdout
+    assert "export PATH=" not in result.stdout

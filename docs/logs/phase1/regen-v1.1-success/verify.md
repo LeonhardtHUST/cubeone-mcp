@@ -3,8 +3,8 @@
 - **verdict**：`PASS`
 - **errors / warnings**：0 / 1
 - **期望外设**：GPIO
-- **schema**：`platform32.verify_generation/1`
-- **生成时间**：2026-11-03T12:15:13+08:00
+- **schema**：`platform32.verify_generation/2`
+- **生成时间**：2026-11-03T12:28:28+08:00
 - **生成日志**：`D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\regen-v1.1-success\cubemx-generate.log`
 - **main.c**：`D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Src\main.c`
 - **.mxproject**：`D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\.mxproject`
