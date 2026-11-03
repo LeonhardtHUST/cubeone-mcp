@@ -24,7 +24,9 @@ python scripts/verify_generation.py \
 | `--mxproject` | ✅ | 生成的 `.mxproject`（查盘符绝对路径） |
 | `--expect` | ✅ | 期望外设；逗号/分号/空白分隔，大小写不敏感，去重转大写；`""` = 不查外设 |
 | `--project-root` | ❌ | 扫描其下 `**/*.mx`；**不传则该检查 `skip`** |
-| `--allow-signal` | ❌ | 可重复、可逗号分隔；**默认不预置**（`regen.sh` 才预置 D8） |
+| `--ioc` | ❌ | `.ioc` 路径，供 `pins_present` 读 `<PIN>.Signal`；**不传则该检查 `skip`** |
+| `--expect-pins` | ❌ | 期望引脚，形式 `PIN=SIGNAL`（如 `PB0=GPIO_Output`）；**可重复、可逗号分隔**（与 `--allow-signal` 同 UX）。**不传则该检查 `skip`** |
+| `--allow-signal` | ❌ | 可重复、可逗号分隔；**默认不预置**（`regen.sh` 才预置 D8）。**按抽出的信号名精确匹配**，见 §4.1 |
 | `--json-out` / `--report-md` | ❌ | 自动建父目录 |
 
 ## 2. 退出码
@@ -64,13 +66,21 @@ python scripts/verify_generation.py \
 - **取参一律从 `inputs` 读**。`/1` 的顶层 `expect` / `allow_signals` 在 `/2` 不再是契约字段。
 - **`tool`** 保持对象（不用字符串），便于将来扩展 `driver` 等字段。
 
-## 4. 六项检查的判定细则
+## 4. 七项检查的判定细则
 
-`checks` 数组**恒为 6 条**，顺序固定。
+`checks` 数组**恒为 7 条**，顺序固定：
+`log_cannot_map` → `main_init_present` → `main_init_called` → **`pins_present`** →
+`mxproject_abs_path` → `mx_script_abs_path` → `syscalls_path`。
 
 ### 4.1 `log_cannot_map`（`blocking: true`）
 
 - 命中 `Cannot map` 行 → 若该行信号名在 `--allow-signal` 白名单内 → 降为 `warn`；否则 `fail`。
+- **白名单匹配以"抽出的信号名"为准（精确、大小写不敏感），不是整行子串匹配**；只有抽不出名字时
+  才退回子串。原因（✅ 实测）：曾出现 `--allow-signal` 双向失效——正则回溯把**字面量 `signal`**
+  当成信号名，于是 ① 把已知噪音加白名单永远匹配不上（**假 FAIL**）；
+  ② `--allow-signal signal` 一次放行**所有**圆括号形态（**假 PASS，D5 守卫被绕过**）。
+  修复后实测：带 `VP_TIM4_VS_ClockSourceINT` → `warn`/PASS/rc=0；不带 → FAIL/rc=1；
+  带 `signal` → 仍 FAIL/rc=1（不再能"用一个短词关掉守卫"）。
 - 另有 `OptionalMessage_ERROR`（如 G474 的 `VP_RIF_VS_RIF1`，D8）**不计入判定**。
 - **空日志/纯空白 → `warn`**（"无法确认生成是否真的跑过"），`verdict` 仍可能是 pass。
   **"日志干净"必须由真实日志证明，不能由空文件证明。**
@@ -103,11 +113,33 @@ S3 的任务是给出真实样本，**或者证明该路径在本机不可达—
   detail 会写"另有 N 个外设无定义、未参与本项：TIM4"——**这行是重要线索**。
 - `main.c` 里找不到 `int main(void)` 函数体 → `fail`。
 
-### 4.4 `mxproject_abs_path`（`blocking: true`）
+### 4.4 `pins_present`（`blocking: true`，**默认 `skip`**）
+
+**存在理由**：`cubemx_configure` 可能回 `ok=True`（上游判据只有"退出码 0 且无整行 `KO`"）而 `.ioc`
+实际没改；生成成功、`MX_GPIO_Init` 本来就在（PC13 在用），于是外设级检查全 pass ——
+用户以为改动生效了，其实什么都没发生。**这是 D5/H-6 的引脚级版本，比整只外设被丢更常见。**
+
+判定（任一不满足即 `fail`）：
+
+1. `.ioc` 里存在 `<PIN>.Signal`，且取值与期望**大小写不敏感**一致；
+2. 该引脚所属端口的时钟使能出现在 `main.c`（`__HAL_RCC_GPIOx_CLK_ENABLE()`）——
+   这一条才让"引脚真的进了生成物"可验证，而不只是"`.ioc` 里写了个键"。
+
+两种 `skip`（detail 会写明原因）：
+
+| 情况 | 结果 |
+|---|---|
+| 未传 `--expect-pins` | `skip`（"未提供 --expect-pins，跳过引脚级检查（v1.1 的外设级保证不含引脚增量）"） |
+| 传了 `--expect-pins` 但没给 `--ioc` | `skip`（"无法读取 `<PIN>.Signal`"） |
+
+> ⚠️ **默认 `skip` 是设计取舍，不是遗漏**：不传 `--expect-pins` 就等于放弃这层保护，
+> 此时"加一个引脚"仍然只有外设级盲区。**路径 A 的正确做法永远带上它。**
+
+### 4.5 `mxproject_abs_path`（`blocking: true`）
 
 - `.mxproject` 出现 `[A-Za-z]:[\\/]` 盘符路径 → `fail`（换机不可复现，P4）。
 
-### 4.5 `mx_script_abs_path`（`blocking: true`，**三态**）
+### 4.6 `mx_script_abs_path`（`blocking: true`，**三态**）
 
 扫描 `<project-root>/**/*.mx`：
 
@@ -125,26 +157,26 @@ S3 的任务是给出真实样本，**或者证明该路径在本机不可达—
 是"从裸 MCU 新建工程"脚本的占位符；G474 没配模板时天然未替换 ⇒ `warn`、`verdict` 仍 `pass`。
 **预期条数恒为 1；≥2 条 = 异常必须查。** 不要为消掉它去改那个脚本。
 
-### 4.6 `syscalls_path`（**`blocking: false`**，唯一不阻塞的一项）
+### 4.7 `syscalls_path`（**`blocking: false`**，唯一不阻塞的一项）
 
 - 同一行里**同时**出现 `syscalls.c`/`sysmem.c` **且**含异常关键字
   （`FileNotFoundException`/`ioexception`/`exception`/`拒绝访问` 等）→ `warn`。
 - 只提到文件名不误报 ⇒ 这条 `warn` 基本可当 D9 的确定性证据。
 - 含义：这两个 newlib 桩本次未更新，属 CubeMX 已知缺陷，**不阻塞交付**。
 
-## 5. 保证边界（v1.1 最重要的免责声明）
+## 5. 保证边界（最重要的一条免责声明）
 
-> **`verdict: pass` 只保证「外设级」不漏**：期望外设有定义、被调用、引脚映射没报错。
+> **`verdict: pass` 的保证范围取决于你传了什么。**
 
-| 层级 | v1.1 是否保证 | 说明 |
+| 层级 | 是否保证 | 说明 |
 |---|---|---|
-| 外设级（整只外设没被丢） | ✅ 保证 | 4.2 + 4.3 |
-| **引脚级**（在已有外设内部加一个引脚） | ❌ **不保证** | `pins_present` 计划 v1.2；v1.1 完全看不见 |
+| 外设级（整只外设没被丢） | ✅ **总是** | 4.2 + 4.3 |
+| **引脚级**（在已有外设内部加一个引脚） | ⚠️ **仅当同时传 `--expect-pins` 与 `--ioc`** | 4.4；不传 → `skip`，**引脚增量仍是真空** |
 | **参数级**（`Prescaler` / `PinState` 等是否生效） | ❌ **不保证** | v2 known limitation |
 
-**为什么引脚级是真空**：`MX_GPIO_Init` 在模板里本来就有（PC13 在用），
+**为什么引脚级默认是真空**：`MX_GPIO_Init` 在模板里本来就有（PC13 在用），
 所以"加一个 PB0"时外设级检查全都不会变红——`configure` 说成功、生成成功、核验 PASS，
-**而 `.ioc` 可能一个字都没改**。
+**而 `.ioc` 可能一个字都没改**。这正是 4.4 存在的唯一理由。
 
 **参数级失明的典型场景**（🚨 与 `set pin` 无关）：`set pin PB0 GPIO_Output` 路径下
 CubeMX **不写** `PB0.PinState=`、也不需要白名单，`main.c` 直接生成

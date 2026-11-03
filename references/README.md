@@ -24,7 +24,7 @@
 | 手册页 | 什么时候看它 |
 |---|---|
 | `capability-boundary.md` | 想知道"这件事工具能不能做"，或要 D25 的原始探测数据、四层权限模型、全绿幻觉链 |
-| `verify-contract.md` | 要消费 `verify.json`（字段语义、六项判据细则、三态表、保证边界、`/1→/2` 迁移） |
+| `verify-contract.md` | 要消费 `verify.json`（字段语义、七项判据细则、三态表、保证边界、`/1→/2` 迁移） |
 | `regen-exit-codes.md` | 用 `regen.sh`（退出码 `0/1/2`、`KO` 必要不充分、dirty 语义、`AskForMigrate` 行为约束） |
 | `diff-evidence.md` | 要证明"真的改了"（三级确认、`numstat -w` vs `status`、`.ioc` 大 diff 归因、引脚级落地判据） |
 | `pitfalls.md` | 遇到 P / D / H 系列陷阱，要看全文而非一句话索引 |

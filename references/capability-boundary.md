@@ -63,7 +63,7 @@
 |---|---|---|---|
 | `set pin` 写非法信号名 | **`KO`** | **根本没走到生成** | `KO` 判据（`regen.sh`）+ 三级确认的 diff |
 | **手改 `.ioc`** 写坏信号名 | 无命令层 | **可能出现 `Cannot map`** | `log_cannot_map` |
-| 手改 `.ioc` 漏 `IPParameters` 白名单（`set ip parameters` 实测同此路） | 无命令层 | **日志干净，什么都不报** | 只有 `main_init_present`（+ v1.2 的 `pins_present`） |
+| 手改 `.ioc` 漏 `IPParameters` 白名单（`set ip parameters` 实测同此路） | 无命令层 | **日志干净，什么都不报** | 只有 `main_init_present`；引脚级另需 `pins_present` + `--expect-pins` |
 
 第三条最危险：**它连 `Cannot map` 都不给**，日志"干净"，生成"成功"，
 只有查 `main.c` 有没有 `MX_xxx_Init` 才发现外设没了——这就是 H-6。
@@ -90,8 +90,9 @@ MX_GPIO_Init 本来就在（模板的 PC13 在用 GPIO）
 2. `git diff HEAD --numstat -w <工程>/*.ioc` **非 0**（证明真写进去了）；
 3. G1 pass 且 `--expect` 覆盖本次全部外设。
 
-**外加**（v1.1 尤其重要）：核验器只保证外设级，**引脚级增量它完全看不见**——
-所以还要按 `diff-evidence.md` §4 的 `Mcu.PinsNb` 三条断言自查。
+**外加**（1.2.0 尤其重要）：核验器**默认只保证外设级**——引脚级增量它看不见，
+**必须同时传 `--expect-pins` 与 `--ioc`** 才补上（`pins_present`，见 `verify-contract.md` §4.4）；
+即便如此，`.ioc` 内部计数是否自洽仍要按 `diff-evidence.md` §4 的 `Mcu.PinsNb` 三条断言自查。
 
 ## 6. 一句话总结
 
