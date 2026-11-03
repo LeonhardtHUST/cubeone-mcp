@@ -260,20 +260,32 @@ scripts/
   regen.sh                备份 → 生成 → 核验 → 失败回滚
   ioc_backup.py           .ioc 备份/还原（sha256 凭据）
   ioc_field.py            .ioc 单键读写（保留 CRLF，原子写）
-tests/                74 个 pytest 用例
+tests/                77 个 pytest 用例（+ fixtures/ 与 node/ 下的 Node 层单测）
 tools/
   mcp_smoke.py          MCP 通道冒烟（真实调用 4 个工具，含负向对照）
-docs/                 决策记录、任务看板、实测报告与原始日志
-.github/workflows/    CI（pytest 矩阵 + 脚本静态检查；不含 CubeMX 端到端）
+  npm_mcp_handshake.mjs npm 包工具通道冒烟（12 项；缺素材的项如实记 SKIP，不冒充通过）
+  check_taskboard.py    看板一致性校验（快照 / 证据路径 / 发布记账）
+  check_release.py      版本轴与发布收口校验（tag ↔ package.json ↔ SKILL.md ↔ README）
+docs/                 决策记录、任务看板、发布正文（releases/）、实测报告与原始日志
+.github/workflows/    CI（pytest × 覆盖率底线 + Node 三档 + Windows 真机 job + 脚本检查；不含 CubeMX 端到端）
 ```
+
+> **依赖边界（重要，别读反）**：`scripts/` 下的三个 Python 脚本是**纯标准库、运行时零第三方依赖**——
+> 只装了 Python 3.11+ 就能跑，不需要 `pip install` 任何东西。`pytest` / `pytest-cov` 属**测试工具链**，
+> 只在跑测试时需要，**不算运行时依赖**；`package.json` 的唯一运行时依赖是
+> `@modelcontextprotocol/sdk`（精确版本，lock 已入库）。
 
 ## 项目状态
 
-- **Phase 1 已完成**：核验器（7 项）、`regen.sh`、74 个单测、S1/S2/S3 三个场景实测
+- **Phase 1 已完成**：核验器（7 项）、`regen.sh`、77 个单测、S1/S2/S3 三个场景实测
 - **Phase 2 挂起**：实板烧录验证（L5）需要接板后继续
-- **Phase 3 已完成**：CI 全绿（`pytest` 3.11 / 3.13 双矩阵）、README 与文档收口
+- **Phase 3 已完成**：CI 全绿（`pytest` 3.11 / 3.13 双矩阵 + `Node` 18/20/22 三档 + **Windows 真机 job**）
 
 CI 覆盖的是「脚本与核验器的逻辑没退化」，**不覆盖**「某个 `.ioc` 改对了」——CubeMX 是 Windows GUI 应用且需交互接受许可，无法在 GitHub Actions 上运行。端到端证据来自本地实测，见 `docs/reports/`。
+
+**覆盖率口径**：Python 侧 `--cov=scripts` 当前实测 **37%**，CI 底线 **36%**（基线 -1pp，只防回退、不追指标）。
+这个数字**低估**了真实覆盖面——多数用例是用子进程调脚本的，子进程内的执行不计入 coverage，
+所以不要拿它当"覆盖率只有 37%"读。Node 侧覆盖率只在 Node 22 档输出、**暂不设门槛**。
 
 ### 三个版本号，别混
 
