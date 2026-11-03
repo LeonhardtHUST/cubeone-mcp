@@ -51,10 +51,10 @@
     ]
   },
   "inputs": {
-    "log": "D:\\Projects\\GitHub\\platform32-mcp\\docs\\logs\\phase1\\regen-v1.1-rollback\\cubemx-generate.log",
-    "main_c": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474\\Core\\Src\\main.c",
-    "mxproject": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474\\.mxproject",
-    "project_root": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474",
+    "log": "D:\\Projects\\GitHub\\cubeone-mcp\\docs\\logs\\phase1\\regen-v1.1-rollback\\cubemx-generate.log",
+    "main_c": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\_verifier-regen\\g474\\Core\\Src\\main.c",
+    "mxproject": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\_verifier-regen\\g474\\.mxproject",
+    "project_root": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\_verifier-regen\\g474",
     "expect": [
       "GPIO",
       "TIM4"

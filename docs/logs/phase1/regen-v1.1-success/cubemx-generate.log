@@ -597,26 +597,26 @@ project generate
 2026-11-03 12:28:21,621 [INFO] IPsOverviews:2785 - set Specific Code input for plugin: NVIC
 2026-11-03 12:28:21,621 [INFO] IPsOverviews:2785 - set Specific Code input for plugin: GPIO
 2026-11-03 12:28:21,634 [INFO] CodeGenerator:899 - code generatio: config db path: C:\ST\STM32CubeMX\\db\
-2026-11-03 12:28:21,754 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\license.tmp_save
-2026-11-03 12:28:22,100 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\license.tmp
-2026-11-03 12:28:22,269 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\gpio.tmp_save
-2026-11-03 12:28:22,491 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\gpio.tmp
-2026-11-03 12:28:22,633 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Src\stm32g4xx_it.c_save
-2026-11-03 12:28:22,810 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Src\stm32g4xx_it.c
-2026-11-03 12:28:22,835 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Inc\stm32g4xx_it.h_save
-2026-11-03 12:28:22,949 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Inc\stm32g4xx_it.h
-2026-11-03 12:28:23,008 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Src\stm32g4xx_hal_msp.c_save
-2026-11-03 12:28:23,174 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Src\stm32g4xx_hal_msp.c
-2026-11-03 12:28:23,196 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\system.tmp_save
-2026-11-03 12:28:23,273 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\system.tmp
-2026-11-03 12:28:23,322 [INFO] CodeEngine:353 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Inc\stm32g4xx_hal_conf.h_save
-2026-11-03 12:28:23,419 [INFO] CodeEngine:377 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Inc\stm32g4xx_hal_conf.h
+2026-11-03 12:28:21,754 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\license.tmp_save
+2026-11-03 12:28:22,100 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\license.tmp
+2026-11-03 12:28:22,269 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\gpio.tmp_save
+2026-11-03 12:28:22,491 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\gpio.tmp
+2026-11-03 12:28:22,633 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Src\stm32g4xx_it.c_save
+2026-11-03 12:28:22,810 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Src\stm32g4xx_it.c
+2026-11-03 12:28:22,835 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Inc\stm32g4xx_it.h_save
+2026-11-03 12:28:22,949 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Inc\stm32g4xx_it.h
+2026-11-03 12:28:23,008 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Src\stm32g4xx_hal_msp.c_save
+2026-11-03 12:28:23,174 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Src\stm32g4xx_hal_msp.c
+2026-11-03 12:28:23,196 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\system.tmp_save
+2026-11-03 12:28:23,273 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\MXTmpFiles\system.tmp
+2026-11-03 12:28:23,322 [INFO] CodeEngine:353 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Inc\stm32g4xx_hal_conf.h_save
+2026-11-03 12:28:23,419 [INFO] CodeEngine:377 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Inc\stm32g4xx_hal_conf.h
 2026-11-03 12:28:23,469 [WARN] IPConfigManager:3283 - Warning: the RefConfig RCC_CommonPeriphClockConfig is not available in your config.xml file
 2026-11-03 12:28:23,478 [INFO] ApiDbMcu:530 - Load IP Config File for RCC
-2026-11-03 12:28:23,517 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Inc\main.h_save
-2026-11-03 12:28:23,615 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Inc\main.h
-2026-11-03 12:28:23,636 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Src\main.c_save
-2026-11-03 12:28:23,777 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Src\main.c
+2026-11-03 12:28:23,517 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Inc\main.h_save
+2026-11-03 12:28:23,615 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Inc\main.h
+2026-11-03 12:28:23,636 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Src\main.c_save
+2026-11-03 12:28:23,777 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Src\main.c
 2026-11-03 12:28:24,319 [INFO] ProjectBuilder:3738 - Time for Copy HAL[0] : 374mS.
 2026-11-03 12:28:24,326 [INFO] ProjectBuilder:5348 - Project Generator version: 4.10.0-B28
 2026-11-03 12:28:24,399 [INFO] ConfigFileManager:1614 - The Die is : DIE469

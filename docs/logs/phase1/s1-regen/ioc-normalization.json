@@ -1,5 +1,5 @@
 {
-  "ioc": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\template-mcu-STM32G474-series\\stm32-g474-template.ioc",
+  "ioc": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\template-mcu-STM32G474-series\\stm32-g474-template.ioc",
   "action": "set",
   "key": "ProjectManager.AskForMigrate",
   "before": "true",

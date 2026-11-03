@@ -5,9 +5,9 @@
 - **期望外设**：GPIO
 - **schema**：`platform32.verify_generation/1`
 - **生成时间**：2026-11-03T12:07:34+08:00
-- **生成日志**：`D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s1-dryrun-regen\cubemx-generate.log`
-- **main.c**：`D:\Projects\GitHub\platform32-mcp\testbeds\_s1-dryrun\g474\Core\Src\main.c`
-- **.mxproject**：`D:\Projects\GitHub\platform32-mcp\testbeds\_s1-dryrun\g474\.mxproject`
+- **生成日志**：`D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\s1-dryrun-regen\cubemx-generate.log`
+- **main.c**：`D:\Projects\GitHub\cubeone-mcp\testbeds\_s1-dryrun\g474\Core\Src\main.c`
+- **.mxproject**：`D:\Projects\GitHub\cubeone-mcp\testbeds\_s1-dryrun\g474\.mxproject`
 - **工程根**：`（未提供，.mx 扫描已跳过）`
 - **生效白名单**：VP_RIF_VS_RIF1
 

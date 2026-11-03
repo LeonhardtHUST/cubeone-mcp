@@ -5,9 +5,9 @@
 # 执行前 .ioc sha256: d0bf5be00e1a51e43bc6e6f6e3279dafd2b58bb6f3932313c397b0653c3536ed
 # 执行前脏项: 0
 # --- 脚本内容 ---
-config load "D:/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-series/stm32-g474-template.ioc"
+config load "D:/Projects/GitHub/cubeone-mcp/testbeds/template-mcu-STM32G474-series/stm32-g474-template.ioc"
 set pin PB0 GPIO_Output
-config saveas "D:/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-series/stm32-g474-template.ioc"
+config saveas "D:/Projects/GitHub/cubeone-mcp/testbeds/template-mcu-STM32G474-series/stm32-g474-template.ioc"
 exit
 # --- 输出 ---
 log4j user configuration file not found: C:\Users\Leon/.stm32cubemx/log4j2.xml
@@ -219,7 +219,7 @@ WARNING: Could not open/create prefs root node Software\JavaSoft\Prefs at root 0
 2026-11-03 12:21:30,292 [INFO] MainFrame:590 - Register for checkConnection events
 2026-11-03 12:21:30,294 [INFO] FastPollingNetworkMonitor:182 - Apply proxy settings
 2026-11-03 12:21:30,294 [INFO] FastPollingNetworkMonitor:201 - Direct internet connection detected
-config load "D:/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-series/stm32-g474-template.ioc"
+config load "D:/Projects/GitHub/cubeone-mcp/testbeds/template-mcu-STM32G474-series/stm32-g474-template.ioc"
 2026-11-03 12:21:30,301 [INFO] FastPollingNetworkMonitor:158 - Register for checkConnection events
 2026-11-03 12:21:30,398 [INFO] MicroXplorer:468 - Change Database Path : 
 2026-11-03 12:21:30,399 [INFO] MicroXplorer:498 - Change Database Version : DB.6.0.181
@@ -600,7 +600,7 @@ config load "D:/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-s
 OK
 set pin PB0 GPIO_Output
 OK
-config saveas "D:/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-series/stm32-g474-template.ioc"
+config saveas "D:/Projects/GitHub/cubeone-mcp/testbeds/template-mcu-STM32G474-series/stm32-g474-template.ioc"
 2026-11-03 12:21:54,277 [INFO] ProjectChoiceTab:3888 - New firmware version: STM32Cube FW_G4 V1.6.3 Old firmware version: STM32Cube FW_G4 V1.6.3
 2026-11-03 12:21:54,305 [INFO] ProjectChoiceTab:3888 - New firmware version: STM32Cube FW_G4 V1.6.3 Old firmware version: STM32Cube FW_G4 V1.6.3
 2026-11-03 12:21:54,326 [INFO] UtilMem:75 - End SaveConfig() Used Memory: 918777568 Bytes (1610612736)

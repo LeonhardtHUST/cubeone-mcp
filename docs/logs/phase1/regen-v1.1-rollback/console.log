@@ -1,13 +1,13 @@
-[regen] 工程：/d/Projects/GitHub/platform32-mcp/testbeds/_verifier-regen/g474
+[regen] 工程：/d/Projects/GitHub/cubeone-mcp/testbeds/_verifier-regen/g474
 [regen] 期望外设：GPIO,TIM4
-[regen] 证据输出：/d/Projects/GitHub/platform32-mcp/docs/logs/phase1/regen-v1.1-rollback
+[regen] 证据输出：/d/Projects/GitHub/cubeone-mcp/docs/logs/phase1/regen-v1.1-rollback
 [regen] 生效 allowlist：VP_RIF_VS_RIF1（同时写进 verify.json 的 inputs.effective_allow_signals）
 [regen] 步骤 1/4：备份 .ioc → .ioc.bak、.mxproject → .mxproject.bak
-backed up D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc → D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc.bak (4792 bytes, sha256=d0bf5be00e1a…)
-[ioc_backup] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\regen-v1.1-rollback\ioc-backup.json
-[regen] .mxproject 备份：/d/Projects/GitHub/platform32-mcp/testbeds/_verifier-regen/g474/.mxproject.bak
-[regen] 步骤 2/4：CubeMX 无头生成（timeout 300s，日志 /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/regen-v1.1-rollback/cubemx-generate.log）
-[regen] CubeMX 工作目录：/d/Projects/GitHub/platform32-mcp/testbeds/_verifier-regen/g474（.mx 里的相对 .ioc 依赖此 cwd）
+backed up D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc → D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc.bak (4792 bytes, sha256=d0bf5be00e1a…)
+[ioc_backup] JSON 报告：D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-v1.1-rollback\ioc-backup.json
+[regen] .mxproject 备份：/d/Projects/GitHub/cubeone-mcp/testbeds/_verifier-regen/g474/.mxproject.bak
+[regen] 步骤 2/4：CubeMX 无头生成（timeout 300s，日志 /d/Projects/GitHub/cubeone-mcp/docs/logs/phase1/regen-v1.1-rollback/cubemx-generate.log）
+[regen] CubeMX 工作目录：/d/Projects/GitHub/cubeone-mcp/testbeds/_verifier-regen/g474（.mx 里的相对 .ioc 依赖此 cwd）
 [regen] 生成阶段：退出码 0 且无 KO。**无 KO 只是必要条件，不是成功证明** ——
 [regen]   'set ip parameters' 这类命令会回 OK、无 KO，却静默空操作；最终以核验为准。
 [regen] 步骤 3/4：生成核验（expect=GPIO,TIM4，allowlist=VP_RIF_VS_RIF1）
@@ -18,14 +18,14 @@ backed up D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\stm32-
   [pass] mxproject_abs_path   '.mxproject' 无盘符绝对路径（换机可复现）
   [warn] mx_script_abs_path   1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程
   [pass] syscalls_path        生成日志无 syscalls.c / sysmem.c 叠加路径异常
-[platform32] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\regen-v1.1-rollback\verify.json
-[platform32] Markdown 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\regen-v1.1-rollback\verify.md
+[platform32] JSON 报告：D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-v1.1-rollback\verify.json
+[platform32] Markdown 报告：D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-v1.1-rollback\verify.md
 [regen][error] [regen] 核验阶段失败（退出码 1）：生成跑完了，但产物不对
-[regen][error]   → 外设可能被静默丢弃、路径不可复现，或输入参数有误；先看 /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/regen-v1.1-rollback/verify.json
+[regen][error]   → 外设可能被静默丢弃、路径不可复现，或输入参数有误；先看 /d/Projects/GitHub/cubeone-mcp/docs/logs/phase1/regen-v1.1-rollback/verify.json
 [regen][warn] 开始回滚到生成前状态（从备份恢复，不动 git 历史）...
-restored D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc ← D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc.bak (4792 bytes)
-[regen] 已从 /d/Projects/GitHub/platform32-mcp/testbeds/_verifier-regen/g474/stm32-g474-template.ioc.bak 恢复 .ioc
-[regen] 已从 /d/Projects/GitHub/platform32-mcp/testbeds/_verifier-regen/g474/.mxproject.bak 恢复 .mxproject
+restored D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc ← D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc.bak (4792 bytes)
+[regen] 已从 /d/Projects/GitHub/cubeone-mcp/testbeds/_verifier-regen/g474/stm32-g474-template.ioc.bak 恢复 .ioc
+[regen] 已从 /d/Projects/GitHub/cubeone-mcp/testbeds/_verifier-regen/g474/.mxproject.bak 恢复 .mxproject
 [regen][warn] Core/ 未自动回滚（局部回滚更容易看清生成动了什么）。当前状态：
  M Core/Inc/main.h
  M Core/Inc/stm32g4xx_hal_conf.h
@@ -33,4 +33,4 @@ restored D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\stm32-g
  M Core/Src/main.c
  M Core/Src/stm32g4xx_hal_msp.c
  M Core/Src/stm32g4xx_it.c
-[regen][warn] 如需丢弃本次生成产物：git -C "/d/Projects/GitHub/platform32-mcp/testbeds/_verifier-regen/g474" checkout -- Core/
+[regen][warn] 如需丢弃本次生成产物：git -C "/d/Projects/GitHub/cubeone-mcp/testbeds/_verifier-regen/g474" checkout -- Core/

@@ -6,4 +6,4 @@
   [pass] mxproject_abs_path   '.mxproject' 无盘符绝对路径（换机可复现）
   [warn] mx_script_abs_path   1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程
   [pass] syscalls_path        生成日志无 syscalls.c / sysmem.c 叠加路径异常
-[platform32] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\v1.2-pins\pc13-pass.json
+[platform32] JSON 报告：D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\v1.2-pins\pc13-pass.json

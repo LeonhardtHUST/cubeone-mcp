@@ -64,7 +64,7 @@
 
 ```bash
 export PATH="/c/Users/Leon/.workbuddy/binaries/PortableGit/versions/1.2.0/usr/bin:/c/Users/Leon/.workbuddy/binaries/PortableGit/versions/1.2.0/bin:$PATH"
-cd /d/Projects/GitHub/platform32-mcp
+cd /d/Projects/GitHub/cubeone-mcp
 git clone --no-hardlinks /d/Projects/GitHub/template-mcu-STM32F103C8T6   testbeds/template-mcu-STM32F103C8T6
 git clone --no-hardlinks /d/Projects/GitHub/template-mcu-STM32G474-series testbeds/template-mcu-STM32G474-series
 git clone --no-hardlinks /d/Projects/GitHub/template-mcu-STM32H723-series testbeds/template-mcu-STM32H723-series
@@ -178,7 +178,7 @@ testbeds/
 └── template-mcu-STM32H723-series/
 ```
 
-`testbeds/` 已被仓库根 `.gitignore` 第 9 行 `/testbeds/` 忽略 → 不会污染 `platform32-mcp` 提交。
+`testbeds/` 已被仓库根 `.gitignore` 第 9 行 `/testbeds/` 忽略 → 不会污染 `cubeone-mcp` 提交。
 
 ---
 

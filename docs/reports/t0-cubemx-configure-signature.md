@@ -236,10 +236,10 @@ def cubemx_new_project(project_name: str, project_dir: str,
 写一个 `.mx` 脚本（**绝对路径**，因为 `cwd` 是 CubeMX 安装目录）：
 
 ```
-config load "D:/Projects/GitHub/platform32-mcp/testbeds/g474/stm32-g474-template.ioc"
+config load "D:/Projects/GitHub/cubeone-mcp/testbeds/g474/stm32-g474-template.ioc"
 set pin PB0 GPIO_Output
 set gpio parameters PB0 GPIO_Label=LED_GREEN
-config saveas "D:/Projects/GitHub/platform32-mcp/testbeds/g474/stm32-g474-template.ioc"
+config saveas "D:/Projects/GitHub/cubeone-mcp/testbeds/g474/stm32-g474-template.ioc"
 exit
 ```
 

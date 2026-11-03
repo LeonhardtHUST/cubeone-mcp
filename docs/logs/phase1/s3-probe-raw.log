@@ -241,7 +241,7 @@ WARNING: Could not open/create prefs root node Software\JavaSoft\Prefs at root 0
 2026-11-03 12:11:00,094 [INFO] MainFrame:590 - Register for checkConnection events
 2026-11-03 12:11:00,098 [INFO] FastPollingNetworkMonitor:182 - Apply proxy settings
 2026-11-03 12:11:00,101 [INFO] FastPollingNetworkMonitor:201 - Direct internet connection detected
-config load "D:/Projects/GitHub/platform32-mcp/testbeds/_s3-probe/g474/stm32-g474-template.ioc"
+config load "D:/Projects/GitHub/cubeone-mcp/testbeds/_s3-probe/g474/stm32-g474-template.ioc"
 2026-11-03 12:11:00,105 [WARN] PackLoader:240 - Cannot read IP mode file for wolfSSL.I-CUBE-wolfTPM.3.8.0
 2026-11-03 12:11:00,128 [INFO] FastPollingNetworkMonitor:158 - Register for checkConnection events
 2026-11-03 12:11:00,129 [WARN] PackLoader:240 - Cannot read IP mode file for STMicroelectronics.X-CUBE-TCPP.4.2.0
@@ -586,7 +586,7 @@ config load "D:/Projects/GitHub/platform32-mcp/testbeds/_s3-probe/g474/stm32-g47
 OK
 set pin PA0 S_TIM2_CH1_ETR
 KO
-config saveas "D:/Projects/GitHub/platform32-mcp/testbeds/_s3-probe/g474/stm32-g474-template.ioc"
+config saveas "D:/Projects/GitHub/cubeone-mcp/testbeds/_s3-probe/g474/stm32-g474-template.ioc"
 2026-11-03 12:11:19,952 [INFO] ProjectChoiceTab:3888 - New firmware version: STM32Cube FW_G4 V1.6.3 Old firmware version: STM32Cube FW_G4 V1.6.3
 2026-11-03 12:11:19,996 [INFO] ProjectChoiceTab:3888 - New firmware version: STM32Cube FW_G4 V1.6.3 Old firmware version: STM32Cube FW_G4 V1.6.3
 2026-11-03 12:11:20,026 [INFO] UtilMem:75 - End SaveConfig() Used Memory: 276773144 Bytes (754974720)

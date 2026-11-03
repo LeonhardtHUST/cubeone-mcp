@@ -50,9 +50,9 @@
     ]
   },
   "inputs": {
-    "log": "D:\\Projects\\GitHub\\platform32-mcp\\docs\\logs\\phase1\\s1-dryrun-regen\\cubemx-generate.log",
-    "main_c": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_s1-dryrun\\g474\\Core\\Src\\main.c",
-    "mxproject": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_s1-dryrun\\g474\\.mxproject",
+    "log": "D:\\Projects\\GitHub\\cubeone-mcp\\docs\\logs\\phase1\\s1-dryrun-regen\\cubemx-generate.log",
+    "main_c": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\_s1-dryrun\\g474\\Core\\Src\\main.c",
+    "mxproject": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\_s1-dryrun\\g474\\.mxproject",
     "project_root": null,
     "effective_allow_signals": [
       "VP_RIF_VS_RIF1"

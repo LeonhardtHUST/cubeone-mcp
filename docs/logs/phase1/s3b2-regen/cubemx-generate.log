@@ -597,26 +597,26 @@ project generate
 2026-11-03 12:35:01,888 [INFO] IPsOverviews:2785 - set Specific Code input for plugin: NVIC
 2026-11-03 12:35:01,888 [INFO] IPsOverviews:2785 - set Specific Code input for plugin: GPIO
 2026-11-03 12:35:01,900 [INFO] CodeGenerator:899 - code generatio: config db path: C:\ST\STM32CubeMX\\db\
-2026-11-03 12:35:02,020 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\license.tmp_save
-2026-11-03 12:35:02,370 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\license.tmp
-2026-11-03 12:35:02,550 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\gpio.tmp_save
-2026-11-03 12:35:02,748 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\gpio.tmp
-2026-11-03 12:35:02,908 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Src\stm32g4xx_it.c_save
-2026-11-03 12:35:03,120 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Src\stm32g4xx_it.c
-2026-11-03 12:35:03,144 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Inc\stm32g4xx_it.h_save
-2026-11-03 12:35:03,272 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Inc\stm32g4xx_it.h
-2026-11-03 12:35:03,336 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Src\stm32g4xx_hal_msp.c_save
-2026-11-03 12:35:03,489 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Src\stm32g4xx_hal_msp.c
-2026-11-03 12:35:03,505 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\system.tmp_save
-2026-11-03 12:35:03,584 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\system.tmp
-2026-11-03 12:35:03,634 [INFO] CodeEngine:353 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Inc\stm32g4xx_hal_conf.h_save
-2026-11-03 12:35:03,727 [INFO] CodeEngine:377 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Inc\stm32g4xx_hal_conf.h
+2026-11-03 12:35:02,020 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\license.tmp_save
+2026-11-03 12:35:02,370 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\license.tmp
+2026-11-03 12:35:02,550 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\gpio.tmp_save
+2026-11-03 12:35:02,748 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\gpio.tmp
+2026-11-03 12:35:02,908 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Src\stm32g4xx_it.c_save
+2026-11-03 12:35:03,120 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Src\stm32g4xx_it.c
+2026-11-03 12:35:03,144 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Inc\stm32g4xx_it.h_save
+2026-11-03 12:35:03,272 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Inc\stm32g4xx_it.h
+2026-11-03 12:35:03,336 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Src\stm32g4xx_hal_msp.c_save
+2026-11-03 12:35:03,489 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Src\stm32g4xx_hal_msp.c
+2026-11-03 12:35:03,505 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\system.tmp_save
+2026-11-03 12:35:03,584 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\MXTmpFiles\system.tmp
+2026-11-03 12:35:03,634 [INFO] CodeEngine:353 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Inc\stm32g4xx_hal_conf.h_save
+2026-11-03 12:35:03,727 [INFO] CodeEngine:377 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Inc\stm32g4xx_hal_conf.h
 2026-11-03 12:35:03,784 [WARN] IPConfigManager:3283 - Warning: the RefConfig RCC_CommonPeriphClockConfig is not available in your config.xml file
 2026-11-03 12:35:03,802 [INFO] ApiDbMcu:530 - Load IP Config File for RCC
-2026-11-03 12:35:03,842 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Inc\main.h_save
-2026-11-03 12:35:03,948 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Inc\main.h
-2026-11-03 12:35:03,968 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Src\main.c_save
-2026-11-03 12:35:04,134 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Src\main.c
+2026-11-03 12:35:03,842 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Inc\main.h_save
+2026-11-03 12:35:03,948 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Inc\main.h
+2026-11-03 12:35:03,968 [INFO] CodeEngine:297 - oldGeneratedFile, D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Src\main.c_save
+2026-11-03 12:35:04,134 [INFO] CodeEngine:321 - Generated code: D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Src\main.c
 2026-11-03 12:35:05,237 [INFO] ProjectBuilder:3738 - Time for Copy HAL[0] : 909mS.
 2026-11-03 12:35:05,244 [INFO] ProjectBuilder:5348 - Project Generator version: 4.10.0-B28
 2026-11-03 12:35:05,315 [INFO] ConfigFileManager:1614 - The Die is : DIE469

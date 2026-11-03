@@ -5,10 +5,10 @@
 - **期望外设**：GPIO, TIM4
 - **schema**：`platform32.verify_generation/2`
 - **生成时间**：2026-11-03T12:35:12+08:00
-- **生成日志**：`D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s3b2-regen\cubemx-generate.log`
-- **main.c**：`D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\Core\Src\main.c`
-- **.mxproject**：`D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b\.mxproject`
-- **工程根**：`D:\Projects\GitHub\platform32-mcp\testbeds\_s3b2\tim4b`
+- **生成日志**：`D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\s3b2-regen\cubemx-generate.log`
+- **main.c**：`D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\Core\Src\main.c`
+- **.mxproject**：`D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b\.mxproject`
+- **工程根**：`D:\Projects\GitHub\cubeone-mcp\testbeds\_s3b2\tim4b`
 - **生效白名单**：VP_RIF_VS_RIF1
 
 | 检查项 | 结果 | 失败时阻塞 | 说明 |

@@ -2,21 +2,21 @@
 time     : 2026-11-03T14:03:31
 mode     : positive
 runner   : C:\Users\Leon\AppData\Roaming\uv\tools\vscode-cube-mcp\Scripts\python.exe
-script   : D:\Projects\GitHub\platform32-mcp\tools\mcp_smoke.py
+script   : D:\Projects\GitHub\cubeone-mcp\tools\mcp_smoke.py
 script_sha256 : 4fb474e915fc1970ae96bdcb8a694179c262fe9293bad8e4b2f0dac87a5c0372
-repo_root: D:\Projects\GitHub\platform32-mcp
+repo_root: D:\Projects\GitHub\cubeone-mcp
 mcp_sdk  : 2.2.0
-cwd      : D:\Projects\GitHub\platform32-mcp
+cwd      : D:\Projects\GitHub\cubeone-mcp
 
 --- A. vscode-cube-mcp ---
-OK   ioc                    : D:\Projects\GitHub\platform32-mcp\testbeds\stm32-g474-template\stm32-g474-template.ioc
+OK   ioc                    : D:\Projects\GitHub\cubeone-mcp\testbeds\stm32-g474-template\stm32-g474-template.ioc
 OK   ioc_sha256_before      : f57b1d334ac658305ec03b90e65312ffa6e98ad5907984f6a3be4487301dc21d
 OK   entry                  : {"command": "C:\\Users\\Leon\\.local\\bin\\vscode-cube-mcp.exe", "args": [], "env": {"ST_CUBEMX_EXE": "C:\\ST\\STM32CubeMX\\STM32CubeMX.exe", "ST_CUBEMX_ALLOWED_ROOTS": "D:\\Projects;C:\\Users\\Leon\\WorkBuddy", "ST_CUBEMX_TIMEOUT": "300"}}
 OK   tools_count            : 9
 OK   cubemx_help            : 135ms | isError=False | chars=2148 | timeout=120s
      preview: Vscode_cube_mcp — 封装 STM32CubeMX 命令行(-q)的 MCP server ============================================================= 【能力边界(先读)】 本工具只负责 **.ioc 工程配置与 HAL 骨架生成**： 引脚 / 外设 / 时钟 / 工具链的配置，以及 generate 出可编译的 H…
 OK   cubemx_load            : 20399ms | isError=False | chars=128 | timeout=120s
-     preview: [OK exit=0] config load "D:\Projects\GitHub\platform32-mcp\testbeds\stm32-g474-template\stm32-g474-template.ioc" OK exit Bye bye
+     preview: [OK exit=0] config load "D:\Projects\GitHub\cubeone-mcp\testbeds\stm32-g474-template\stm32-g474-template.ioc" OK exit Bye bye
 OK   ioc_sha256_after       : f57b1d334ac658305ec03b90e65312ffa6e98ad5907984f6a3be4487301dc21d
 OK   ioc_readonly           : sha256 前后一致，文件未被修改
 

@@ -206,7 +206,7 @@ WARNING: Could not open/create prefs root node Software\JavaSoft\Prefs at root 0
 2026-11-03 12:11:54,259 [INFO] MainFrame:590 - Register for checkConnection events
 2026-11-03 12:11:54,260 [INFO] FastPollingNetworkMonitor:182 - Apply proxy settings
 2026-11-03 12:11:54,260 [INFO] FastPollingNetworkMonitor:201 - Direct internet connection detected
-config load "D:/Projects/GitHub/platform32-mcp/testbeds/_s3-probe/g474/stm32-g474-template.ioc"
+config load "D:/Projects/GitHub/cubeone-mcp/testbeds/_s3-probe/g474/stm32-g474-template.ioc"
 2026-11-03 12:11:54,268 [INFO] FastPollingNetworkMonitor:158 - Register for checkConnection events
 2026-11-03 12:11:54,469 [INFO] MicroXplorer:468 - Change Database Path : 
 2026-11-03 12:11:54,470 [INFO] MicroXplorer:498 - Change Database Version : DB.6.0.181
@@ -591,7 +591,7 @@ set ip parameters TIM2 InputCapture PA0-WKUP S_TIM2_CH1_ETR Prescaler 65535
 OK
 set pin PA1 USART2_TX
 KO
-config saveas "D:/Projects/GitHub/platform32-mcp/testbeds/_s3-probe/g474/stm32-g474-template.ioc"
+config saveas "D:/Projects/GitHub/cubeone-mcp/testbeds/_s3-probe/g474/stm32-g474-template.ioc"
 2026-11-03 12:12:26,200 [INFO] ProjectChoiceTab:3888 - New firmware version: STM32Cube FW_G4 V1.6.3 Old firmware version: STM32Cube FW_G4 V1.6.3
 2026-11-03 12:12:26,239 [INFO] ProjectChoiceTab:3888 - New firmware version: STM32Cube FW_G4 V1.6.3 Old firmware version: STM32Cube FW_G4 V1.6.3
 2026-11-03 12:12:26,267 [INFO] UtilMem:75 - End SaveConfig() Used Memory: 318059416 Bytes (1505755136)

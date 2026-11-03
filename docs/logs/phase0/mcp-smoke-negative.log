@@ -4,14 +4,14 @@
 time     : 2026-11-03T14:02:48
 mode     : negative-control
 runner   : C:\Users\Leon\AppData\Roaming\uv\tools\vscode-cube-mcp\Scripts\python.exe
-script   : D:\Projects\GitHub\platform32-mcp\tools\mcp_smoke.py
+script   : D:\Projects\GitHub\cubeone-mcp\tools\mcp_smoke.py
 script_sha256 : 4fb474e915fc1970ae96bdcb8a694179c262fe9293bad8e4b2f0dac87a5c0372
-repo_root: D:\Projects\GitHub\platform32-mcp
+repo_root: D:\Projects\GitHub\cubeone-mcp
 mcp_sdk  : 2.2.0
-cwd      : D:\Projects\GitHub\platform32-mcp
+cwd      : D:\Projects\GitHub\cubeone-mcp
 
 --- A. vscode-cube-mcp ---
-OK   ioc                    : D:\Projects\GitHub\platform32-mcp\testbeds\stm32-g474-template\stm32-g474-template.ioc
+OK   ioc                    : D:\Projects\GitHub\cubeone-mcp\testbeds\stm32-g474-template\stm32-g474-template.ioc
 OK   ioc_sha256_before      : f57b1d334ac658305ec03b90e65312ffa6e98ad5907984f6a3be4487301dc21d
 FAIL command                : 找不到可执行文件 C:\definitely\not\here\vscode-cube-mcp.exe
 SKIP cubemx_help            : 前置 vscode-cube-mcp 命令不存在（vscode-cube-mcp.exe），未执行

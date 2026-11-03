@@ -9,11 +9,11 @@
 time     : 2026-11-03T15:06:55
 mode     : negative-error
 runner   : C:\Users\Leon\AppData\Roaming\uv\tools\vscode-cube-mcp\Scripts\python.exe
-script   : D:\Projects\GitHub\platform32-mcp\tools\mcp_smoke.py
+script   : D:\Projects\GitHub\cubeone-mcp\tools\mcp_smoke.py
 script_sha256 : 43e0641cfb71912ca60cdbd4940f5ba0ab4e83935bb3f3c907f8816d3b5f63f9
-repo_root: D:\Projects\GitHub\platform32-mcp
+repo_root: D:\Projects\GitHub\cubeone-mcp
 mcp_sdk  : 2.2.0
-cwd      : D:\Projects\GitHub\platform32-mcp
+cwd      : D:\Projects\GitHub\cubeone-mcp
 
 --- A. vscode-cube-mcp ---
 INFO ioc_fake_path          : C:\Users\Leon\AppData\Local\Temp\no-such-project.ioc | exists=False（期望 False） | in_testbeds=False（期望 False）

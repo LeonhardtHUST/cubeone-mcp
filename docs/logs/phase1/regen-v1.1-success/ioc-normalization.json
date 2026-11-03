@@ -1,5 +1,5 @@
 {
-  "ioc": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474\\stm32-g474-template.ioc",
+  "ioc": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\_verifier-regen\\g474\\stm32-g474-template.ioc",
   "action": "set",
   "key": "ProjectManager.AskForMigrate",
   "before": "true",

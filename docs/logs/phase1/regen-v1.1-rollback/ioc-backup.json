@@ -1,12 +1,12 @@
 {
   "schema": "platform32.ioc_backup/1",
   "action": "backup",
-  "project": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474",
+  "project": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\_verifier-regen\\g474",
   "timestamp": "2026-11-03T12:28:30+08:00",
   "files": [
     {
-      "ioc": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474\\stm32-g474-template.ioc",
-      "backup": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_verifier-regen\\g474\\stm32-g474-template.ioc.bak",
+      "ioc": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\_verifier-regen\\g474\\stm32-g474-template.ioc",
+      "backup": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\_verifier-regen\\g474\\stm32-g474-template.ioc.bak",
       "bytes": 4792,
       "sha256": "d0bf5be00e1a51e43bc6e6f6e3279dafd2b58bb6f3932313c397b0653c3536ed"
     }

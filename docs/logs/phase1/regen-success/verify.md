@@ -5,9 +5,9 @@
 - **期望外设**：GPIO
 - **schema**：`platform32.verify_generation/1`
 - **生成时间**：2026-11-03T11:59:31+08:00
-- **生成日志**：`D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\regen-success\cubemx-generate.log`
-- **main.c**：`D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Src\main.c`
-- **.mxproject**：`D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\.mxproject`
+- **生成日志**：`D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-success\cubemx-generate.log`
+- **main.c**：`D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\Core\Src\main.c`
+- **.mxproject**：`D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\.mxproject`
 
 | 检查项 | 结果 | 级别 | 说明 |
 |---|---|---|---|

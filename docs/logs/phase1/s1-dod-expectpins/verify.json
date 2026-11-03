@@ -56,11 +56,11 @@
     ]
   },
   "inputs": {
-    "log": "D:\\Projects\\GitHub\\platform32-mcp\\docs\\logs\\phase1\\s1-regen\\cubemx-generate.log",
-    "main_c": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\template-mcu-STM32G474-series\\Core\\Src\\main.c",
-    "mxproject": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\template-mcu-STM32G474-series\\.mxproject",
-    "project_root": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\template-mcu-STM32G474-series",
-    "ioc": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\template-mcu-STM32G474-series\\stm32-g474-template.ioc",
+    "log": "D:\\Projects\\GitHub\\cubeone-mcp\\docs\\logs\\phase1\\s1-regen\\cubemx-generate.log",
+    "main_c": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\template-mcu-STM32G474-series\\Core\\Src\\main.c",
+    "mxproject": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\template-mcu-STM32G474-series\\.mxproject",
+    "project_root": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\template-mcu-STM32G474-series",
+    "ioc": "D:\\Projects\\GitHub\\cubeone-mcp\\testbeds\\template-mcu-STM32G474-series\\stm32-g474-template.ioc",
     "expect": [
       "GPIO"
     ],

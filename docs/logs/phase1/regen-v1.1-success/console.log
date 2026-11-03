@@ -1,14 +1,14 @@
 [regen] 未指定 --expect，按 .ioc 推导：GPIO
-[regen] 工程：/d/Projects/GitHub/platform32-mcp/testbeds/_verifier-regen/g474
+[regen] 工程：/d/Projects/GitHub/cubeone-mcp/testbeds/_verifier-regen/g474
 [regen] 期望外设：GPIO
-[regen] 证据输出：/d/Projects/GitHub/platform32-mcp/docs/logs/phase1/regen-v1.1-success
+[regen] 证据输出：/d/Projects/GitHub/cubeone-mcp/docs/logs/phase1/regen-v1.1-success
 [regen] 生效 allowlist：VP_RIF_VS_RIF1（同时写进 verify.json 的 inputs.effective_allow_signals）
 [regen] 步骤 1/4：备份 .ioc → .ioc.bak、.mxproject → .mxproject.bak
-backed up D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc → D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc.bak (4792 bytes, sha256=d0bf5be00e1a…)
-[ioc_backup] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\regen-v1.1-success\ioc-backup.json
-[regen] .mxproject 备份：/d/Projects/GitHub/platform32-mcp/testbeds/_verifier-regen/g474/.mxproject.bak
-[regen] 步骤 2/4：CubeMX 无头生成（timeout 300s，日志 /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/regen-v1.1-success/cubemx-generate.log）
-[regen] CubeMX 工作目录：/d/Projects/GitHub/platform32-mcp/testbeds/_verifier-regen/g474（.mx 里的相对 .ioc 依赖此 cwd）
+backed up D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc → D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474\stm32-g474-template.ioc.bak (4792 bytes, sha256=d0bf5be00e1a…)
+[ioc_backup] JSON 报告：D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-v1.1-success\ioc-backup.json
+[regen] .mxproject 备份：/d/Projects/GitHub/cubeone-mcp/testbeds/_verifier-regen/g474/.mxproject.bak
+[regen] 步骤 2/4：CubeMX 无头生成（timeout 300s，日志 /d/Projects/GitHub/cubeone-mcp/docs/logs/phase1/regen-v1.1-success/cubemx-generate.log）
+[regen] CubeMX 工作目录：/d/Projects/GitHub/cubeone-mcp/testbeds/_verifier-regen/g474（.mx 里的相对 .ioc 依赖此 cwd）
 [regen] 生成阶段：退出码 0 且无 KO。**无 KO 只是必要条件，不是成功证明** ——
 [regen]   'set ip parameters' 这类命令会回 OK、无 KO，却静默空操作；最终以核验为准。
 [regen] 步骤 3/4：生成核验（expect=GPIO，allowlist=VP_RIF_VS_RIF1）
@@ -19,14 +19,14 @@ backed up D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\stm32-
   [pass] mxproject_abs_path   '.mxproject' 无盘符绝对路径（换机可复现）
   [warn] mx_script_abs_path   1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程
   [pass] syscalls_path        生成日志无 syscalls.c / sysmem.c 叠加路径异常
-[platform32] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\regen-v1.1-success\verify.json
-[platform32] Markdown 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\regen-v1.1-success\verify.md
+[platform32] JSON 报告：D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-v1.1-success\verify.json
+[platform32] Markdown 报告：D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-v1.1-success\verify.md
 
 [regen] 全部通过 ✅
-  生成日志   : /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/regen-v1.1-success/cubemx-generate.log
-  核验 JSON  : /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/regen-v1.1-success/verify.json
-  核验报告   : /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/regen-v1.1-success/verify.md
-  备份快照   : /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/regen-v1.1-success/ioc-backup.json
+  生成日志   : /d/Projects/GitHub/cubeone-mcp/docs/logs/phase1/regen-v1.1-success/cubemx-generate.log
+  核验 JSON  : /d/Projects/GitHub/cubeone-mcp/docs/logs/phase1/regen-v1.1-success/verify.json
+  核验报告   : /d/Projects/GitHub/cubeone-mcp/docs/logs/phase1/regen-v1.1-success/verify.md
+  备份快照   : /d/Projects/GitHub/cubeone-mcp/docs/logs/phase1/regen-v1.1-success/ioc-backup.json
 下一步      : pio run（构建，L3）→ 需要实板再烧录（L5）；提交前按模板 AGENTS.md 写清验证等级
 提醒        : 核验器只保证**外设级**（整只外设没被丢）。引脚级增量（如多加一个 PB0）
               不在 v1 核验范围，需另加断言：Mcu.PinsNb / __HAL_RCC_GPIOx_CLK_ENABLE() / HAL_GPIO_Init(GPIOx
