@@ -117,8 +117,24 @@ def make_fake_java(tmp_path: Path, body: str) -> Path:
 
 
 def run_regen(project: Path, *args: str, timeout: int = 120) -> subprocess.CompletedProcess[str]:
-    """跑 regen.sh（PYTHON 指向当前解释器，避免 PATH 差异）。"""
+    """跑 regen.sh（PYTHON 指向当前解释器，避免 PATH 差异）。
+
+    未显式传 ``--java`` 时，把 ``ST_CUBEMX_JRE`` 指到一个存根文件。
+
+    原因：``regen.sh`` 在步骤 2 之前有 ``[ -f "$JAVA_BIN" ]`` 的存在性检查，
+    而多数用例只关心"前置检查/退出码/是否改文件"，用 ``--dry-run`` 压根不执行 java。
+    若不注入存根，这些用例就会依赖"本机是否装了 CubeMX"——在 Windows 开发机上是绿的，
+    到 Linux CI 上直接 ``die 2``（真实事故：CI 5 例全红）。测试必须与宿主环境无关。
+    """
     assert BASH is not None
+    env = {**os.environ, "PYTHON": sys.executable}
+    if "--java" not in args:
+        stub = project.parent / "stub-java"
+        if not stub.exists():
+            stub.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8", newline="\n")
+            os.chmod(stub, 0o755)
+        # 强制覆盖（而不是 setdefault）：允许宿主环境变量影响测试结果同样是不可复现的来源。
+        env["ST_CUBEMX_JRE"] = str(stub)
     return subprocess.run(
         [BASH, str(REGEN), str(project), *args],
         capture_output=True,
@@ -128,7 +144,7 @@ def run_regen(project: Path, *args: str, timeout: int = 120) -> subprocess.Compl
         cwd=str(REPO_ROOT),
         timeout=timeout,
         check=False,
-        env={**os.environ, "PYTHON": sys.executable},
+        env=env,
     )
 
 
