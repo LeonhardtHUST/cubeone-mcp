@@ -1,0 +1,7 @@
+# vpx = C:\Users\Leon\.vite-plus\bin\vpx.exe
+# 拉起 vpx cubeone-mcp（首次含下载，耐心等）…
+[PASS] 握手 server=cubeone-mcp v0.6.0
+[PASS] tools/list 3 个：verify_generation, ioc_backup, ioc_field
+[PASS] ioc_field get → MxCube.Version=6.18.1
+
+VERDICT: VPX COLDSTART PASS

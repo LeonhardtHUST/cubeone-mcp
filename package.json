@@ -1,0 +1,45 @@
+{
+  "name": "cubeone-mcp",
+  "version": "0.6.0",
+  "description": "STM32 CubeMX generation verifier (G1 gate) and safe .ioc read/write tools as an MCP stdio server. Thin Node wrapper around the battle-tested stdlib-only Python scripts of the cubeone-mcp repo (STM32 工程全流程编排的 MCP 工具通道).",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "stm32",
+    "cubemx",
+    "platformio",
+    "ioc",
+    "embedded",
+    "verify"
+  ],
+  "license": "MIT",
+  "author": "LeonhardtHUST",
+  "type": "module",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "bin": {
+    "cubeone-mcp": "bin/cubeone-mcp.mjs"
+  },
+  "main": "lib/server.mjs",
+  "files": [
+    "bin/",
+    "lib/",
+    "scripts/verify_generation.py",
+    "scripts/ioc_backup.py",
+    "scripts/ioc_field.py",
+    "SKILL.md",
+    "references/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LeonhardtHUST/cubeone-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LeonhardtHUST/cubeone-mcp/issues"
+  },
+  "homepage": "https://github.com/LeonhardtHUST/cubeone-mcp#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2"
+  }
+}

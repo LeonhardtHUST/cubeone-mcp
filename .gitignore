@@ -44,6 +44,10 @@ venv/
 .workbuddy/
 *.genie
 
+# ── npm / MCP server ─────────────────────────────────────────
+node_modules/
+package-lock.json
+
 # ── 编辑器与系统 ─────────────────────────────────────────────
 .vscode/
 .idea/
