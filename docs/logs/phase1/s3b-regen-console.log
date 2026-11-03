@@ -1,0 +1,58 @@
+# T1.8 场景 S3(b)：TIM4 缺 TIM4.IPParameters（复现 HAL-PITFALLS H-6 静默丢弃）
+# 主证据：日志干净（log_cannot_map pass）+ 外设缺失（main_init_present fail）
+# 时间: 2026-11-03 12:33:25 +0800
+# 工程: testbeds/_s3b/tim4（独立克隆自 G474 testbed HEAD，不含 S1 的 PB0）
+# 注入: Mcu.IP3=TIM4 / Mcu.Pin5=VP_TIM4_VS_ClockSourceINT / Mcu.PinsNb=6 / VP_TIM4_VS_ClockSourceINT.Mode|Signal
+# 故意省略: TIM4.IPParameters
+# 命令: regen.sh testbeds/_s3b/tim4 -e GPIO,TIM4 -o docs/logs/phase1/s3b-regen
+# .ioc sha256（注入态，生成前）: c262edb169aa04c21706da925a7d0893cfc64d84347b37f3923280aff2f99566
+# scripts sha256:
+#   91e9ebc2b991e84d3cb4dd4cc381c1cb7d1cef5e5995d8c6a30e9afa4a66e028 *scripts/ioc_backup.py
+#   b28fd070914bd45585fb96dbe29a6c907b7758203e3d2ec4f543593c02b95d01 *scripts/ioc_field.py
+#   2b5d573f9830e57a4b202cc5fae7c40b3260895ad1caf328b969750584f67c96 *scripts/verify_generation.py
+#   bbd16737d85a308430a2580146cc32c7c86fbb42c8cc5cbe2b50063753bfed0b *scripts/regen.sh
+# ============================================================
+[regen][warn] .ioc 有未提交的内容改动（行尾差异不算），将按现状生成：
+    stm32-g474-template.ioc
+[regen][warn] 备份将存到 /d/Projects/GitHub/platform32-mcp/testbeds/_s3b/tim4/stm32-g474-template.ioc.bak；**失败时从备份恢复，不用 git checkout**，不会丢你的编辑
+[regen] 工程：/d/Projects/GitHub/platform32-mcp/testbeds/_s3b/tim4
+[regen] 期望外设：GPIO,TIM4
+[regen] 证据输出：/d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s3b-regen
+[regen] 生效 allowlist：VP_RIF_VS_RIF1（同时写进 verify.json 的 inputs.effective_allow_signals）
+[regen] 步骤 1/4：备份 .ioc → .ioc.bak、.mxproject → .mxproject.bak
+backed up D:\Projects\GitHub\platform32-mcp\testbeds\_s3b\tim4\stm32-g474-template.ioc → D:\Projects\GitHub\platform32-mcp\testbeds\_s3b\tim4\stm32-g474-template.ioc.bak (4943 bytes, sha256=c262edb169aa…)
+[ioc_backup] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s3b-regen\ioc-backup.json
+[regen] .mxproject 备份：/d/Projects/GitHub/platform32-mcp/testbeds/_s3b/tim4/.mxproject.bak
+[regen] 步骤 2/4：CubeMX 无头生成（timeout 300s，日志 /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s3b-regen/cubemx-generate.log）
+[regen] CubeMX 工作目录：/d/Projects/GitHub/platform32-mcp/testbeds/_s3b/tim4（.mx 里的相对 .ioc 依赖此 cwd）
+[regen] 生成阶段：退出码 0 且无 KO。**无 KO 只是必要条件，不是成功证明** ——
+[regen]   'set ip parameters' 这类命令会回 OK、无 KO，却静默空操作；最终以核验为准。
+[regen] 步骤 3/4：生成核验（expect=GPIO,TIM4，allowlist=VP_RIF_VS_RIF1）
+[platform32] 生成核验 verdict=FAIL errors=2 warnings=1 expect=GPIO,TIM4
+  [fail] log_cannot_map       命中 1 条 'Cannot map'，其中 1 条不在白名单 → 外设会被静默丢弃（D5/H-6）。L321: signal ← 2026-11-03 12:33:47,866 [INFO] ImportTextPane:234 - (OptionalMessage_ERROR) Cannot map signal (VP_TIM4_VS_ClockSourceINT) on pin (VP_TIM4_VS_ClockSourceINT)
+  [fail] main_init_present    1/2 个期望外设没有 MX_..._Init 定义 → 配置未生效或被静默丢弃（D5/H-6）：TIM4(missing)。已满足：GPIO → MX_GPIO_Init（exact，定义 L152）
+  [pass] main_init_called     全部 1 个初始化函数都在 main() 内被调用：GPIO → MX_GPIO_Init（调用 L88）；另有 1 个外设无定义、未参与本项：TIM4
+  [pass] mxproject_abs_path   '.mxproject' 无盘符绝对路径（换机可复现）
+  [warn] mx_script_abs_path   1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程
+  [pass] syscalls_path        生成日志无 syscalls.c / sysmem.c 叠加路径异常
+[platform32] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s3b-regen\verify.json
+[platform32] Markdown 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s3b-regen\verify.md
+[regen][error] [regen] 核验阶段失败（退出码 1）：生成跑完了，但产物不对
+[regen][error]   → 外设可能被静默丢弃、路径不可复现，或输入参数有误；先看 /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s3b-regen/verify.json
+[regen][warn] 开始回滚到生成前状态（从备份恢复，不动 git 历史）...
+restored D:\Projects\GitHub\platform32-mcp\testbeds\_s3b\tim4\stm32-g474-template.ioc ← D:\Projects\GitHub\platform32-mcp\testbeds\_s3b\tim4\stm32-g474-template.ioc.bak (4943 bytes)
+[regen] 已从 /d/Projects/GitHub/platform32-mcp/testbeds/_s3b/tim4/stm32-g474-template.ioc.bak 恢复 .ioc
+[regen] 已从 /d/Projects/GitHub/platform32-mcp/testbeds/_s3b/tim4/.mxproject.bak 恢复 .mxproject
+[regen][warn] Core/ 未自动回滚（局部回滚更容易看清生成动了什么）。当前状态：
+ M Core/Inc/main.h
+ M Core/Inc/stm32g4xx_hal_conf.h
+ M Core/Inc/stm32g4xx_it.h
+ M Core/Src/main.c
+ M Core/Src/stm32g4xx_hal_msp.c
+ M Core/Src/stm32g4xx_it.c
+[regen][warn] 如需丢弃本次生成产物：git -C "/d/Projects/GitHub/platform32-mcp/testbeds/_s3b/tim4" checkout -- Core/
+
+[EXIT CODE] 1   ← 期望 1
+# .ioc sha256（生成后/回滚后）: c262edb169aa04c21706da925a7d0893cfc64d84347b37f3923280aff2f99566
+# 回滚一致性: 一致 ✅
+[END] 2026-11-03 12:34:06

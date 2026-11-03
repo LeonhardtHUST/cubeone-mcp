@@ -1,0 +1,76 @@
+# 关键观察（lead 要求）：regen.sh 默认参数下 pins_present 是 pass 还是 skip
+# 方法：--skip-generate 复用已有生成日志，零 CubeMX 开销
+# 时间: 2026-11-03 12:43:08 +0800
+# scripts sha256:
+#   91e9ebc2b991e84d3cb4dd4cc381c1cb7d1cef5e5995d8c6a30e9afa4a66e028 *scripts/ioc_backup.py
+#   b28fd070914bd45585fb96dbe29a6c907b7758203e3d2ec4f543593c02b95d01 *scripts/ioc_field.py
+#   5d002a408682d44439f1e31c91c3979addc275403b416b0486c641c89351983c *scripts/verify_generation.py
+#   39d0270f8f9b7ec9a68d9952b049756294480d0032b239462b7218da8115960b *scripts/regen.sh
+[regen][warn] .ioc 有未提交的内容改动（行尾差异不算），将按现状生成：
+    stm32-g474-template.ioc
+[regen][warn] 备份将存到 /d/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-series/stm32-g474-template.ioc.bak；**失败时从备份恢复，不用 git checkout**，不会丢你的编辑
+[regen] 工程：/d/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-series
+[regen] 期望外设：GPIO
+[regen] 证据输出：/d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s1-dod-default
+[regen] 生效 allowlist：VP_RIF_VS_RIF1（同时写进 verify.json 的 inputs.effective_allow_signals）
+[regen] 期望引脚：未指定（pins_present 将 skip；引脚级改动无法由核验器保证）
+[regen] 步骤 1/4：备份 .ioc → .ioc.bak、.mxproject → .mxproject.bak
+backed up D:\Projects\GitHub\platform32-mcp\testbeds\template-mcu-STM32G474-series\stm32-g474-template.ioc → D:\Projects\GitHub\platform32-mcp\testbeds\template-mcu-STM32G474-series\stm32-g474-template.ioc.bak (4973 bytes, sha256=f57b1d334ac6…)
+[ioc_backup] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s1-dod-default\ioc-backup.json
+[regen] .mxproject 备份：/d/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-series/.mxproject.bak
+[regen][warn] --skip-generate：跳过 CubeMX 生成，仅核验现有生成物
+[regen] 步骤 3/4：生成核验（expect=GPIO，allowlist=VP_RIF_VS_RIF1）
+[platform32] 生成核验 verdict=PASS errors=0 warnings=1 expect=GPIO
+  [pass] log_cannot_map       生成日志无 'Cannot map' 命中（另有 1 条 OptionalMessage_ERROR，属 CubeMX 已知噪音，如 G474 的 VP_RIF_VS_RIF1 见模板 D8，不计入判定）
+  [pass] main_init_present    全部 1 个期望外设都有初始化函数定义：GPIO → MX_GPIO_Init（exact，定义 L152）
+  [pass] main_init_called     全部 1 个初始化函数都在 main() 内被调用：GPIO → MX_GPIO_Init（调用 L88）
+  [skip] pins_present         未提供 --expect-pins，跳过引脚级检查（v1.1 的外设级保证不含引脚增量）
+  [pass] mxproject_abs_path   '.mxproject' 无盘符绝对路径（换机可复现）
+  [warn] mx_script_abs_path   1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程
+  [pass] syscalls_path        生成日志无 syscalls.c / sysmem.c 叠加路径异常
+[platform32] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s1-dod-default\verify.json
+[platform32] Markdown 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s1-dod-default\verify.md
+
+[regen] 全部通过 ✅
+  生成日志   : docs/logs/phase1/s1-regen/cubemx-generate.log
+  核验 JSON  : /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s1-dod-default/verify.json
+  核验报告   : /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s1-dod-default/verify.md
+  备份快照   : /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s1-dod-default/ioc-backup.json
+下一步      : pio run（构建，L3）→ 需要实板再烧录（L5）；提交前按模板 AGENTS.md 写清验证等级
+提醒        : 核验器只保证**外设级**（整只外设没被丢）。引脚级增量（如多加一个 PB0）
+              不在 v1 核验范围，需另加断言：Mcu.PinsNb / __HAL_RCC_GPIOx_CLK_ENABLE() / HAL_GPIO_Init(GPIOx
+EXIT=0
+[regen][warn] .ioc 有未提交的内容改动（行尾差异不算），将按现状生成：
+    stm32-g474-template.ioc
+[regen][warn] 备份将存到 /d/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-series/stm32-g474-template.ioc.bak；**失败时从备份恢复，不用 git checkout**，不会丢你的编辑
+[regen] 工程：/d/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-series
+[regen] 期望外设：GPIO
+[regen] 证据输出：/d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s1-dod-expectpins
+[regen] 生效 allowlist：VP_RIF_VS_RIF1（同时写进 verify.json 的 inputs.effective_allow_signals）
+[regen] 期望引脚（1 项）：PB0=GPIO_Output
+[regen] 步骤 1/4：备份 .ioc → .ioc.bak、.mxproject → .mxproject.bak
+backed up D:\Projects\GitHub\platform32-mcp\testbeds\template-mcu-STM32G474-series\stm32-g474-template.ioc → D:\Projects\GitHub\platform32-mcp\testbeds\template-mcu-STM32G474-series\stm32-g474-template.ioc.bak (4973 bytes, sha256=f57b1d334ac6…)
+[ioc_backup] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s1-dod-expectpins\ioc-backup.json
+[regen] .mxproject 备份：/d/Projects/GitHub/platform32-mcp/testbeds/template-mcu-STM32G474-series/.mxproject.bak
+[regen][warn] --skip-generate：跳过 CubeMX 生成，仅核验现有生成物
+[regen] 步骤 3/4：生成核验（expect=GPIO，allowlist=VP_RIF_VS_RIF1）
+[platform32] 生成核验 verdict=PASS errors=0 warnings=1 expect=GPIO
+  [pass] log_cannot_map       生成日志无 'Cannot map' 命中（另有 1 条 OptionalMessage_ERROR，属 CubeMX 已知噪音，如 G474 的 VP_RIF_VS_RIF1 见模板 D8，不计入判定）
+  [pass] main_init_present    全部 1 个期望外设都有初始化函数定义：GPIO → MX_GPIO_Init（exact，定义 L152）
+  [pass] main_init_called     全部 1 个初始化函数都在 main() 内被调用：GPIO → MX_GPIO_Init（调用 L88）
+  [pass] pins_present         全部 1 个期望引脚都在 .ioc 与生成物中对上：PB0.Signal=GPIO_Output + __HAL_RCC_GPIOB_CLK_ENABLE()
+  [pass] mxproject_abs_path   '.mxproject' 无盘符绝对路径（换机可复现）
+  [warn] mx_script_abs_path   1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程
+  [pass] syscalls_path        生成日志无 syscalls.c / sysmem.c 叠加路径异常
+[platform32] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s1-dod-expectpins\verify.json
+[platform32] Markdown 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\s1-dod-expectpins\verify.md
+
+[regen] 全部通过 ✅
+  生成日志   : docs/logs/phase1/s1-regen/cubemx-generate.log
+  核验 JSON  : /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s1-dod-expectpins/verify.json
+  核验报告   : /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s1-dod-expectpins/verify.md
+  备份快照   : /d/Projects/GitHub/platform32-mcp/docs/logs/phase1/s1-dod-expectpins/ioc-backup.json
+下一步      : pio run（构建，L3）→ 需要实板再烧录（L5）；提交前按模板 AGENTS.md 写清验证等级
+提醒        : 核验器只保证**外设级**（整只外设没被丢）。引脚级增量（如多加一个 PB0）
+              不在 v1 核验范围，需另加断言：Mcu.PinsNb / __HAL_RCC_GPIOx_CLK_ENABLE() / HAL_GPIO_Init(GPIOx
+EXIT2=0

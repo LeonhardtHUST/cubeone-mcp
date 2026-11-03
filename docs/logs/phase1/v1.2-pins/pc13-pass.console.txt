@@ -1,0 +1,9 @@
+[platform32] 生成核验 verdict=PASS errors=0 warnings=1 expect=GPIO
+  [pass] log_cannot_map       生成日志无 'Cannot map' 命中（另有 1 条 OptionalMessage_ERROR，属 CubeMX 已知噪音，如 G474 的 VP_RIF_VS_RIF1 见模板 D8，不计入判定）
+  [pass] main_init_present    全部 1 个期望外设都有初始化函数定义：GPIO → MX_GPIO_Init（exact，定义 L152）
+  [pass] main_init_called     全部 1 个初始化函数都在 main() 内被调用：GPIO → MX_GPIO_Init（调用 L88）
+  [pass] pins_present         全部 1 个期望引脚都在 .ioc 与生成物中对上：PC13.Signal=GPIO_Output + __HAL_RCC_GPIOC_CLK_ENABLE()
+  [pass] mxproject_abs_path   '.mxproject' 无盘符绝对路径（换机可复现）
+  [warn] mx_script_abs_path   1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程
+  [pass] syscalls_path        生成日志无 syscalls.c / sysmem.c 叠加路径异常
+[platform32] JSON 报告：D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\v1.2-pins\pc13-pass.json

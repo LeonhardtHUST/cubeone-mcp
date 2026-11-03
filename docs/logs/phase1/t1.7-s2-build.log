@@ -1,0 +1,154 @@
+# T1.7 场景 S2 —— stm32-digital-clock testbed 构建日志
+# 执行者: scenario-tester  时间: 2026-11-03 11:55:10 +0800
+# 通道: CLI 等价通道（pio run），MCP 客户端可见性待重启后确认
+# 命令: "C:/Users/Leon/.platformio/penv/Scripts/pio.exe" run -d testbeds/stm32-digital-clock
+# ============================================================
+[START] 2026-11-03 11:55:10
+
+Processing genericSTM32F103C8 (platform: ststm32@20.0.0; board: genericSTM32F103C8; framework: stm32cube)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/ststm32/genericSTM32F103C8.html
+PLATFORM: ST STM32 (20.0.0) > STM32F103C8 (20k RAM. 64k Flash)
+HARDWARE: STM32F103C8T6 72MHz, 20KB RAM, 64KB Flash
+DEBUG: Current (cmsis-dap) External (blackmagic, cmsis-dap, jlink, stlink)
+PACKAGES: 
+ - framework-stm32cubef1 @ 1.8.7 
+ - tool-ldscripts-ststm32 @ 0.3.0 
+ - tool-openocd @ 3.1200.7 (12.0) 
+ - toolchain-gccarmnoneeabi @ 1.70201.0 (7.2.1)
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 28 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in release mode
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_adc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_adc_ex.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_can.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_cec.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_cortex.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_crc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_dac.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_dac_ex.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_dma.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_eth.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_exti.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_flash.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_flash_ex.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_gpio.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_gpio_ex.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_hcd.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_i2c.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_i2s.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_irda.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_iwdg.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_mmc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_nand.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_nor.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_pccard.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_pcd.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_pcd_ex.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_pwr.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_rcc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_rcc_ex.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_rtc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_rtc_ex.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_sd.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_smartcard.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_spi.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_sram.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_tim.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_tim_ex.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_uart.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_usart.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_hal_wwdg.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_adc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_crc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_dac.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_dma.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_exti.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_fsmc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_gpio.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_i2c.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_pwr.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_rcc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_rtc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_sdmmc.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_spi.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_tim.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_usart.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_usb.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkHALDriver\Src\stm32f1xx_ll_utils.o
+Compiling .pio\build\genericSTM32F103C8\src\display.o
+Compiling .pio\build\genericSTM32F103C8\src\main.o
+Compiling .pio\build\genericSTM32F103C8\src\power_ctrl.o
+Compiling .pio\build\genericSTM32F103C8\src\stdio_port.o
+Compiling .pio\build\genericSTM32F103C8\src\stm32f1xx_hal_msp.o
+Compiling .pio\build\genericSTM32F103C8\src\stm32f1xx_it.o
+Compiling .pio\build\genericSTM32F103C8\src\syscalls.o
+Compiling .pio\build\genericSTM32F103C8\src\sysmem.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkCMSISDevice\gcc\startup_stm32f103xb.o
+Compiling .pio\build\genericSTM32F103C8\FrameworkCMSISDevice\system_stm32f1xx.o
+Archiving .pio\build\genericSTM32F103C8\libFrameworkCMSISDevice.a
+Indexing .pio\build\genericSTM32F103C8\libFrameworkCMSISDevice.a
+Linking .pio\build\genericSTM32F103C8\firmware.elf
+Memory region         Used Size  Region Size  %age Used
+             RAM:        1680 B        20 KB      8.20%
+           FLASH:        4136 B        64 KB      6.31%
+Checking size .pio\build\genericSTM32F103C8\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [          ]   0.7% (used 140 bytes from 20480 bytes)
+Flash: [=         ]   5.9% (used 3860 bytes from 65536 bytes)
+Building .pio\build\genericSTM32F103C8\firmware.bin
+========================= [SUCCESS] Took 17.76 seconds =========================
+[EXIT CODE] 0
+[END] 2026-11-03 11:55:30
+
+# ============================================================
+# 补充 A：尺寸交叉核对（arm-none-eabi-size）  2026-11-03 11:56:21
+# 说明：PlatformIO 默认 size 报告不含 stack/heap 预留，故与链接器 --print-memory-usage 数字不同，两者都记录
+# ============================================================
+--- Berkeley summary (text/data/bss) ---
+   text	   data	    bss	    dec	    hex	filename
+   4116	     20	   1668	   5804	   16ac	testbeds/stm32-digital-clock/.pio/build/genericSTM32F103C8/firmware.elf
+
+--- Section 明细 -A ---
+testbeds/stm32-digital-clock/.pio/build/genericSTM32F103C8/firmware.elf  :
+section             size        addr
+.isr_vector          268   134217728
+.text               3812   134217996
+.rodata               36   134221808
+.ARM.extab             0   134221844
+.ARM                   0   134221844
+.preinit_array         0   134221844
+.init_array            4   134221844
+.fini_array            4   134221848
+.data                 12   536870912
+.bss                 128   536870924
+._user_heap_stack   1540   536871052
+.ARM.attributes       41           0
+.comment             126           0
+.debug_frame          76           0
+Total               6047
+
+
+
+--- 产物 ---
+-rw-r--r-- 1 Leon 197609   4136 Nov  3 11:55 testbeds/stm32-digital-clock/.pio/build/genericSTM32F103C8/firmware.bin
+-rw-r--r-- 1 Leon 197609 138652 Nov  3 11:55 testbeds/stm32-digital-clock/.pio/build/genericSTM32F103C8/firmware.elf
+1b2b4d93ec35561c214a1993503d6d021d0111d27cbb0d6ce6332c95939717d6 *testbeds/stm32-digital-clock/.pio/build/genericSTM32F103C8/firmware.bin
+
+# ============================================================
+# 补充 B：主机 GCC 回归（AGENTS.md §3，L2 附赠项）  2026-11-03 11:56:22
+# ============================================================
+gcc.exe (x86_64-posix-seh-rev1, Built by MinGW-Builds project) 15.2.0
+$ gcc -std=c11 -Wall -Wextra -Werror Core/Src/stdio_port.c tests/stdio_port_test.c -o .pio/host-test/stdio-test
+  → 编译 exit=0
+  → 运行 exit=0
+$ gcc -std=c11 -Wall -Wextra -Werror -DTEST_BACKEND Core/Src/stdio_port.c tests/stdio_port_test.c -o .pio/host-test/stdio-backend-test
+  → 编译 exit=0
+  → 运行 exit=0
+
+[BUILD LOG END] 2026-11-03 11:56:24

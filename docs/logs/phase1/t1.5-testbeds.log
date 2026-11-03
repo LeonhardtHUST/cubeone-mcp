@@ -1,0 +1,215 @@
+# T1.5 建 testbeds —— 证据日志
+
+- 任务：计划 §2.2 T1.5「克隆三个模板仓 + `stm32-digital-clock` 副本（`git clone` 本地路径，不碰原仓）」
+- Owner：scenario-tester
+- 执行时间：2026-11-03 11:51 – 11:56 (+0800)
+- 通道：CLI 等价通道（`git` CLI）——**MCP 客户端可见性待重启后确认**（本次会话三个 MCP server 未被客户端加载）
+- 验证等级：**L1（静态）**
+- 硬约束遵守情况：原仓全程只读；未对原仓执行任何写操作（无 `checkout`/`add`/`commit`/`fetch`）；未在原仓产生 `.pio/` 等新产物
+
+---
+
+## 1. 判定依据
+
+`docs/DECISIONS.md` **D9**：`template-mcu-STM32F103C8T6` 的 2 处脏改动（`M .vscode/extensions.json`、`M .vscode/launch.json`，mtime 2026-10-15）认定为本项目开工前既有状态，不算异常、不修复。
+验收判据取「是否有 mtime 晚于 2026-11-03 11:00 的改动」，而非「是否绝对干净」。
+
+---
+
+## 2. 克隆前基线快照
+
+完整快照存 `testbeds/.baseline.txt`（含每仓 `HEAD` / `branch` / `git status --porcelain` / 脏文件 mtime）。
+
+| 原仓 | 分支 | HEAD | 脏项数 |
+|---|---|---|---|
+| `D:\Projects\GitHub\template-mcu-STM32F103C8T6` | master | `fca23bea4f1adf9be47e7dab1de3382d1ddeddb1` | 2 |
+| `D:\Projects\GitHub\template-mcu-STM32G474-series` | master | `621d020ce992b0531718fb5ab528ed248520a66b` | 0 |
+| `D:\Projects\GitHub\template-mcu-STM32H723-series` | master | `7a1db52096bc0039dbffae732862eb6768cb4665` | 0 |
+| `D:\Projects\GitHub\HUSTRadio\stm32-digital-clock` | master | `ef78a4e23027dcf70aac7b7d002a75f8543fb454` | **13** |
+
+### 2.1 F1 模板仓的 2 处既有脏项（与 D9 一致）
+
+```
+ M .vscode/extensions.json     2026-10-15 16:25:37
+ M .vscode/launch.json         2026-10-15 16:25:37
+```
+
+两项 mtime 均早于本项目首次提交（2026-11-03 11:17），符合 D9 认定，**本任务未触碰、未修复**。
+
+### 2.2 【新发现】`stm32-digital-clock` 原仓 13 项既有脏改动（lead 初始简报未提及）
+
+```
+ M .mxproject                       2026-09-17 01:12:31
+ M .vscode/extensions.json          2026-09-20 20:00:22
+ M .vscode/launch.json              2026-09-20 20:00:22
+ M Core/Inc/stm32f1xx_hal_conf.h    2026-09-17 01:08:27
+ M Core/Src/main.c                  2026-09-20 20:28:01
+ M Core/Src/stm32f1xx_hal_msp.c     2026-09-17 01:08:27
+ M scripts/openocd-cmsis-dap.cfg    2026-09-20 19:58:01
+ M stm32-digital-clock.ioc          2026-09-17 01:12:20
+?? .vscode/c_cpp_properties.json    2026-09-20 20:00:22
+?? Core/Inc/display.h               2026-09-20 20:28:01
+?? Core/Inc/power_ctrl.h            2026-09-20 20:10:07
+?? Core/Src/display.c               2026-09-20 20:28:01
+?? Core/Src/power_ctrl.c            2026-09-20 20:10:07
+```
+
+**全部 13 项 mtime 均 ≤ 2026-09-20 20:28**，早于本次会话 2 个多月，按 D9 同一判据属开工前既有状态，非本次执行造成。
+
+**关键事实（决定 T1.7 做法）**：该仓 `HEAD` 里的 `.ioc` 是 **92 行空壳**（仅 PC13 / PA13 / PA14 三个引脚，`Mcu.IPNb=3`，无 SPI），真实工程（20 引脚 / `Mcu.IPNb=4` 含 SPI1）**只存在于未提交的工作树**里（160 行）。若直接 `git clone` 得到的是 HEAD 空壳，审计与构建都失去意义。
+
+---
+
+## 3. 克隆（本地路径，`--no-hardlinks`）
+
+```bash
+export PATH="/c/Users/Leon/.workbuddy/binaries/PortableGit/versions/1.2.0/usr/bin:/c/Users/Leon/.workbuddy/binaries/PortableGit/versions/1.2.0/bin:$PATH"
+cd /d/Projects/GitHub/platform32-mcp
+git clone --no-hardlinks /d/Projects/GitHub/template-mcu-STM32F103C8T6   testbeds/template-mcu-STM32F103C8T6
+git clone --no-hardlinks /d/Projects/GitHub/template-mcu-STM32G474-series testbeds/template-mcu-STM32G474-series
+git clone --no-hardlinks /d/Projects/GitHub/template-mcu-STM32H723-series testbeds/template-mcu-STM32H723-series
+git clone --no-hardlinks /d/Projects/GitHub/HUSTRadio/stm32-digital-clock  testbeds/stm32-digital-clock
+```
+
+输出（4 条全部 `done.` / exit 0）：
+
+```
+Cloning into 'testbeds/template-mcu-STM32F103C8T6'...    done.  exit=0
+Cloning into 'testbeds/template-mcu-STM32G474-series'... done.  exit=0
+Cloning into 'testbeds/template-mcu-STM32H723-series'... done.  exit=0
+Cloning into 'testbeds/stm32-digital-clock'...           done.  exit=0
+```
+
+- `--no-hardlinks` 理由：避免克隆与原仓共享 object 硬链接，保证原仓字节零风险。
+- 走本地文件系统路径，**不联网**。克隆自带 `origin` 指向本地路径（非 GitHub），符合"实验区不污染远端"。
+
+---
+
+## 4. `stm32-digital-clock` 工作树镜像（补齐未提交状态）
+
+目的：让 testbed 的**工作树**与原仓工作树逐字节一致，审计/构建才有意义。做法全程是**从原仓读取**的只读操作：
+
+```bash
+SRC=/d/Projects/GitHub/HUSTRadio/stm32-digital-clock
+DST=testbeds/stm32-digital-clock
+
+# (1) 导出原仓未提交 diff（只读）
+git -C "$SRC" diff --binary --no-color > /tmp/dc-worktree.patch          # 663 行
+# (2) 应用到 testbed
+git -C "$DST" apply --whitespace=nowarn /tmp/dc-worktree.patch           # APPLY OK
+# (3) 复制 5 个未跟踪文件（-p 保留 mtime）
+for f in .vscode/c_cpp_properties.json Core/Inc/display.h Core/Inc/power_ctrl.h \
+         Core/Src/display.c Core/Src/power_ctrl.c; do
+  mkdir -p "$DST/$(dirname "$f")"; cp -p "$SRC/$f" "$DST/$f"
+done
+```
+
+结果 —— testbed `git status` 与原仓 **完全同构**（13 项，逐条同名同序）：
+
+```
+ M .mxproject
+ M .vscode/extensions.json
+ M .vscode/launch.json
+ M Core/Inc/stm32f1xx_hal_conf.h
+ M Core/Src/main.c
+ M Core/Src/stm32f1xx_hal_msp.c
+ M scripts/openocd-cmsis-dap.cfg
+ M stm32-digital-clock.ioc
+?? .vscode/c_cpp_properties.json
+?? Core/Inc/display.h
+?? Core/Inc/power_ctrl.h
+?? Core/Src/display.c
+?? Core/Src/power_ctrl.c
+```
+
+### 4.1 逐文件 sha256 校验（git 可见文件）
+
+```
+git 可见文件清单：orig=32 / testbed=32 → diff 无输出，清单完全一致
+逐文件 sha256：32 个文件，不一致 0 个
+抽查：
+  stm32-digital-clock.ioc   ce53e6e686915485 | ce53e6e686915485
+  Core/Src/main.c           2c4e08144d69bc9f | 2c4e08144d69bc9f
+  Core/Src/display.c        a77081e37351a10e | a77081e37351a10e
+```
+
+> 说明：`Drivers/`、`.workbuddy/`、`.pio/` 等 **gitignored 产物**不在克隆范围内（32 个 git 可见文件 vs 937 个磁盘文件），这是 `git clone` 的既定语义，不是缺陷。`Drivers/` 由 PlatformIO framework 包提供（AGENTS.md §2.4），故不影响构建——T1.7 已实测构建通过。
+
+---
+
+## 5. 克隆后重拍快照 + 逐仓 diff
+
+完整快照存 `testbeds/.after-clone.txt`。去掉文件头注释行后与原基线逐行 diff：
+
+```
+★ 正文完全一致：4 仓 HEAD / branch / status / dirty-mtime 全同，原仓零变化
+```
+
+| 原仓 | 克隆前脏项 | 克隆后脏项 | 一致? |
+|---|---|---|---|
+| `template-mcu-STM32F103C8T6` | 2 | 2 | ✅ |
+| `template-mcu-STM32G474-series` | 0 | 0 | ✅ |
+| `template-mcu-STM32H723-series` | 0 | 0 | ✅ |
+| `HUSTRadio/stm32-digital-clock` | 13 | 13 | ✅ |
+
+testbed HEAD 与原仓 HEAD 逐一比对：
+
+| testbed | HEAD 一致 | HEAD |
+|---|---|---|
+| `testbeds/template-mcu-STM32F103C8T6` | OK | `fca23bea4f1a…` |
+| `testbeds/template-mcu-STM32G474-series` | OK | `621d020ce992…` |
+| `testbeds/template-mcu-STM32H723-series` | OK | `7a1db52096bc…` |
+| `testbeds/stm32-digital-clock` | OK | `ef78a4e23027…` |
+
+**结论：原仓零变化，L1 达成。**
+
+---
+
+## 6. testbeds 目录现状
+
+```
+testbeds/
+├── .baseline.txt                          克隆前原仓快照（13 KB 内）
+├── .after-clone.txt                       克隆后原仓快照
+├── .gitkeep
+├── stm32-digital-clock/                   工作树已镜像原仓（32 git 可见文件 byte 一致）
+├── template-mcu-STM32F103C8T6/
+├── template-mcu-STM32G474-series/
+└── template-mcu-STM32H723-series/
+```
+
+`testbeds/` 已被仓库根 `.gitignore` 第 9 行 `/testbeds/` 忽略 → 不会污染 `platform32-mcp` 提交。
+
+---
+
+## 6.1 终态复核（收尾时再验一次，用真实参考文件避免 `-nt` 误用）
+
+以 `touch -t 202611031100 /tmp/ref_1100.txt` 建参考文件，逐仓统计**工作树 git 可见文件**中 `mtime > 2026-11-03 11:00` 的个数（D9 判据）：
+
+| 原仓 | HEAD 是否变化 | 脏项（今/基线） | 工作树文件 mtime>11:00 个数 |
+|---|---|---|---|
+| `template-mcu-STM32F103C8T6` | SAME | 2 / 2 | **0** |
+| `template-mcu-STM32G474-series` | SAME | 0 / 0 | **0** |
+| `template-mcu-STM32H723-series` | SAME | 0 / 0 | **0** |
+| `HUSTRadio/stm32-digital-clock` | SAME | 13 / 13 | **0** |
+
+`.git/index` 的 mtime（证明连 git 内部都没被写）：
+
+| 原仓 | `.git/index` mtime | 说明 |
+|---|---|---|
+| `template-mcu-STM32F103C8T6` | 2026-10-15 16:27:02 | 早于本次会话 |
+| `template-mcu-STM32G474-series` | 2026-11-03 10:56:33 | 早于本任务开工（11:51） |
+| `template-mcu-STM32H723-series` | 2026-11-03 11:43:58 | 早于本任务开工（11:51） |
+| `HUSTRadio/stm32-digital-clock` | 2026-09-20 20:01:01 | 早于本次会话 |
+
+**结论：4 个原仓连 `.git/index` 都未被 `git status` 刷新，绝对的字节级零改动。**
+
+> 勘误留痕：首次写这条检查时误用 `[ file -nt "2026-11-03 11:00:00" ]`（第二参数被当成不存在的文件名，bash 判为真），错误地报出 35/34/35/32。已改用真实参考文件重测，结果如上表；此处如实记录该缺陷，避免后续成员复用时踩同一坑。
+
+---
+
+## 7. 遗留与提示
+
+1. **H723 testbed 只可克隆、不可生产**：本机无 FW_H7（DECISIONS D4 已定推迟到接板日），T2.2 再跑生成/构建。本次仅做克隆，符合 DoD。
+2. **`stm32-digital-clock` 的未提交工作树未入库**：这是用户仓库的既有状态，本任务只读镜像，**不建议**替用户提交（超出本项目范围）。若后续 S2/CI 需要可复现基线，建议由用户在 `HUSTRadio/stm32-digital-clock` 自行提交一次。
+3. 克隆时未执行 `git remote set-url`，testbed 的 `origin` 指向本地路径，误 `push` 也打不到 GitHub——作为实验区这是期望行为。

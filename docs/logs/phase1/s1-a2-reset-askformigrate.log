@@ -1,0 +1,11 @@
+# S1 步骤 A2：复位 ProjectManager.AskForMigrate=false（冻结版 regen.sh 生成前置检查要求）
+# 原因: 步骤 A 的 config saveas 必然把它写成 true；冻结版 regen.sh 命中 true 即 die 2（未调 CubeMX）
+# 工具: scripts/ioc_field.py（冻结版自带，regen.sh 报错提示原文即指向它）
+# 时间: 2026-11-03 12:22:10 +0800
+
+$ ioc_field.py get  → true
+$ ioc_field.py set  ProjectManager.AskForMigrate false
+[ioc_field] ProjectManager.AskForMigrate: true → false （L49, changed）
+  → set exit=0
+$ ioc_field.py get  → false
+# .ioc sha256 复位后: 88bc08a66d53c187201ffa8b5a4b87c851d72bc9624f4e39c2db8e7a7026ccb1

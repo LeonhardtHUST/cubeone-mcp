@@ -1,0 +1,81 @@
+{
+  "schema": "platform32.verify_generation/2",
+  "verdict": "fail",
+  "checks": [
+    {
+      "id": "log_cannot_map",
+      "status": "fail",
+      "blocking": true,
+      "detail": "命中 1 条 'Cannot map'，其中 1 条不在白名单 → 外设会被静默丢弃（D5/H-6）。L321: signal ← 2026-11-03 12:33:47,866 [INFO] ImportTextPane:234 - (OptionalMessage_ERROR) Cannot map signal (VP_TIM4_VS_ClockSourceINT) on pin (VP_TIM4_VS_ClockSourceINT)"
+    },
+    {
+      "id": "main_init_present",
+      "status": "fail",
+      "blocking": true,
+      "detail": "1/2 个期望外设没有 MX_..._Init 定义 → 配置未生效或被静默丢弃（D5/H-6）：TIM4(missing)。已满足：GPIO → MX_GPIO_Init（exact，定义 L152）"
+    },
+    {
+      "id": "main_init_called",
+      "status": "pass",
+      "blocking": true,
+      "detail": "全部 1 个初始化函数都在 main() 内被调用：GPIO → MX_GPIO_Init（调用 L88）；另有 1 个外设无定义、未参与本项：TIM4"
+    },
+    {
+      "id": "mxproject_abs_path",
+      "status": "pass",
+      "blocking": true,
+      "detail": "'.mxproject' 无盘符绝对路径（换机可复现）"
+    },
+    {
+      "id": "mx_script_abs_path",
+      "status": "warn",
+      "blocking": true,
+      "detail": "1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程"
+    },
+    {
+      "id": "syscalls_path",
+      "status": "pass",
+      "blocking": false,
+      "detail": "生成日志无 syscalls.c / sysmem.c 叠加路径异常"
+    }
+  ],
+  "summary": {
+    "errors": 2,
+    "warnings": 1,
+    "checked_peripherals": [
+      "GPIO",
+      "TIM4"
+    ],
+    "notes": [
+      "deprecated: 顶层 expect / allow_signals 已迁入 inputs（同名键），将于 v1.2 删除，请改读 inputs.expect / inputs.allow_signals"
+    ]
+  },
+  "inputs": {
+    "log": "D:\\Projects\\GitHub\\platform32-mcp\\docs\\logs\\phase1\\s3b-regen\\cubemx-generate.log",
+    "main_c": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_s3b\\tim4\\Core\\Src\\main.c",
+    "mxproject": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_s3b\\tim4\\.mxproject",
+    "project_root": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_s3b\\tim4",
+    "expect": [
+      "GPIO",
+      "TIM4"
+    ],
+    "expect_pins": [],
+    "allow_signals": [
+      "VP_RIF_VS_RIF1"
+    ],
+    "tool": {
+      "name": "verify_generation.py",
+      "version": "1.1.0"
+    },
+    "effective_allow_signals": [
+      "VP_RIF_VS_RIF1"
+    ]
+  },
+  "expect": [
+    "GPIO",
+    "TIM4"
+  ],
+  "allow_signals": [
+    "VP_RIF_VS_RIF1"
+  ]
+}

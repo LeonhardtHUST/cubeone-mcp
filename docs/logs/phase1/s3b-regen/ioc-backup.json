@@ -1,0 +1,18 @@
+{
+  "schema": "platform32.ioc_backup/1",
+  "action": "backup",
+  "project": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_s3b\\tim4",
+  "timestamp": "2026-11-03T12:33:28+08:00",
+  "files": [
+    {
+      "ioc": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_s3b\\tim4\\stm32-g474-template.ioc",
+      "backup": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_s3b\\tim4\\stm32-g474-template.ioc.bak",
+      "bytes": 4943,
+      "sha256": "c262edb169aa04c21706da925a7d0893cfc64d84347b37f3923280aff2f99566"
+    }
+  ],
+  "tool": {
+    "name": "ioc_backup.py",
+    "version": "1.0.0"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "ioc": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\template-mcu-STM32G474-series\\stm32-g474-template.ioc",
+  "action": "set",
+  "key": "ProjectManager.AskForMigrate",
+  "before": "true",
+  "after": "false",
+  "line": 49,
+  "changed": true,
+  "dry_run": false,
+  "schema": "platform32.ioc_field/1",
+  "tool": {
+    "name": "ioc_field.py",
+    "version": "1.0.0"
+  }
+}

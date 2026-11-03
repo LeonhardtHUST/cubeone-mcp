@@ -1,0 +1,175 @@
+# T1.6 场景 S1 —— G474 testbed 改动前干净基线构建（before 基线）
+# 执行者: scenario-tester  时间: 2026-11-03 11:59:09 +0800
+# 目的: S1 会在 G474 testbed 加一个 GPIO 输出；先建干净基线，改后才有 before/after 的 Flash/RAM 可比数字
+# 通道: CLI 等价通道（pio run），MCP 客户端可见性待重启后确认
+# testbed 状态: 0 项脏（0 = 干净）
+# HEAD: 621d020ce992b0531718fb5ab528ed248520a66b
+# 命令: "C:/Users/Leon/.platformio/penv/Scripts/pio.exe" run -d testbeds/template-mcu-STM32G474-series
+# ============================================================
+[START] 2026-11-03 11:59:09
+
+Processing genericSTM32G474VE (platform: ststm32@20.0.0; board: genericSTM32G474VE; framework: stm32cube)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/ststm32/genericSTM32G474VE.html
+PLATFORM: ST STM32 (20.0.0) > STM32G474VET6 (512K Flash, 128K RAM)
+HARDWARE: STM32G474VET6 170MHz, 128KB RAM, 512KB Flash
+DEBUG: Current (stlink) External (blackmagic, cmsis-dap, jlink, stlink)
+PACKAGES: 
+ - framework-stm32cubeg4 @ 1.6.3 
+ - tool-ldscripts-ststm32 @ 0.3.0 
+ - tool-openocd @ 3.1200.7 (12.0) 
+ - toolchain-gccarmnoneeabi @ 1.70201.0 (7.2.1)
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 23 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in release mode
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_adc.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_adc_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_comp.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_cordic.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_cortex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_crc.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_crc_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_cryp.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_cryp_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_dac.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_dac_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_dma.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_dma_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_exti.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_fdcan.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_flash.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_flash_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_flash_ramfunc.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_fmac.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_gpio.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_hrtim.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_i2c.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_i2c_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_i2s.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_irda.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_iwdg.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_lptim.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_nand.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_nor.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_opamp.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_opamp_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_pcd.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_pcd_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_pwr.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_pwr_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_qspi.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_rcc.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_rcc_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_rng.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_rtc.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_rtc_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_sai.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_sai_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_smartcard.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_smartcard_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_smbus.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_smbus_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_spi.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_spi_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_sram.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_tim.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_tim_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_uart.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_uart_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_usart.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_usart_ex.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_hal_wwdg.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_adc.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_comp.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_cordic.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_crc.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_crs.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_dac.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_dma.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_exti.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_fmac.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_fmc.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_gpio.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_hrtim.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_i2c.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_lptim.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_lpuart.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_opamp.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_pwr.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_rcc.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_rng.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_rtc.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_spi.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_tim.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_ucpd.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_usart.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_usb.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkHALDriver\Src\stm32g4xx_ll_utils.o
+Compiling .pio\build\genericSTM32G474VE\src\main.o
+Compiling .pio\build\genericSTM32G474VE\src\stdio_port.o
+Compiling .pio\build\genericSTM32G474VE\src\stm32g4xx_hal_msp.o
+Compiling .pio\build\genericSTM32G474VE\src\stm32g4xx_it.o
+Compiling .pio\build\genericSTM32G474VE\src\syscalls.o
+Compiling .pio\build\genericSTM32G474VE\src\sysmem.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkCMSISDevice\gcc\startup_stm32g474xx.o
+Compiling .pio\build\genericSTM32G474VE\FrameworkCMSISDevice\system_stm32g4xx.o
+Archiving .pio\build\genericSTM32G474VE\libFrameworkCMSISDevice.a
+Indexing .pio\build\genericSTM32G474VE\libFrameworkCMSISDevice.a
+Linking .pio\build\genericSTM32G474VE\firmware.elf
+Memory region         Used Size  Region Size  %age Used
+             RAM:        1584 B       128 KB      1.21%
+           FLASH:        3744 B       512 KB      0.71%
+Checking size .pio\build\genericSTM32G474VE\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [          ]   0.0% (used 44 bytes from 131072 bytes)
+Flash: [          ]   0.6% (used 3264 bytes from 524288 bytes)
+Building .pio\build\genericSTM32G474VE\firmware.bin
+========================= [SUCCESS] Took 18.17 seconds =========================
+[EXIT CODE] 0
+[END] 2026-11-03 11:59:29
+
+# ============================================================
+# 补充 A：尺寸交叉核对  2026-11-03 11:59:36
+# ============================================================
+   text	   data	    bss	    dec	    hex	filename
+   3724	     20	   1572	   5316	   14c4	testbeds/template-mcu-STM32G474-series/.pio/build/genericSTM32G474VE/firmware.elf
+
+testbeds/template-mcu-STM32G474-series/.pio/build/genericSTM32G474VE/firmware.elf  :
+section             size        addr
+.isr_vector          472   134217728
+.text               3236   134218200
+.rodata               16   134221436
+.ARM.extab             0   134221452
+.ARM                   0   134221452
+.preinit_array         0   134221452
+.init_array            4   134221452
+.fini_array            4   134221456
+.data                 12   536870912
+.bss                  32   536870924
+._user_heap_stack   1540   536870956
+.ARM.attributes       42           0
+.comment             126           0
+.debug_frame          76           0
+Total               5560
+
+
+
+-rw-r--r-- 1 Leon 197609 3744 Nov  3 11:59 testbeds/template-mcu-STM32G474-series/.pio/build/genericSTM32G474VE/firmware.bin
+60addaa90ff1f57fd3d6d7c293693605fff42773b8afb2caf81fc88f5817d003 *testbeds/template-mcu-STM32G474-series/.pio/build/genericSTM32G474VE/firmware.bin
+
+# ============================================================
+# 补充 B：主机 GCC 回归（AGENTS.md §3，L2）  2026-11-03 11:59:37
+# ============================================================
+$ gcc -std=c11 -Wall -Wextra -Werror Core/Src/stdio_port.c test/stdio_port_test.c -o .pio/host-test/stdio-test
+  → 编译 exit=0
+  → 运行 exit=0
+$ gcc -std=c11 -Wall -Wextra -Werror -DTEST_BACKEND Core/Src/stdio_port.c test/stdio_port_test.c -o .pio/host-test/stdio-backend-test
+  → 编译 exit=0
+  → 运行 exit=0
+
+[BASELINE LOG END] 2026-11-03 11:59:39

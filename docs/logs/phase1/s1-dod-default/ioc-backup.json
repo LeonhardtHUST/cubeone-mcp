@@ -1,0 +1,18 @@
+{
+  "schema": "platform32.ioc_backup/1",
+  "action": "backup",
+  "project": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\template-mcu-STM32G474-series",
+  "timestamp": "2026-11-03T12:43:13+08:00",
+  "files": [
+    {
+      "ioc": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\template-mcu-STM32G474-series\\stm32-g474-template.ioc",
+      "backup": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\template-mcu-STM32G474-series\\stm32-g474-template.ioc.bak",
+      "bytes": 4973,
+      "sha256": "f57b1d334ac658305ec03b90e65312ffa6e98ad5907984f6a3be4487301dc21d"
+    }
+  ],
+  "tool": {
+    "name": "ioc_backup.py",
+    "version": "1.0.0"
+  }
+}

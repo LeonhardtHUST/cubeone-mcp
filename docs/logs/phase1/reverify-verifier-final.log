@@ -1,0 +1,33 @@
+# 用当前 verify_generation.py 重放三个已有生成日志（含 7 项 + pins_present）
+# 时间: 2026-11-03 12:38:51 +0800
+# verify_generation.py sha256: 5d002a408682d44439f1e31c91c3979addc275403b416b0486c641c89351983c
+# regen.sh sha256: 7090e97d9a5d750409d0ed47494e1075bcb8a52ecf40eaf55968d7884d8fba3d
+# 注意: 该文件在本轮验证期间仍在变动（8ff9f447 → 5d002a40 → 本次），下列为当次快照
+============================================================
+[platform32] 生成核验 verdict=PASS errors=0 warnings=1 expect=GPIO
+  [pass] log_cannot_map       生成日志无 'Cannot map' 命中（另有 1 条 OptionalMessage_ERROR，属 CubeMX 已知噪音，如 G474 的 VP_RIF_VS_RIF1 见模板 D8，不计入判定）
+  [pass] main_init_present    全部 1 个期望外设都有初始化函数定义：GPIO → MX_GPIO_Init（exact，定义 L152）
+  [pass] main_init_called     全部 1 个初始化函数都在 main() 内被调用：GPIO → MX_GPIO_Init（调用 L88）
+  [pass] pins_present         全部 1 个期望引脚都在 .ioc 与生成物中对上：PB0.Signal=GPIO_Output + __HAL_RCC_GPIOB_CLK_ENABLE()
+  [pass] mxproject_abs_path   '.mxproject' 无盘符绝对路径（换机可复现）
+  [warn] mx_script_abs_path   1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程
+  [pass] syscalls_path        生成日志无 syscalls.c / sysmem.c 叠加路径异常
+EXIT=0
+[platform32] 生成核验 verdict=FAIL errors=2 warnings=1 expect=GPIO,TIM4
+  [fail] log_cannot_map       命中 1 条 'Cannot map'，其中 1 条不在白名单 → 外设会被静默丢弃（D5/H-6）。L321: signal ← 2026-11-03 12:33:47,866 [INFO] ImportTextPane:234 - (OptionalMessage_ERROR) Cannot map signal (VP_TIM4_VS_ClockSourceINT) on pin (VP_TIM4_VS_ClockSourceINT)
+  [fail] main_init_present    1/2 个期望外设没有 MX_..._Init 定义 → 配置未生效或被静默丢弃（D5/H-6）：TIM4(missing)。已满足：GPIO → MX_GPIO_Init（exact，定义 L152）
+  [pass] main_init_called     全部 1 个初始化函数都在 main() 内被调用：GPIO → MX_GPIO_Init（调用 L88）；另有 1 个外设无定义、未参与本项：TIM4
+  [skip] pins_present         未提供 --expect-pins，跳过引脚级检查（v1.1 的外设级保证不含引脚增量）
+  [pass] mxproject_abs_path   '.mxproject' 无盘符绝对路径（换机可复现）
+  [warn] mx_script_abs_path   1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程
+  [pass] syscalls_path        生成日志无 syscalls.c / sysmem.c 叠加路径异常
+EXIT=1
+[platform32] 生成核验 verdict=FAIL errors=1 warnings=1 expect=GPIO,TIM4
+  [pass] log_cannot_map       生成日志无 'Cannot map' 命中（另有 1 条 OptionalMessage_ERROR，属 CubeMX 已知噪音，如 G474 的 VP_RIF_VS_RIF1 见模板 D8，不计入判定）
+  [fail] main_init_present    1/2 个期望外设没有 MX_..._Init 定义 → 配置未生效或被静默丢弃（D5/H-6）：TIM4(missing)。已满足：GPIO → MX_GPIO_Init（exact，定义 L152）
+  [pass] main_init_called     全部 1 个初始化函数都在 main() 内被调用：GPIO → MX_GPIO_Init（调用 L88）；另有 1 个外设无定义、未参与本项：TIM4
+  [skip] pins_present         未提供 --expect-pins，跳过引脚级检查（v1.1 的外设级保证不含引脚增量）
+  [pass] mxproject_abs_path   '.mxproject' 无盘符绝对路径（换机可复现）
+  [warn] mx_script_abs_path   1 处占位符未替换（脚本未配置，直接跑会失败）：scripts/cubemx-init.mx:5: __PROJECT_DIR__（in_comment=false） ← project path __PROJECT_DIR__。扫描 3 个 .mx 脚本，0 处绝对路径指向本工程
+  [pass] syscalls_path        生成日志无 syscalls.c / sysmem.c 叠加路径异常
+EXIT=1

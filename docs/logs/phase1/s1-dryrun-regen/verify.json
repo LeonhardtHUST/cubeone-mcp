@@ -1,0 +1,71 @@
+{
+  "schema": "platform32.verify_generation/1",
+  "verdict": "pass",
+  "checks": [
+    {
+      "id": "log_cannot_map",
+      "status": "pass",
+      "blocking": true,
+      "detail": "生成日志无 'Cannot map' 命中（另有 1 条 OptionalMessage_ERROR，属 CubeMX 已知噪音，如 G474 的 VP_RIF_VS_RIF1 见模板 D8，不计入判定）"
+    },
+    {
+      "id": "main_init_present",
+      "status": "pass",
+      "blocking": true,
+      "detail": "全部 1 个期望外设都有初始化函数定义：GPIO → MX_GPIO_Init（exact，定义 L152）"
+    },
+    {
+      "id": "main_init_called",
+      "status": "pass",
+      "blocking": true,
+      "detail": "全部 1 个初始化函数都在 main() 内被调用：GPIO → MX_GPIO_Init（调用 L88）"
+    },
+    {
+      "id": "mxproject_abs_path",
+      "status": "pass",
+      "blocking": true,
+      "detail": "'.mxproject' 无盘符绝对路径（换机可复现）"
+    },
+    {
+      "id": "mx_script_abs_path",
+      "status": "skip",
+      "blocking": true,
+      "detail": "未提供 --project-root，跳过 .mx 脚本扫描（脚本里的 project path 未核验）"
+    },
+    {
+      "id": "syscalls_path",
+      "status": "pass",
+      "blocking": false,
+      "detail": "生成日志无 syscalls.c / sysmem.c 叠加路径异常"
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 0,
+    "checked_peripherals": [
+      "GPIO"
+    ],
+    "notes": [
+      "mx_script_abs_path: 未提供 --project-root，跳过 .mx 脚本扫描（脚本里的 project path 未核验）"
+    ]
+  },
+  "inputs": {
+    "log": "D:\\Projects\\GitHub\\platform32-mcp\\docs\\logs\\phase1\\s1-dryrun-regen\\cubemx-generate.log",
+    "main_c": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_s1-dryrun\\g474\\Core\\Src\\main.c",
+    "mxproject": "D:\\Projects\\GitHub\\platform32-mcp\\testbeds\\_s1-dryrun\\g474\\.mxproject",
+    "project_root": null,
+    "effective_allow_signals": [
+      "VP_RIF_VS_RIF1"
+    ]
+  },
+  "expect": [
+    "GPIO"
+  ],
+  "allow_signals": [
+    "VP_RIF_VS_RIF1"
+  ],
+  "tool": {
+    "name": "verify_generation.py",
+    "version": "1.1.0"
+  }
+}
