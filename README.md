@@ -58,20 +58,48 @@ STM32 开发里有一种很难发现的失败：
 工具清单、退出码判据、发布与注册细节见 [`docs/guides/npm-publish-and-codebuddy.md`](docs/guides/npm-publish-and-codebuddy.md)。
 能力边界对 MCP 通道同样适用：**非 GPIO 外设的增改依旧没有工具能力**，核验器仍是唯一安全网。
 
-### 安全默认值：`CUBEONE_ALLOWED_ROOTS` 未设置 = 本次调用没有任何路径限制
+### 安全默认值（0.7.0 起）：`CUBEONE_ALLOWED_ROOTS` 未设置 = **拒绝所有路径参数**
 
-这一条必须读，因为它的默认值**不安全**：
+> **BREAKING（0.7.0）**：默认值从"未设 = 不校验"翻转为 **fail-closed**。升级后如果没配白名单，
+> 每次带路径参数的调用都会返回 `[cubeone-mcp][策略拦截] 未配置 CUBEONE_ALLOWED_ROOTS…` 并拒绝执行。
+> 这是**有意**的破坏：迁移只需在注册条目里加一行 env（见下）。
 
 | 情形 | 实际行为 |
 |---|---|
-| 设了 `CUBEONE_ALLOWED_ROOTS` | 路径参数不在白名单内 → 拒绝（返回「越界」） |
-| **未设** `CUBEONE_ALLOWED_ROOTS` | ⚠️ **不校验，工具可以访问任意路径**——只在返回文本末尾回显 `allowed_roots=未设置(本次调用无路径限制，见 README 安全节)` |
+| 设了 `CUBEONE_ALLOWED_ROOTS` | 路径参数不在白名单内 → 拒绝（返回「越界」，并给出解析后的物理路径） |
+| **未设** `CUBEONE_ALLOWED_ROOTS` | ✅ **默认拒绝**所有路径参数，文案给出配置方法 + 逃生门 |
+| 未设 + `CUBEONE_ALLOW_NO_ROOTS=1` | ⚠️ **宽松模式**：不校验，可访问任意路径。返回文本回显 `allowed_roots=未设置(宽松模式：本次调用无路径限制，CUBEONE_ALLOW_NO_ROOTS 生效)` |
 
-也就是说"能跑通"不等于"被限制住了"。默认值这样定是为了让第一次 `npx` 不至于处处报错，**不是**因为它安全。
+**迁移方法**（二选一，改完重启 MCP 客户端）：
 
-**想让它变成硬要求**：在注册条目里加 `"CUBEONE_REQUIRE_ROOTS": "1"`。启用后若 `CUBEONE_ALLOWED_ROOTS` 为空，server **启动即退出 1** 并在 stderr 打印配置方法——不会静默降级成"无限制"。不设这个 env 时行为与本条之前完全一致（opt-in，不改默认）。
+```jsonc
+// 推荐：配白名单（Windows 用 ';' 分隔多个目录，POSIX 用 ':'）
+"cubeone-mcp": {
+  "command": "vpx",
+  "args": ["cubeone-mcp"],
+  "env": {
+    "CUBEONE_POLICY": "read_only",
+    "CUBEONE_ALLOWED_ROOTS": "D:\\Projects;C:\\Users\\you\\WorkBuddy"
+  }
+}
+```
 
-> **计划变更**：0.7.0 会把默认值翻转为 **fail-closed**（未设白名单就拒绝所有路径参数），并保留 `CUBEONE_ALLOW_NO_ROOTS=1` 作为显式逃生门。届时属 BREAKING，release notes 会给迁移方法。
+```jsonc
+// 不推荐：显式退回 0.6.x 的宽松语义（确实需要访问任意路径时）
+"env": { "CUBEONE_ALLOW_NO_ROOTS": "1" }
+```
+
+**为什么把 fail-open 当默认值是错的**：默认值不会自己说话——用户看到"能跑通"就以为路径被限制住了，
+实际上 agent 的每一次笔误（写错工程目录、跟错 junction）都能落到任意位置，而**它全程处于无保护状态
+却不自知**。安全默认值的第一原则是"默认拒绝、显式放行"：只有写下来的放宽才可能被看见、被复核。
+0.7.0 因此把代价从"所有人静默无保护"换成"需要放宽的人写一行 env"。
+
+白名单比较的是**物理路径**（`realpath`）：白名单目录内的 symlink / junction（Windows `mklink /J`
+不需要管理员权限）指向界外时同样会被拒绝，拒绝文案会把物理落点打出来。
+⚠️ 残余风险：不防 TOCTOU（校验通过后、打开文件前链接被替换）——威胁模型是 agent 误操作，不是对抗者。
+
+`CUBEONE_REQUIRE_ROOTS=1` 仍然可用，但 0.7.0 起**降级为冗余**（默认已严格）：设不设都不改变路径判定，
+只额外提供"启动即退出"的 fail-fast。它与 `CUBEONE_ALLOW_NO_ROOTS` 同时为真时**以后者为准**（显式放宽优先）。
 
 ## 快速开始
 
@@ -242,11 +270,11 @@ CI 覆盖的是「脚本与核验器的逻辑没退化」，**不覆盖**「某�
 
 | 版本 | 指什么 | 当前值 |
 |---|---|---|
-| **仓库发布标签** | 对外发布的整体快照 | `v0.6.2`（本次发布后） |
-| `SKILL.md` 的 `version` | Agent 操作面的文档迭代号 | `0.6.2` |
+| **仓库发布标签** | 对外发布的整体快照 | `v0.7.0`（本次发布后） |
+| `SKILL.md` 的 `version` | Agent 操作面的文档迭代号 | `0.7.0` |
 | `verify_generation.py --version` | 核验器实现 + JSON schema | `1.2.0`（schema `/2`） |
 
-**发布轴规则**：前两轴与 `package.json` 的 `version` 必须**同值同步**——`git tag` = `package.json` = `SKILL.md` frontmatter（如 `v0.6.2` / `0.6.2` / `0.6.2`）；核验器那一轴**故意独立**（它是判据契约号，与包版本解耦）。每次打 tag 必须同时有 **GitHub Release + npm 发布 + 看板回填**，三者缺一视为发布未收口。规则出处与理由见 [`docs/DECISIONS.md`](docs/DECISIONS.md) **D33**。
+**发布轴规则**：前两轴与 `package.json` 的 `version` 必须**同值同步**——`git tag` = `package.json` = `SKILL.md` frontmatter（如 `v0.7.0` / `0.7.0` / `0.7.0`）；核验器那一轴**故意独立**（它是判据契约号，与包版本解耦）。每次打 tag 必须同时有 **GitHub Release + npm 发布 + 看板回填**，三者缺一视为发布未收口。规则出处与理由见 [`docs/DECISIONS.md`](docs/DECISIONS.md) **D33**。
 
 引用时请写明是哪一轴：说「核验器 1.2.0」比说「0.6.2」有用得多，因为前者决定了 `verify.json` 的形状。
 

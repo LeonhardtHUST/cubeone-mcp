@@ -1,7 +1,7 @@
 ---
 name: cubeone-mcp
 description: "STM32 工程全流程编排：.ioc 改配置 → CubeMX 生成 → 生成核验（G1 强制关卡）→ PlatformIO 构建 →（接板后）烧录与串口验证，带 L0–L5 验证等级声明与符合模板 AGENTS.md 的 commit。**能力边界（先读）：只能可靠代做普通 GPIO 级改动（新增引脚/改模式/改上下拉）；UART/SPI/TIM/ADC 等非 GPIO 外设的增改没有工具能力，必须手改 .ioc 或走 GUI，并强制过 G1。** 双通道执行：已注册 MCP 走工具通道，未注册走 CubeMX CLI + pio CLI 等价通道，判据与证据要求完全相同。当用户说「改一下这个 ioc」「加一个 GPIO」「加一路串口/SPI/定时器」「CubeMX 重新生成」「生成完帮我核一遍」「有没有被静默丢弃的外设」「pio 构建」「Flash/RAM 多少」「烧进去看看」「串口有输出吗」时使用。只读审计不写盘；写操作前必须备份 .ioc，生成后必须跑核验器并如实声明验证等级；不碰 testbeds/ 之外的模板原仓。"
-version: 0.6.2
+version: 0.7.0
 agent_created: true
 license: MIT
 compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证）；CubeMX 6.18.1（路径见 §0.2）；PlatformIO Core 6.x；MCP 可选，未注册用 §0.4
@@ -12,7 +12,8 @@ compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证�
 > **本文件是操作面，不是手册。** 逐条细则在 `references/`：`capability-boundary.md`（能力边界）·
 > `verify-contract.md`（核验器契约）· `regen-exit-codes.md`（`regen.sh`）· `diff-evidence.md`（取证判据）·
 > `pitfalls.md`（陷阱全文）。证据可信度：**✅** 本机实测 ｜ **📄** 引自模板仓/官方文档 ｜ **⚠️** 未实测。
-> 状态：v0.6.2（对齐核验器 **1.2.0**：7 项 / schema `/2`；含 npm 包 MCP 工具通道与 **M1 接缝修复批次**）。Phase 2 烧录段无硬件，整体挂起（D7）。
+> 状态：v0.7.0（对齐核验器 **1.2.0**：7 项 / schema `/2`）——**0.7.0：路径白名单默认 fail-closed（BREAKING）**，
+> 迁移见 §0.2；同批含 `ioc_backup` 备份完整性摘要与原子还原、`realpath` 防 junction 绕出。Phase 2 烧录段无硬件，整体挂起（D7）。
 
 ## 0. 硬前提
 
@@ -51,12 +52,22 @@ MCP 通道另有 env：`ST_CUBEMX_EXE`、`ST_CUBEMX_ALLOWED_ROOTS`（白名单�
 `ST_CUBEMX_TIMEOUT=300`、`PLATFORMIO_MCP_POLICY=build_only`、`PLATFORMIO_MCP_PIO`。
 
 **工具通道自己的 env**：`CUBEONE_ALLOWED_ROOTS`（路径白名单）、`CUBEONE_POLICY`（`read_only` 默认 / `full`）、
-`CUBEONE_PYTHON`、`CUBEONE_REQUIRE_ROOTS`。
+`CUBEONE_PYTHON`、`CUBEONE_ALLOW_NO_ROOTS`（宽松逃生门）、`CUBEONE_REQUIRE_ROOTS`（冗余：默认已严格）。
 
-> ⚠️ **`CUBEONE_ALLOWED_ROOTS` 未设置 = 本次调用没有任何路径限制。** 返回文本末尾会回显
-> `allowed_roots=未设置(本次调用无路径限制，见 README 安全节)`——看到这句就说明**当前不受白名单约束**，
-> 别把它当成正常状态。要让"必须有白名单"变成硬要求，设 `CUBEONE_REQUIRE_ROOTS=1`：未配置则 server
-> **启动即退出 1**（stderr 给配置方法），不会静默降级。0.7.0 将把默认翻转为 fail-closed（BREAKING）。
+> 🔴 **0.7.0 起 `CUBEONE_ALLOWED_ROOTS` 未设置 = 拒绝所有路径参数（BREAKING）。**
+> 返回文本会以 `[cubeone-mcp][策略拦截] 未配置 CUBEONE_ALLOWED_ROOTS，0.7.0 起默认拒绝所有路径参数。`
+> 开头，并给出配置方法。**迁移方法（二选一，改完重启客户端）**：
+> ① 在注册条目的 `env` 里配白名单，多个用系统分隔符（Windows `;`，POSIX `:`）——
+> `"CUBEONE_ALLOWED_ROOTS": "D:\\Projects;C:\\Users\\you\\WorkBuddy"`；
+> ② 确实需要访问任意路径，显式设 `"CUBEONE_ALLOW_NO_ROOTS": "1"`（宽松模式，**不建议**；返回文本会标注
+> `allowed_roots=未设置(宽松模式：本次调用无路径限制，CUBEONE_ALLOW_NO_ROOTS 生效)`）。
+>
+> **为什么把 fail-open 当默认值是错的**：默认值不会自己说话——能跑通就被当成"被限制住了"，用户
+> **全程处于无保护状态却不自知**。安全默认值只能是"默认拒绝、显式放行"：写下来的放宽才会被看见、被复核。
+> 白名单比的是**物理路径**（`realpath`），白名单内 junction/symlink 指向界外同样被拒（文案会打物理落点）；
+> 残余风险：不防 TOCTOU（校验后链接被换），威胁模型是误操作而非对抗者。
+> `CUBEONE_REQUIRE_ROOTS=1` 仍可用但**冗余**：设不设都不改变路径判定，只多一条"启动即退出"的 fail-fast；
+> 与 `CUBEONE_ALLOW_NO_ROOTS` 同时为真时**以后者为准**。
 
 ### 0.3 三条红线
 
@@ -104,7 +115,7 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
 |---|---|
 | **生成核验（G1 硬关卡）** | `scripts/verify_generation.py` —— 契约见 `references/verify-contract.md` |
 | 备份 → 生成 → 核验 → 失败回滚 | `scripts/regen.sh <工程> [-e …] [-o …] [--require-clean]` —— 见 `references/regen-exit-codes.md`。**包内可用**，但编排 CubeMX 生成需本机存在 CubeMX/JRE（路径可用 `ST_CUBEMX_JRE`/`ST_CUBEMX_EXE` 覆盖） |
-| `.ioc` 字段读写 / 备份还原 | `scripts/ioc_field.py`、`ioc_backup.py --project <工程根> [--restore\|--list]` |
+| `.ioc` 字段读写 / 备份还原 | `scripts/ioc_field.py`、`ioc_backup.py --project <工程根> [--restore\|--list]`。备份会同时落 `<name>.ioc.bak.sha256` 旁路摘要；`--restore` 先校验摘要再原子替换（不一致 → 拒还原、退出码 2、`.ioc` 不动；无摘要的旧备份 → 警告后照常还原）。**不要手删/手改 `.bak.sha256`**——删了就等于放弃篡改检测 |
 
 ### 1.2 双通道对照
 
@@ -120,6 +131,11 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
 四个必填：`--log` `--main-c` `--mxproject` `--expect`（`""` = 不查外设）。
 可选：`--project-root`（不传则该检查 `skip`）、`--ioc` + `--expect-pins PIN=SIGNAL`（引脚级检查，见 §1.4
 第 4 项；`--expect-pins` 可重复、可逗号分隔）、`--allow-signal`（**默认为空**）、`--json-out`、`--report-md`。
+
+> 📝 **`--report-md` 是写行为**：它会生成一份 Markdown 报告文件。`CUBEONE_POLICY=read_only` 下**也允许**
+> （属证据输出，与 `.ioc` 写操作不是一回事），但**路径仍受白名单校验**——报错目录落在
+> `CUBEONE_ALLOWED_ROOTS` 之外时同样被拒（0.7.0 未配白名单则直接拒绝）。反馈这类"读工具写盘"的
+> 行为差异时，不要说成"read_only 下完全不写盘"。
 
 - **退出码**：`0` 通过（可含 `warn`）；`1` 有 `fail`；`2` 输入/IO/参数错。
 - **`blocking: true` 不等于"这条报错了"**——它只在 `status` 为 `fail` 时生效。
