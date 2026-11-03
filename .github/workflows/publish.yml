@@ -1,0 +1,91 @@
+# cubeone-mcp / npm 发布（Trusted Publisher，OIDC）
+#
+# 定位：package.json 版本 bump 后，由 GitHub OIDC 向 npm 证明
+# "这个 tarball 来自 LeonhardtHUST/cubeone-mcp 仓库的本工作流"，
+# 全程**不使用任何 npm token / secret**（长寿命 token 已被 npm 收紧）。
+#
+# 前置（一次性，只能在 npmjs.com 网页上做，CI 替代不了）：
+#   npmjs.com → cubeone-mcp 包页 → Settings → Trusted Publisher → 绑定：
+#     GitHub 仓库  LeonhardtHUST/cubeone-mcp
+#     workflow 文件 publish.yml
+#     （environment 留空；未绑定时本工作流会以 403/ENEEDAUTH 失败，属预期）
+#
+# 发新版本的流程：
+#   1. bump package.json 的 version（本仓约定：npm 版本与 SKILL.md 对齐）
+#   2. push master 后到 Actions → "Publish npm" → Run workflow（workflow_dispatch）；
+#      或直接发 GitHub Release（release: published 自动触发）
+#
+# 已知坑（2026-11 实测/调研，别删）：
+#   - ubuntu-latest 的 Node 22 自带 npm 10.x，**低于 OIDC 信任发布要求的 11.5.1**，
+#     必须显式 `npm install -g npm@latest`。缺失这步的表现是 ENEEDAUTH
+#     （IronaAI 等仓的 publish.yml 因此长期全红）。
+#   - `--provenance` 需要 `id-token: write`；ci.yml 的顶层 permissions 不含它，
+#     因此本文件单独声明，不与 CI 共享顶层配置。
+#   - 本地手动发布的替代路径见 docs/guides/npm-publish-and-codebuddy.md
+#     （passkey 账号在 TTY 里走 auth/cli 浏览器确认流；`--registry=<url>` 连写
+#     在部分 npm shim 上会被拆参，必须分开写并加引号）。
+
+name: Publish npm
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+# 同名工作流只保留最新一次运行。
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: npm publish (trusted publisher)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+
+      # 发布前先过一遍与本仓 CI 相同版本的 pytest —— 发布是信任时刻，
+      # 不允许"逻辑已退化但版本号新鲜"的包出去（对齐 ci.yml 的 pytest==9.2.0 钉版）。
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: 安装 pytest 并跑单元测试
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pytest==9.2.0"
+          python -m pytest tests/ -q
+
+      # OIDC 信任发布要求 npm >= 11.5.1；runner 预装的是 10.x，必须升。
+      - name: 升级 npm（OIDC 信任发布要求 >= 11.5.1）
+        run: npm install -g npm@latest
+
+      - name: 读取待发布版本
+        id: pkg
+        run: |
+          echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # 幂等护栏：重复触发时直接红在这里，而不是让 registry 拒绝一版已存在的发布。
+      - name: 幂等检查（已发布的版本必须先 bump）
+        run: |
+          if npm view "${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}" version --registry "https://registry.npmjs.org/" >/dev/null 2>&1; then
+            echo "::error::${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }} 已存在 —— 先 bump package.json version 再触发发布"
+            exit 1
+          fi
+
+      - name: 包内容预检（打包清单进日志，人工可查）
+        run: npm pack --dry-run
+
+      - name: 发布（OIDC，无 token）
+        run: npm publish --access public --provenance
