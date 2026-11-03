@@ -50,3 +50,9 @@ venv/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ── 本地测试输出 ─────────────────────────────────────────────
+# pytest 输出每次跑都变，入库只会制造无意义 diff；测试结论靠 CI 留证，
+# 不靠提交日志文件。已在 index 中的旧文件用 `git rm --cached` 摘除。
+docs/logs/**/*-pytest.log
+docs/logs/**/pytest-*.log

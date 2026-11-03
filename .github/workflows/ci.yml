@@ -77,6 +77,10 @@ jobs:
       - name: Python 字节码编译（scripts/*.py）
         run: python -m py_compile scripts/*.py
 
+      # 本步骤要跑 pytest --collect-only，故 lint job 也需要装 pytest（与 pytest job 同版本）。
+      - name: 安装 pytest（供收集用例用）
+        run: python -m pip install "pytest==9.2.0"
+
       # shellcheck 的处置方式：**只报告，不判红**。
       #   理由：scripts/ 的 owner 是 verifier-dev，本流水线的职责不是让上游脚本
       #   为风格问题返工；一旦判红，一次与本次改动无关的脚本风格调整就会挡住所有 PR。
@@ -124,3 +128,34 @@ jobs:
             echo "::error::regen.sh 缺参数应以 2 退出（未执行），实际 ${rc}"
             exit 1
           fi
+
+      # 同名测试函数检查：同一个模块里重复 `def test_x`（列 0）时，后一个覆盖前一个，
+      # 前一份永不执行，而 pytest 照样报表绿。危害不是覆盖率，而是"看起来有测试、
+      # 实际没跑" —— 翻文件时先读到的是死代码，改它测试照绿、bug 照样溜过去。
+      #
+      # 为什么**不**直接比"收集数 == 声明数"（最初提的写法）：
+      # `@pytest.mark.parametrize` 会让一条声明展开成多个用例。本仓现有 1 处
+      # parametrize（3 个参数），实测（pytest 9.2.0）：声明 72 / 收集 74，
+      # 相等口径在干净的仓库上就会误报。所以拆成两条独立判据：
+      #   ① 逐文件找重名（这才是缺陷形态）→ 命中即 fail；
+      #   ② 收集数 < 声明数 → fail（说明有函数没被收集到，比如导入期抛异常）。
+      # 只数行首（列 0）的 `def test_`：类方法/嵌套函数本仓不存在，也不作为测试收集。
+      - name: 测试函数重名检查
+        run: |
+          fail=0
+          for f in tests/test_*.py; do
+            dups=$(grep -o '^def test_[A-Za-z0-9_]*' "$f" | sort | uniq -d || true)
+            if [ -n "$dups" ]; then
+              echo "::error file=${f}::存在同名测试函数定义（后者覆盖前者，前者永远不会执行）：${dups}"
+              fail=1
+            fi
+          done
+
+          declared=$(grep -rhc '^def test_' tests/*.py | awk '{s+=$1} END {print s}')
+          collected=$(python -m pytest tests/ --collect-only -q 2>/dev/null | grep -c '::')
+          echo "declared=${declared} collected=${collected}"
+          if [ "${collected}" -lt "${declared}" ]; then
+            echo "::error::收集数 ${collected} 少于声明数 ${declared} —— 有测试函数未被收集"
+            fail=1
+          fi
+          exit "${fail}"
