@@ -32,6 +32,20 @@
 > 这五页由 `skill-author` 维护；它们与 `SKILL.md` 的**唯一真源关系**是：判据在手册页展开，
 > 操作结论在 `SKILL.md`。两者冲突时**以手册页为准**，并立即修 `SKILL.md`（说明 `SKILL.md` 被压缩时丢了细节）。
 
+### 跨文档一致性（防"文档打架"）
+
+同一件事在多个文件出现时，**必须指定真源，其余位置只引用或逐字复制**：
+
+| 内容 | 真源 | 其他位置 |
+|---|---|---|
+| **保证边界三段式**（无条件 / 有条件 / 不保证） | `verify-contract.md` §5 | `SKILL.md` §1.4、`README.md`「能力边界」段 —— 改一处必须同步另两处 |
+| 能力边界证据（D25 探测、三路线、四层模型） | `capability-boundary.md` | `SKILL.md` §0.0 只放结论 |
+| 七项判据细则 | `verify-contract.md` §4 | `SKILL.md` §1.4 只放一句话判据 |
+| `regen.sh` 退出码与 `KO` | `regen-exit-codes.md` | `SKILL.md` §1.5 |
+| 取证判据（`numstat -w`、三级确认） | `diff-evidence.md` | `SKILL.md` §2 第 3A / 第 7 步 |
+
+改任何一处都要顺手 `grep` 另两处，避免同一句话在三个文件里各说一版。
+
 ## 一、三个模板仓（平台要服务的工程范式，也是流程验收靶子）
 
 三者结构一致：`AGENTS.md`、`TEMPLATE-PLACEHOLDERS.md`、`.ioc`、`platformio.ini`、
