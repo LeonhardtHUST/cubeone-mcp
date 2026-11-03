@@ -4,7 +4,7 @@ description: "STM32 工程全流程编排：.ioc 改配置 → CubeMX 生成 →
 version: 0.6.0
 agent_created: true
 license: MIT
-compatibility: Python 3.8+；CubeMX 6.18.1（路径见 §0.2）；PlatformIO Core 6.x；MCP 可选，未注册用 §0.4
+compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证）；CubeMX 6.18.1（路径见 §0.2）；PlatformIO Core 6.x；MCP 可选，未注册用 §0.4
 ---
 
 # platform32-mcp：STM32 生成 / 核验 / 构建 / 烧录编排
@@ -139,8 +139,7 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
 - **`skip` ≠ 通过 ≠ 失败**：`--expect ""` 使 2/3 都 `skip`；外设全无定义时 3 也 `skip`（同根因只在 2 报一次
   fail）；**4 默认 `skip`，须显式传 `--expect-pins`（直调时还需 `--ioc`）才有结论**；**写证据必须解释原因**
   （读 `summary.notes`）。**G474 上第 6 项稳定出现 1 条 `warn`**（`cubemx-init.mx:5` 的 `__PROJECT_DIR__` 占位符），`verdict` 仍 `pass`——**预期条数恒为 1，≥2 条 = 异常必须查**。
-- `log_cannot_map` 的**真实实例**与"CLI 路径不可达"的对照（S3 两组证据）见 `references/verify-contract.md` §4.1。
-- 两项没有 check 是**有意的**：`ioc_ask_for_migrate`（核验器跑在生成之后，等它看见人已白等 → 归 `regen.sh` 告警）、`ioc_version_stamp`（提交卫生 → 归 P2）。
+- `log_cannot_map` 的真实实例与"CLI 路径不可达"对照（S3 两组证据）见 `references/verify-contract.md` §4.1。**两项没有 check 是有意的**：`ioc_ask_for_migrate`（核验器跑在生成之后，等它看见人已白等 → 归 `regen.sh` 告警）、`ioc_version_stamp`（提交卫生 → 归 P2）。
 
 #### 🔴 保证边界（最重要的一条免责声明）
 
@@ -290,8 +289,11 @@ git ls-files --eol <被报 M 的文件>   # 定性：CRLF 噪音 vs 真改动
 
 L2 命令（主机回归，不需要开发板）：
 
-```bashgcc -std=c11 -Wall -Wextra -Werror Core/Src/stdio_port.c test/stdio_port_test.c -o .pio/host-test/stdio-test && ./.pio/host-test/stdio-test
-gcc -std=c11 -Wall -Wextra -Werror -DTEST_BACKEND Core/Src/stdio_port.c test/stdio_port_test.c -o .pio/host-test/stdio-backend-test && ./.pio/host-test/stdio-backend-test && pio run
+```bash
+mkdir -p .pio/host-test
+gcc -std=c11 -Wall -Wextra -Werror Core/Src/stdio_port.c test/stdio_port_test.c -o .pio/host-test/stdio-test && ./.pio/host-test/stdio-test
+gcc -std=c11 -Wall -Wextra -Werror -DTEST_BACKEND Core/Src/stdio_port.c test/stdio_port_test.c -o .pio/host-test/stdio-backend-test && ./.pio/host-test/stdio-backend-test
+pio run
 ```
 
 **四条不许混**：① `.ioc` 改动没有 L4 = 没做完（L3 不能顶）；② **3B 不可降级为 L3**；
@@ -327,12 +329,10 @@ gcc -std=c11 -Wall -Wextra -Werror -DTEST_BACKEND Core/Src/stdio_port.c test/std
 | P3 | Flash/RAM 对不上 → PIO size 不计 stack/heap，以链接器/bin 为准 |
 | P4 | `.mxproject` 干净但换机跑不了 → `.mx` 写死绝对路径（指向本工程是合规） |
 
-**D 系列（工具层）**：D1 `formatOnSave` 重排 ｜ D2 纯行尾 diff ｜ D3 白名单漏 key ｜ D4 缺 `S_` 前缀 ｜
-D5 `Cannot map` 静默丢弃 ｜ D6 `Drivers/` 只有 `.gitkeep` 是正常的 ｜ D7 与 P1 同一件事（**以 P1 为准**）｜
-D8 `VP_RIF_VS_RIF1` 噪音忽略 ｜ D9 `syscalls` 叠加路径不阻塞。
-**H 系列（HAL 运行期）**：H-1 UART 能发不能收（NVIC）｜ H-2 TIM 状态机混用 ｜ H-3 停 DMA 关掉共享时基 ｜
-H-4 高频捕获 `CC1OF` ｜ H-5 `Error_Handler` 后无诊断 ｜ **H-6 新增外设没落进生成物且日志干净**。
-⚠️ `HAL-PITFALLS.md` 只在 F103C8T6 与 H723 仓，**G474 仓没有**。
+**D 系列（工具层）**：D1 `formatOnSave` 重排 ｜ D2 纯行尾 diff ｜ D3 白名单漏 key ｜ D4 缺 `S_` 前缀 ｜ D5 `Cannot map`
+静默丢弃 ｜ D6 `Drivers/` 只有 `.gitkeep` 正常 ｜ D7 同 P1（**以 P1 为准**）｜ D8 `VP_RIF_VS_RIF1` 忽略 ｜ D9 `syscalls` 不阻塞。
+**H 系列（HAL 运行期）**：H-1 UART 能发不能收（NVIC）｜ H-2 TIM 状态机混用 ｜ H-3 停 DMA 关共享时基 ｜ H-4 `CC1OF` ｜
+H-5 `Error_Handler` 后无诊断 ｜ **H-6 新增外设没落进生成物且日志干净**。⚠️ `HAL-PITFALLS.md` 只在 F103C8T6 与 H723 仓。
 
 ## 6. 串口与烧录（Phase 2，挂起）
 
@@ -344,7 +344,7 @@ H-4 高频捕获 `CC1OF` ｜ H-5 `Error_Handler` 后无诊断 ｜ **H-6 新增�
 
 - 手册页 `references/`：`capability-boundary` / `verify-contract` / `regen-exit-codes` /
   `diff-evidence` / `pitfalls`；外部资料链接见 `references/README.md`。
-- 状态真源 `docs/TASKBOARD.md`；决策 D1–D26 见 `docs/DECISIONS.md`；核验器完整契约
+- 状态真源 `docs/TASKBOARD.md`；决策 D1–D30 见 `docs/DECISIONS.md`；核验器完整契约
   `docs/reports/t1.2-verifier-contract.md`；MCP 注册 `docs/guides/mcp-registration.md`；版本历史见 git log。
 - **单写者边界**：`scripts/`、`tests/` → verifier-dev；`SKILL.md`、`docs/`、`references/` → skill-author；
-  `testbeds/` → scenario-tester；`.github/` → ci-agent。**本文件只由 skill-author 改**。
+  `testbeds/` → scenario-tester；`.github/` → lead 收口（原 `release-engineer`，已收口）。**本文件只由 skill-author 改**。
