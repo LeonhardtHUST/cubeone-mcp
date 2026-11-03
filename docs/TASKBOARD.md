@@ -53,9 +53,9 @@
 | 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
 |---|---|---|---|---|---|---|
 | T0.1 | 执行 GATE-D 决策问询，结论写入 `docs/DECISIONS.md` | platform-lead | — | 已完成 | L0 | `docs/DECISIONS.md`（用户已确认 6 项；文件正文待 lead 落盘，当前为 T1.1 占位） |
-| T0.2 | 改 `~/.workbuddy/mcp.json`：新增 `vscode-cube-mcp`（内联 `ST_CUBEMX_EXE`/`ST_CUBEMX_ALLOWED_ROOTS`/`ST_CUBEMX_TIMEOUT=300`）、新增 `platformio.mcp`（`uvx`，`PLATFORMIO_MCP_POLICY=build_only`）；`stm32-stlink` 保持 disabled | env-agent | T0.1 | 进行中 | L1 | 待补：`docs/backups/`（改前备份）+ JSON 校验输出 → `docs/logs/phase0/` |
-| T0.3 | 安装并自检 `uvx platformio.mcp doctor` | env-agent | T0.2 | 进行中 | L1 | 待补：`docs/logs/phase0/platformio-mcp-doctor.log` |
-| T0.4 | 逐 server 冒烟：`cubemx_help`、`pio_system_info` + `pio_list_devices`、对 G474 模板仓**只读** `cubemx_load` | scenario-tester | T0.2、T0.3 | 待开始 | L1 | 待补：三段输出 → `docs/logs/phase0/`；`cubemx_load` 后原仓 `git status` 干净 |
+| T0.2 | 改动 `mcp.json` 以注册两个 server | env-agent | T0.1 | **已完成（降级为建议）** | L1 | **按 D12 不替用户改配置**：产出 `docs/backups/mcp.proposed.diff`（含内联 `ST_CUBEMX_EXE`/`ST_CUBEMX_ALLOWED_ROOTS`/`ST_CUBEMX_TIMEOUT=300`、`platformio.mcp` 经 `uvx` + `PLATFORMIO_MCP_POLICY=build_only`、`stm32-stlink` 保持 disabled），改前备份脱敏入库（`mcp.json.bak-*.redacted.json`，JWT 残留 0）。注册动作留给用户，注册指南见 `docs/guides/mcp-registration.md` |
+| T0.3 | 安装并自检 `uvx platformio.mcp doctor` | env-agent | T0.2 | 已完成 | L1 | `docs/logs/phase0/platformio-mcp-install.log`（0.2.0 安装成功）、`platformio-mcp-doctor.log`（`ok:true`，Core 6.2.0 / policy build_only）、`platformio-mcp-handshake.log`（协议 `2025-11-25`，**40 个工具**，`HANDSHAKE PASS`） |
+| T0.4 | 逐 server **工具调用级**冒烟：`cubemx_help`、`cubemx_load`（对 G474 只读）、`pio_system_info`、`pio_list_devices` | software-engineer（实现）+ software-qa-engineer（复核） | T0.2、T0.3 | 已完成 | L1 | `tools/mcp_smoke.py`（929 行，**sha256 `4fb474e9…`**）+ `docs/logs/phase0/mcp-smoke.log`（**4/4 通过，`SMOKE PASS`**，`cubemx_help` 127ms / `cubemx_load` 25.4s / `pio_system_info` 2.8s / `pio_list_devices` 1.8s）+ `mcp-smoke-negative.log`（`--negative-control`，**exit=1、`SMOKE FAIL`、`必需调用通过 2/4（缺 cubemx_help、cubemx_load）`**）。**只读性有证据**：`.ioc` sha256 前后均为 `f57b1d33…`。**已知缺口**：`isError=True` 分支未执行验证（负向对照只到"前置命令不存在"就 SKIP），见 release notes 已知限制 |
 | T0.5 | 建 `docs/TASKBOARD.md` 任务看板 | skill-author | T0.1 | 已完成 | L0 | 本文件（25 条任务 + GATE 表 + 证据约定，已投入实际使用） |
 
 ### Phase 1：MVP 无硬件闭环（2–3 天）
@@ -90,7 +90,7 @@
 | T3.1 | CI 流水线：**实测修正为** `pytest` matrix（Python 3.11 / 3.13）+ 脚本静态检查（`bash -n` / `py_compile` / YAML）+ 同名测试函数硬门禁（后者覆盖前者 = 死代码，见 `e20adba`）+ 不依赖 CubeMX 的入口冒烟。**原计划的 `pio run` matrix 未实现**：本仓无 `platformio.ini`，模板工程在 `testbeds/`（gitignored），且 CubeMX 无法在 ubuntu runner 运行 ⇒ 端到端不进 CI（原因已写进 workflow 注释） | release-engineer → lead（接手收口） | T1.6 | 已完成 | L1（本地等价校验） | `.github/workflows/ci.yml`（2 job / 8 步）+ commit `996d19a` / 去重 `b14fba5`。本地等价校验：pytest 74 passed、`bash -n` OK、`py_compile` OK、YAML 可解析、重名检查 `declared=72 collected=74 dup=0`、`regen.sh` 缺参 `rc=2`。**Actions 已实测通过**：run `41585670440`（`7db26e7`）→ overall **success**，`pytest 3.11` / `pytest 3.13` 各 **74 passed**、`脚本检查` 12 步全过。**首次运行三次全红**，根因是测试依赖 Windows 上真实存在的 `C:/ST/STM32CubeMX/**` 路径（`regen.sh:313/314` 的 `[ -f ]` 检查），已用存根注入消除（`8d3b5d5` + `7db26e7`）——**纯本地开发永远发现不了这类缺陷** |
 | T3.2 | README 定稿：定位、能力边界（只可靠代做普通 GPIO）、7 项检查表、保证边界三段式、L0–L5、退出码、两条红线、文档索引 | release-engineer → lead（接手收口） | T1.9、T2.5 | 已完成 | L0 | `README.md` 203 行 + commit `b14fba5` / `3ee4387`。本地校验：无失效链接、L0–L5 与模板 `AGENTS.md:105-110` 逐字一致、Python 宣称范围收紧为 3.11+（= CI 覆盖范围）。**原计划的架构图未做**（三 server 职责已在 `references/` 与 `docs/guides/` 覆盖，README 用文档索引替代、避免重复展开） |
 | T3.3 | SKILL.md 终版：合并 Phase 2 串口/烧录增补；附 L 等级自查清单 | skill-author | T2.4 | 待开始 | L1 | 待补：定稿 commit（**阻塞于 Phase 2 挂起**——§6 串口/烧录段无硬件、不做能力宣称，故终版实质等同现版 v0.6.0） |
-| T3.4 | 选做评估（只读，产出报告不改代码）：① CubeMX 2.1.1 兼容性（同一 `.ioc` 双版本生成 diff）② CMake 流可行性 ③ strtt RTT 是否引入 | evaluator | 各自独立 | 待开始 | L1 | 待补：`docs/evaluations/`，每项给"做/不做/推迟"结论 |
+| T3.4 | 选做评估（只读，产出报告不改代码）：① CubeMX 2.1.1 兼容性（同一 `.ioc` 双版本生成 diff）② CMake 流可行性 ③ strtt RTT 是否引入 | —（本轮不做） | 各自独立 | **不做（已关闭）** | — | **关闭理由**：① 本机只装了 6.18.1，要做得再装第二个 CubeMX 版本（数百 MB + 许可交互），而 v0.1.0 的结论不依赖它；②③ 无用户需求，做了也没有使用者。**不产出报告，是因为没有结论可给**——不写"待评估"，避免下一个人以为有人在跟 |
 | T3.5 | 发布：打 tag `v0.1.0` + release notes（含验证等级汇总表：哪些 L3、哪些 L5） | platform-lead | T3.1–T3.3 | 待开始 | L1 | 待补：tag + release notes（remote 已在 T1.1 建好，无需再建） |
 
 ---

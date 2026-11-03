@@ -186,17 +186,31 @@ scripts/
   ioc_backup.py           .ioc 备份/还原（sha256 凭据）
   ioc_field.py            .ioc 单键读写（保留 CRLF，原子写）
 tests/                74 个 pytest 用例
+tools/
+  mcp_smoke.py          MCP 通道冒烟（真实调用 4 个工具，含负向对照）
 docs/                 决策记录、任务看板、实测报告与原始日志
 .github/workflows/    CI（pytest 矩阵 + 脚本静态检查；不含 CubeMX 端到端）
 ```
 
 ## 项目状态
 
-- **Phase 1 已完成**：核验器 1.2.0（7 项）、`regen.sh`、74 个单测、S1/S2/S3 三个场景实测
+- **Phase 1 已完成**：核验器（7 项）、`regen.sh`、74 个单测、S1/S2/S3 三个场景实测
 - **Phase 2 挂起**：实板烧录验证（L5）需要接板后继续
-- **Phase 3 进行中**：CI 与文档收口
+- **Phase 3 已完成**：CI 全绿（`pytest` 3.11 / 3.13 双矩阵）、README 与文档收口
 
 CI 覆盖的是「脚本与核验器的逻辑没退化」，**不覆盖**「某个 `.ioc` 改对了」——CubeMX 是 Windows GUI 应用且需交互接受许可，无法在 GitHub Actions 上运行。端到端证据来自本地实测，见 `docs/reports/`。
+
+### 三个版本号，别混
+
+本仓同时存在三个版本轴，它们不是一回事：
+
+| 版本 | 指什么 | 当前值 |
+|---|---|---|
+| **仓库发布标签** | 对外发布的整体快照 | `v0.1.0` |
+| `SKILL.md` 的 `version` | Agent 操作面的文档迭代号 | `0.6.0` |
+| `verify_generation.py --version` | 核验器实现 + JSON schema | `1.2.0`（schema `/2`） |
+
+引用时请写明是哪一轴：说「核验器 1.2.0」比说「0.1.0」有用得多，因为前者决定了 `verify.json` 的形状。
 
 ## License
 

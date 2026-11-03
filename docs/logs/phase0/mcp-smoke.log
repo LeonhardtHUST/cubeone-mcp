@@ -1,0 +1,44 @@
+===== MCP 工具调用冒烟自检 (T0.4) =====
+time     : 2026-11-03T14:03:31
+mode     : positive
+runner   : C:\Users\Leon\AppData\Roaming\uv\tools\vscode-cube-mcp\Scripts\python.exe
+script   : D:\Projects\GitHub\platform32-mcp\tools\mcp_smoke.py
+script_sha256 : 4fb474e915fc1970ae96bdcb8a694179c262fe9293bad8e4b2f0dac87a5c0372
+repo_root: D:\Projects\GitHub\platform32-mcp
+mcp_sdk  : 2.2.0
+cwd      : D:\Projects\GitHub\platform32-mcp
+
+--- A. vscode-cube-mcp ---
+OK   ioc                    : D:\Projects\GitHub\platform32-mcp\testbeds\stm32-g474-template\stm32-g474-template.ioc
+OK   ioc_sha256_before      : f57b1d334ac658305ec03b90e65312ffa6e98ad5907984f6a3be4487301dc21d
+OK   entry                  : {"command": "C:\\Users\\Leon\\.local\\bin\\vscode-cube-mcp.exe", "args": [], "env": {"ST_CUBEMX_EXE": "C:\\ST\\STM32CubeMX\\STM32CubeMX.exe", "ST_CUBEMX_ALLOWED_ROOTS": "D:\\Projects;C:\\Users\\Leon\\WorkBuddy", "ST_CUBEMX_TIMEOUT": "300"}}
+OK   tools_count            : 9
+OK   cubemx_help            : 135ms | isError=False | chars=2148 | timeout=120s
+     preview: Vscode_cube_mcp — 封装 STM32CubeMX 命令行(-q)的 MCP server ============================================================= 【能力边界(先读)】 本工具只负责 **.ioc 工程配置与 HAL 骨架生成**： 引脚 / 外设 / 时钟 / 工具链的配置，以及 generate 出可编译的 H…
+OK   cubemx_load            : 20399ms | isError=False | chars=128 | timeout=120s
+     preview: [OK exit=0] config load "D:\Projects\GitHub\platform32-mcp\testbeds\stm32-g474-template\stm32-g474-template.ioc" OK exit Bye bye
+OK   ioc_sha256_after       : f57b1d334ac658305ec03b90e65312ffa6e98ad5907984f6a3be4487301dc21d
+OK   ioc_readonly           : sha256 前后一致，文件未被修改
+
+--- B. platformio.mcp ---
+OK   entry                  : {"command": "C:\\Users\\Leon\\.pyenv\\pyenv-win\\shims\\uvx.BAT", "args": ["platformio.mcp"], "env": {"PLATFORMIO_MCP_POLICY": "build_only", "PLATFORMIO_MCP_PIO": "C:\\Users\\Leon\\.platformio\\penv\\Scripts\\pio.exe"}}
+OK   pio_exe                : C:\Users\Leon\.platformio\penv\Scripts\pio.exe
+OK   tools_count            : 40
+OK   pio_system_info        : 2594ms | isError=False | chars=628 | timeout=120s
+     preview: { "ok": true, "summary": "PlatformIO Core 6.2.0 at C:\\Users\\Leon\\.platformio\\penv\\Scripts\\platformio.exe (python 3.11.7-final.0, 2 platforms installed). Policy: build_only.", "server_version": …
+OK   pio_list_devices       : 1793ms | isError=False | chars=2047 | timeout=120s | 已枚举到设备
+     preview: { "ok": true, "summary": "8 serial port(s). No port looks like a USB dev board; check the cable (data, not charge-only) and drivers.", "devices": [ { "port": "COM21", "description": "蓝牙链接上的标准串行 (COM2…
+
+--- 汇总 ---
+OK   cubemx_help            : 通过
+OK   cubemx_load            : 通过
+OK   pio_system_info        : 通过
+OK   pio_list_devices       : 通过
+OK   必需调用通过           : 4 / 4
+INFO 判据                   : cubemx_load 必须成功且 .ioc 的 sha256 不变；pio_list_devices 允许空结果，调用成功即通过
+INFO 耗时                   : vscode-cube-mcp/cubemx_help = 135ms
+INFO 耗时                   : vscode-cube-mcp/cubemx_load = 20399ms
+INFO 耗时                   : platformio.mcp/pio_system_info = 2594ms
+INFO 耗时                   : platformio.mcp/pio_list_devices = 1793ms
+
+VERDICT: SMOKE PASS
