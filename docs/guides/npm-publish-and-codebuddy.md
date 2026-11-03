@@ -1,8 +1,38 @@
 # npm 包（MCP 工具通道）发布与 CodeBuddy 注册全记录
 
-> 产出时间：2026-11-03 · 验证等级：**L2/L4**（真实握手 + 真实工具调用，证据见 `docs/logs/phase1/npm-mcp/`）
+> 产出时间：2026-11-03 · 更新：2026-11-04（对齐 0.7.0 fail-closed，随 0.7.1 入包） · 验证等级：**L2/L4**（真实握手 + 真实工具调用，证据见 `docs/logs/phase1/npm-mcp/`）
+> **归属**：本页讲**本包（`cubeone-mcp` 的 npm 通道）**怎么注册、`CUBEONE_*` 怎么配、包怎么发。
+> `vscode-cube-mcp` / `platformio.mcp` 这两个**外部 server** 的注册见 [`mcp-registration.md`](mcp-registration.md)（那是另一个话题，别混）。
 > 适用对象：要在自己机器上用 `npx cubeone-mcp` / `vpx cubeone-mcp` 的人，以及要复现发布流程的维护者。
 > **所有结论均为本机实测**（Windows 11 / npm 10.9.7 / vite+ 0.x / CodeBuddy CN），标注 ✅ 的都踩过实证。
+
+---
+
+## 🔴 0.7.0 BREAKING：未设 `CUBEONE_ALLOWED_ROOTS` = **拒绝所有路径参数**
+
+0.6.x 的默认值是"未设白名单 = 不校验"。从 **0.7.0 起翻转**：没有白名单就**一律拒绝**带路径参数的调用。
+
+```
+[cubeone-mcp][策略拦截] 未配置 CUBEONE_ALLOWED_ROOTS，0.7.0 起默认拒绝所有路径参数。
+```
+
+**为什么必须破坏**：默认值不会自己说话——工具能正常返回时，用户会把它当成"已经被限制住了"，
+而实际上 agent 的每一次笔误（写错工程目录、跟错 junction）都能落到任意位置，**全程无保护却不自知**。
+代价从"所有人静默无保护"换成"需要放宽的人写一行 env"。
+
+**两条出路（改完必须重启客户端，二选一）**：
+
+| 出路 | 怎么写 | 适用 |
+|---|---|---|
+| ① 配白名单（**推荐**） | `"CUBEONE_ALLOWED_ROOTS": "D:\\Projects\\my-project;C:\\Users\\you\\WorkBuddy"` | 正常使用，只给真正要操作的工程目录 |
+| ② 显式开逃生门 | `"CUBEONE_ALLOW_NO_ROOTS": "1"` | 确实要访问任意路径；**不建议**，且会自曝（见下） |
+
+- **宽松模式必须自曝**：脚注回显 `allowed_roots=未设置(宽松模式：本次调用无路径限制，CUBEONE_ALLOW_NO_ROOTS 生效)`。
+  静默放宽等于没有放宽可言——看到这行就说明你现在不受白名单约束。
+- **`CUBEONE_REQUIRE_ROOTS` 已冗余但保留**：默认已严格，设不设都不改变路径判定，只多一条"启动即退出"的
+  fail-fast（配错白名单时早失败，而不是第一次调用才发现）。与 `CUBEONE_ALLOW_NO_ROOTS` 同时为真时**以后者为准**。
+- 白名单比的是**物理路径**（`realpath`）：白名单目录内的 junction / symlink 指向界外同样被拒，拒绝文案会把
+  物理落点打出来。残余风险：不防 TOCTOU（校验后链接被替换），威胁模型是误操作而非对抗者。
 
 ---
 
@@ -20,8 +50,8 @@ MCP 客户端（CodeBuddy / Claude Desktop / WorkBuddy…）
                └─ scripts/ioc_field.py           （.ioc 键读 / 写）
 ```
 
-- 包名：[`cubeone-mcp`](https://www.npmjs.com/package/cubeone-mcp)（未加 scope），版本与仓库对齐（首发 `0.6.0`）
-- `files` 白名单只带 `bin/ lib/ scripts/*.py SKILL.md references/`——testbeds/docs **不进包**（`npm pack --dry-run` 实测 15 文件 / 63.4 kB）
+- 包名：[`cubeone-mcp`](https://www.npmjs.com/package/cubeone-mcp)（未加 scope），版本与仓库对齐（当前 `0.7.1`，首发 `0.6.0`）
+- `files` 白名单只带 `bin/ lib/ scripts/*.py SKILL.md references/ docs/guides/`（**两本注册指南随包可读**）——testbeds **不进包**
 - 三个 Python 脚本全是纯标准库 ⇒ 机器上只要有 **Python 3.11+**（`python` 在 PATH 或 `CUBEONE_PYTHON` 指定），**无需 pip install 任何东西**
 
 ### 工具清单（`tools/list` 实测 3 个）
@@ -30,7 +60,7 @@ MCP 客户端（CodeBuddy / Claude Desktop / WorkBuddy…）
 |---|---|---|---|
 | `verify_generation` | verify_generation.py（schema /2，7 项检查） | 否 | ✅ 可用 |
 | `ioc_backup`（backup/restore/list） | ioc_backup.py | restore 是 | backup/list ✅；restore ❌ 拒绝 |
-| `ioc_field`（get/set） | ioc_field.py | set 是 | get ✅；set 仅 `dry_run=true` |
+| `ioc_field`（get/set） | ioc_field.py（脚本轴 **1.1.0**） | set 是 | get ✅；set 仅 `dry_run=true` |
 
 **退出码 → isError 映射**（与脚本约定一致）：`0`=OK；`1`=域内结论（核验 FAIL / 键不存在，**isError=false**，结论看 structuredContent 的 JSON）；`2` 或 spawn 失败=执行层错误（isError=true）。JS 侧把 `spawnSync` 的 `status` 当退出码——**不是 `exitCode`**（那是异步 ChildProcess 的属性，✅ 实测踩过）。
 
@@ -41,8 +71,12 @@ MCP 客户端（CodeBuddy / Claude Desktop / WorkBuddy…）
 | 变量 | 作用 | 建议 |
 |---|---|---|
 | `CUBEONE_POLICY` | 写策略门禁：`read_only`（默认）/ `full` | 日常 read_only；要改 `.ioc` 时升级 full 并重启客户端 |
-| `CUBEONE_ALLOWED_ROOTS` | 路径前缀白名单，`;` 分隔（与 `ST_CUBEMX_ALLOWED_ROOTS` 同构） | 至少覆盖工程所在盘根，如 `D:\Projects` |
+| `CUBEONE_ALLOWED_ROOTS` | 路径白名单（按 **`realpath` 物理路径**做前缀比较）。**0.7.0 起未设 = 拒绝所有路径参数** | **只列真正要操作的工程目录**；**给盘根（`D:\Projects` 乃至 `D:`）等于没设防** |
+| `CUBEONE_ALLOW_NO_ROOTS` | 宽松逃生门：设 `1` 时无白名单也不拦（退回 0.6.x 语义） | **不建议**。确实需要访问任意路径才设；脚注会标注宽松模式 |
+| `CUBEONE_REQUIRE_ROOTS` | 冗余（默认已严格）：设 `1` 只多一条「启动即退出」的 fail-fast | 一般不用设；与 `CUBEONE_ALLOW_NO_ROOTS` 同时为真时**以后者为准** |
 | `CUBEONE_PYTHON` | Python 解释器绝对路径；缺省回退 `python` | PATH 里有 python.exe 就不用设 |
+
+> **多个目录用 `;`（Windows）/ `:`（POSIX）分隔，改完重启客户端。** 配置是启动时读的，不重启等于没改。
 
 ---
 
@@ -56,7 +90,7 @@ MCP 客户端（CodeBuddy / Claude Desktop / WorkBuddy…）
   "args": ["cubeone-mcp"],
   "env": {
     "CUBEONE_POLICY": "read_only",
-    "CUBEONE_ALLOWED_ROOTS": "D:\\Projects"
+    "CUBEONE_ALLOWED_ROOTS": "D:\\Projects\\my-project"
   }
 }
 ```
@@ -68,12 +102,58 @@ MCP 客户端（CodeBuddy / Claude Desktop / WorkBuddy…）
 
 ---
 
-## 2. 发布流程
+## 2. 注册后自检（**必做**——注册完不确认，等于不知道配没配上）
 
-### 2.1 手动发布（passkey 账号的实际路径 ✅）
+0.7.0 起"注册成功"和"配对了"是两件事：**3 个工具能列出来，不代表 `CUBEONE_ALLOWED_ROOTS` 生效了**。
+下面两条路各选一条，30 秒出结论。
+
+### 2.1 源码用户（手上有仓库）：跑握手冒烟
 
 ```bash
-# 注意：--registry 用分写+引号（见 §3.4 的拆参坑）
+node tools/npm_mcp_handshake.mjs
+```
+
+期望末尾一行：
+
+```
+VERDICT: HANDSHAKE SMOKE PASS (pass=12 fail=0)
+```
+
+12 项全过 = 协议握手、3 工具、域内结论、策略拦截、路径白名单（含"无白名单默认拒绝"这条 T11）都符合预期。
+
+### 2.2 npm 用户（只有包）：调一次 `ioc_field` 看脚注
+
+让客户端调一次 `ioc_field`，`action=get`、`key=MxCube.Version`，然后**读返回文本末尾的环境脚注**：
+
+```
+—
+policy=read_only | allowed_roots=D:\Projects\my-project
+```
+
+三种情况，一眼分辨：
+
+| 脚注里看到 | 含义 | 怎么办 |
+|---|---|---|
+| `allowed_roots=<你配的路径>` | 配对上了，白名单正在生效 | 可以正常用 |
+| `allowed_roots=未设置(严格模式：…)` | 白名单**没配上**，所有路径参数都会被拒 | 检查 `env` 拼写/分隔符，改完**重启客户端** |
+| `allowed_roots=未设置(宽松模式：…)` | 你开了逃生门 `CUBEONE_ALLOW_NO_ROOTS`，**当前不受白名单约束** | 正常使用前先补白名单，或确认自己确实需要无限制 |
+
+若调用直接返回：
+
+```
+[cubeone-mcp][策略拦截] 未配置 CUBEONE_ALLOWED_ROOTS，0.7.0 起默认拒绝所有路径参数。
+```
+
+**就是没配上**（这是 0.7.0 的默认拒绝在生效，不是 bug）——按本文顶部「两条出路」配好，然后重启客户端再自检一次。
+
+---
+
+## 3. 发布流程
+
+### 3.1 手动发布（passkey 账号的实际路径 ✅）
+
+```bash
+# 注意：--registry 用分写+引号（见 §4.4 的拆参坑）
 npm publish --registry "https://registry.npmjs.org/" --access public
 ```
 
@@ -83,12 +163,12 @@ TTY 里会走 **auth/cli 浏览器确认流**：
 Authenticate your account at:
 https://www.npmjs.com/auth/cli/<uuid>
 Press ENTER to open in the browser...
-+ cubeone-mcp@0.6.0
++ cubeone-mcp@0.7.1
 ```
 
-浏览器里用 passkey 确认，终端自动继续。**这条 URL 只在 TTY 里显示**；非 TTY（脚本/agent 派生）下 EOTP 且 URL 被打码（✅ 实测，winpty 强造 pty 也救不回来，见 §3.5）。
+浏览器里用 passkey 确认，终端自动继续。**这条 URL 只在 TTY 里显示**；非 TTY（脚本/agent 派生）下 EOTP 且 URL 被打码（✅ 实测，winpty 强造 pty 也救不回来，见 §4.5）。
 
-### 2.2 自动发布（Trusted Publisher / OIDC）
+### 3.2 自动发布（Trusted Publisher / OIDC）
 
 `.github/workflows/publish.yml` 已就位：`workflow_dispatch` 或 GitHub Release 触发，
 `id-token: write` + `npm publish --provenance`，**全程无 token / secret**。
@@ -101,33 +181,35 @@ Press ENTER to open in the browser...
 
 **工作流里的两道护栏**：已发布版本直接红（防覆盖）；发布前跑与 CI 同版本（pytest==9.2.0）的单元测试。
 
-### 2.3 已知前提
+### 3.3 已知前提
 
-- 发布必须指定 `--registry https://registry.npmjs.org/`——本机默认 registry 是 npmmirror 镜像，不带这个参数发布到镜像上等于没发（§3.1）
+- 发布必须指定 `--registry https://registry.npmjs.org/`——本机默认 registry 是 npmmirror 镜像，不带这个参数发布到镜像上等于没发（§4.1）
 - 包对 npmmirror 的可见性：发布后 npmmirror 不自动即时同步，手动 `curl -X PUT https://registry.npmmirror.com/cubeone-mcp/sync` 触发（✅ 实测秒同步）
+- 发版后**先自检再用**：按 §2.2 调一次 `ioc_field`，确认脚注 `allowed_roots=` 是你配的路径。
 
 ---
 
-## 3. 反直觉点合集（本机实测，复现发布前先读）
+## 4. 反直觉点合集（本机实测，复现发布前先读）
 
 1. **默认 registry = npmmirror 掩盖 token 失效**：`npm whoami` 打到镜像上报 `ENEEDAUTH`，让人误以为只是没登录；实际 npmjs 侧的 `_authToken` 早已 401。诊断方法：`npm whoami --registry=https://registry.npmjs.org/`。
 2. **granular Publish token 照样 EOTP**：npm 正在收紧"bypass 2FA"类 token（登录时的官方公告），新发的 Publish 类型 token 发布时仍要第二要素，别指望"给个 token 就能静默发"。
-3. **passkey 账号没有 6 位码**：2FA 走安全密钥的账号，TOTP 这条路不存在，正确路径就是 §2.1 的 `auth/cli` 浏览器确认流；`npm account 2fa` 设置页里找不到"OTP 设置"不是你找错了地方。
+3. **passkey 账号没有 6 位码**：2FA 走安全密钥的账号，TOTP 这条路不存在，正确路径就是 §3.1 的 `auth/cli` 浏览器确认流；`npm account 2fa` 设置页里找不到"OTP 设置"不是你找错了地方。
 4. **`--registry=<url>` 连写会被拆参**：本机实测（bash 与 pwsh 都复现）`npm publish --registry=https://...` 被解析成 `registry="https"` + 把 `//registry.npmjs.org/` 当路径（`ENOENT: D:\registry.npmjs.org\package.json`）。**必须分写并加引号**：`npm publish --registry "https://registry.npmjs.org/"`。
 5. **非 TTY 下 auth/cli URL 被打码**：agent/脚本环境跑 publish 只会看到 EOTP，URL 是 `***`；winpty 强造 pty 在无控制台的沙箱里启动即崩（winpty.cc 断言），`script` 在 Git Bash 里不存在。结论：**发布这一步要么人在真终端里做，要么走 CI OIDC**。
 6. **`spawnSync` 的退出码字段是 `status`**：`exitCode` 恒为 `undefined`（那是异步 ChildProcess 的字段）。MCP 层 isFirstVersion 就因为这个把 `exit=undefined` 写进了返回头。
 7. **OIDC 信任发布要求 npm ≥ 11.5.1**：ubuntu-latest 的 Node 22 自带 npm 10.x，必须在 CI 里显式 `npm install -g npm@latest`，否则发布步骤 ENEEDAUTH（多个开源仓因此长期全红）。
 8. **从 MSYS 环境派生原生 exe 时 PATH 是 POSIX 格式**：`/c/...:...` 传给 vpx/node 这类 Windows 程序解析不了（表现为"找不到 npm"）。只影响测试脚本；真实 MCP 客户端是原生进程，无此问题。
+9. **"注册成功"≠"白名单配对了"**：`tools/list` 返回 3 个工具只证明进程起来了，`CUBEONE_ALLOWED_ROOTS` 写错/没生效时工具照样列得出来，只是每次调用被拒。**唯一可靠的确认手段是 §2 的脚注自检**——这条是 0.7.0 默认拒绝上线后暴露的，此前指南没有。
 
 ---
 
-## 4. 自检与证据
+## 5. 自检与证据
 
 | 内容 | 位置 |
 |---|---|
-| MCP 握手 + 9 项工具通道冒烟（10/10 PASS） | `docs/logs/phase1/npm-mcp/handshake.log`（脚本 `tools/npm_mcp_handshake.mjs`） |
+| MCP 握手 + 12 项工具通道冒烟（12/12 PASS） | `docs/logs/phase1/npm-mcp/handshake.log`（脚本 `tools/npm_mcp_handshake.mjs`） |
 | vpx 冷启动（握手 + 真实调用） | `docs/logs/phase1/npm-mcp/vpx-coldstart.log`（脚本 `tools/npm_vpx_coldstart.mjs`） |
-| 包内容基线 | `npm pack --dry-run` = 15 文件 / 63.4 kB / sha512-4vbi8UZPiSdb1 |
+| 包内容基线 | `npm pack --dry-run`（清单里应有 `docs/guides/mcp-registration.md` **与** `docs/guides/npm-publish-and-codebuddy.md` 两本） |
 | 线上包 | <https://www.npmjs.com/package/cubeone-mcp> |
 
 故障速查：
@@ -136,6 +218,8 @@ Press ENTER to open in the browser...
 |---|---|
 | 客户端里工具数不是 3 | 没重启 / 没信任 / vpx 拉包失败——看客户端 MCP 日志 |
 | 工具返回 "无法启动 Python" | 设 `CUBEONE_PYTHON` 指向 python.exe 绝对路径，重启客户端 |
-| 工具返回 "[越界]" | 路径不在 `CUBEONE_ALLOWED_ROOTS`，加根目录（`;` 分隔）后重启 |
+| 工具返回 `[cubeone-mcp][策略拦截] 未配置 CUBEONE_ALLOWED_ROOTS` | 白名单没配上：配 `CUBEONE_ALLOWED_ROOTS`（`;` 分隔）或显式 `CUBEONE_ALLOW_NO_ROOTS=1`，**重启客户端**，再按 §2 自检 |
+| 工具返回 "越界" | 路径不在 `CUBEONE_ALLOWED_ROOTS`（比较的是**物理路径**，junction/symlink 绕出也算界外）→ 加目录后重启 |
+| 脚注 `allowed_roots=未设置(宽松模式…)` | 你开了 `CUBEONE_ALLOW_NO_ROOTS`，当前不受白名单约束；不需要就删掉并重启 |
 | set/restore 被拒 | 这是 read_only 策略在拦截；`CUBEONE_POLICY=full` 并重启 |
 | `npm view` E404 但包刚发 | npmmirror 未同步，`curl -X PUT https://registry.npmmirror.com/<pkg>/sync` |

@@ -281,11 +281,11 @@ CI 覆盖的是「脚本与核验器的逻辑没退化」，**不覆盖**「某�
 
 | 版本 | 指什么 | 当前值 |
 |---|---|---|
-| **仓库发布标签** | 对外发布的整体快照 | `v0.7.0`（本次发布后） |
-| `SKILL.md` 的 `version` | Agent 操作面的文档迭代号 | `0.7.0` |
+| **仓库发布标签** | 对外发布的整体快照 | `v0.7.1`（本次发布后） |
+| `SKILL.md` 的 `version` | Agent 操作面的文档迭代号 | `0.7.1` |
 | `verify_generation.py --version` | 核验器实现 + JSON schema | `1.2.0`（schema `/2`） |
 
-**发布轴规则**：前两轴与 `package.json` 的 `version` 必须**同值同步**——`git tag` = `package.json` = `SKILL.md` frontmatter（如 `v0.7.0` / `0.7.0` / `0.7.0`）；核验器那一轴**故意独立**（它是判据契约号，与包版本解耦）。每次打 tag 必须同时有 **GitHub Release + npm 发布 + 看板回填**，三者缺一视为发布未收口。规则出处与理由见 [`docs/DECISIONS.md`](docs/DECISIONS.md) **D33**。
+**发布轴规则**：前两轴与 `package.json` 的 `version` 必须**同值同步**——`git tag` = `package.json` = `SKILL.md` frontmatter（如 `v0.7.1` / `0.7.1` / `0.7.1`）；核验器那一轴**故意独立**（它是判据契约号，与包版本解耦）。每次打 tag 必须同时有 **GitHub Release + npm 发布 + 看板回填**，三者缺一视为发布未收口。规则出处与理由见 [`docs/DECISIONS.md`](docs/DECISIONS.md) **D33**。
 
 引用时请写明是哪一轴：说「核验器 1.2.0」比说「0.6.2」有用得多，因为前者决定了 `verify.json` 的形状。
 

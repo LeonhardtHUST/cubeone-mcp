@@ -1,5 +1,8 @@
 # MCP 工具链注册指引（可选步骤，不代替用户操作）
 
+> **本页讲的是 `vscode-cube-mcp` / `platformio.mcp` 这两个外部 server。**
+> **本包自身的注册（`npx cubeone-mcp`）与 `CUBEONE_*` 配置见 [`npm-publish-and-codebuddy.md`](npm-publish-and-codebuddy.md)**——两页容易看反，先确认你要注册的是哪一个。
+
 > 产出时间：2026-11-03 · owner：`env-agent` · 验证等级：**L1**
 > 适用对象：想在自己机器上把 `vscode-cube-mcp` / `platformio.mcp` 接到 MCP 客户端的人
 > **重要前提**：`cubeone-mcp` 的交付物是仓库本体（Skill + 核验脚本 + 文档 + CI），**不包含**替用户改全局配置。本文档只提供可复现的注册步骤与实测结论，**所有操作由你自己执行**；本仓库不会、也没有修改你的 `~/.workbuddy/mcp.json`。
