@@ -48,6 +48,8 @@ MAIN_MULTI = FIXTURES / "main_multi_periph.c"
 MAIN_MISSING_TIM4 = FIXTURES / "main_missing_tim4.c"
 MAIN_TIM4_COMMENTED = FIXTURES / "main_tim4_call_commented.c"
 
+IOC_G474 = FIXTURES / "ioc_g474_template.txt"
+
 MXP_RELATIVE = FIXTURES / "mxproject_relative.txt"
 MXP_ABS = FIXTURES / "mxproject_abs_path.txt"
 
@@ -77,6 +79,7 @@ def run_verify(
     mxproject: Path = MXP_RELATIVE,
     expect: str = "GPIO",
     project_root: Path | None = None,
+    ioc: Path | None = None,
     extra: tuple[str, ...] = (),
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
     """跑一次 CLI 并返回 (进程结果, JSON 报告)。"""
@@ -95,6 +98,8 @@ def run_verify(
     ]
     if project_root is not None:
         args.extend(["--project-root", str(project_root)])
+    if ioc is not None:
+        args.extend(["--ioc", str(ioc)])
     args.extend(extra)
     result = run_cli(*args)
     assert json_out.is_file(), f"CLI 未生成 JSON 报告：{result.stderr}"
@@ -135,6 +140,8 @@ def test_positive_g474_template(tmp_path: Path) -> None:
         vg.CHECK_LOG_CANNOT_MAP: "pass",
         vg.CHECK_MAIN_INIT_PRESENT: "pass",
         vg.CHECK_MAIN_INIT_CALLED: "pass",
+        # 未传 --expect-pins → 引脚级 skip
+        vg.CHECK_PINS_PRESENT: "skip",
         vg.CHECK_MXPROJECT_ABS_PATH: "pass",
         # 未传 --project-root → .mx 扫描 skip（向后兼容，不报 fail）
         vg.CHECK_MX_SCRIPT_ABS_PATH: "skip",
@@ -186,6 +193,7 @@ def test_schema_v2_shape(tmp_path: Path) -> None:
         "main_c",
         "mxproject",
         "project_root",
+        "ioc",
         "expect",
         "expect_pins",
         "allow_signals",
@@ -466,6 +474,7 @@ def test_blocking_field_semantics(tmp_path: Path) -> None:
         vg.CHECK_LOG_CANNOT_MAP: True,
         vg.CHECK_MAIN_INIT_PRESENT: True,
         vg.CHECK_MAIN_INIT_CALLED: True,
+        vg.CHECK_PINS_PRESENT: True,
         vg.CHECK_MXPROJECT_ABS_PATH: True,
         vg.CHECK_MX_SCRIPT_ABS_PATH: True,
         vg.CHECK_SYSCALLS_PATH: False,
@@ -677,3 +686,317 @@ def test_resolve_init_symbol_variants() -> None:
     assert vg.resolve_init_symbol("TIM3", defined)[0] is None
     # expect TIM 不应误匹配 TIM4（否则"少配一个定时器"会漏报）
     assert vg.resolve_init_symbol("TIM", defined)[0] is None
+
+
+# ---------------------------------------------------------------------------
+# 15. 引脚级检查（v1.2 `pins_present`）
+# ---------------------------------------------------------------------------
+def test_pins_present_on_unmodified_g474_baseline_must_fail(tmp_path: Path) -> None:
+    """**第 7 项唯一的存在理由**：未改动的 G474 基线 + `--expect-pins PB0=...` 必须 fail。
+
+    基线 `Mcu.PinsNb=5`、`.ioc` 里没有 `PB0.Signal`、`main.c` 里 `GPIOB` 出现 0 次，
+    所以外设级检查（`--expect GPIO`）全 pass，只有引脚级能抓出"PB0 根本没加进去"。
+    """
+    result, report = run_verify(
+        tmp_path,
+        ioc=IOC_G474,
+        expect="GPIO",
+        extra=("--expect-pins", "PB0=GPIO_Output"),
+    )
+
+    assert result.returncode == vg.EXIT_FAIL, result.stdout + result.stderr
+    assert report["verdict"] == "fail"
+    # 外设级确实全绿（证明"真空 pass"真实存在）
+    assert check_of(report, vg.CHECK_MAIN_INIT_PRESENT)["status"] == "pass"
+    assert check_of(report, vg.CHECK_MAIN_INIT_CALLED)["status"] == "pass"
+    pins = check_of(report, vg.CHECK_PINS_PRESENT)
+    assert pins["status"] == "fail"
+    assert pins["blocking"] is True
+    detail = str(pins["detail"])
+    assert "PB0" in detail
+    assert "没有 PB0.Signal" in detail
+
+
+def test_pins_present_passes_for_existing_pc13(tmp_path: Path) -> None:
+    """基线里真实存在的 PC13（`.ioc` 有 Signal + main.c 有 GPIOC 时钟）→ pass。"""
+    result, report = run_verify(
+        tmp_path,
+        ioc=IOC_G474,
+        expect="GPIO",
+        extra=("--expect-pins", "PC13=GPIO_Output"),
+    )
+    assert result.returncode == vg.EXIT_PASS, result.stdout + result.stderr
+    pins = check_of(report, vg.CHECK_PINS_PRESENT)
+    assert pins["status"] == "pass"
+    assert "PC13.Signal=GPIO_Output" in str(pins["detail"])
+    assert "__HAL_RCC_GPIOC_CLK_ENABLE()" in str(pins["detail"])
+
+
+def test_pins_present_fails_on_signal_mismatch(tmp_path: Path) -> None:
+    """引脚存在但信号不符 → fail（`Input` ≠ `GPIO_Output`）。"""
+    _, report = run_verify(
+        tmp_path, ioc=IOC_G474, expect="GPIO", extra=("--expect-pins", "PC13=GPIO_Input")
+    )
+    pins = check_of(report, vg.CHECK_PINS_PRESENT)
+    assert pins["status"] == "fail"
+    detail = str(pins["detail"])
+    assert "PC13" in detail and "GPIO_Input" in detail
+
+
+def test_pins_present_fails_when_port_clock_missing(tmp_path: Path) -> None:
+    """`.ioc` 写了 `PB0.Signal` 但 `main.c` 没有 `__HAL_RCC_GPIOB_CLK_ENABLE()` → fail。
+
+    这一条才让"引脚真的进了生成物"可验证，而不只是"`.ioc` 里写了个键"。
+    """
+    ioc = tmp_path / "pb0.ioc"
+    ioc.write_text(
+        IOC_G474.read_text(encoding="utf-8") + "PB0.GPIOParameters=PinState\nPB0.Signal=GPIO_Output\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    # main_c 用 G474 真实模板：只有 GPIOC，没有 GPIOB
+    _, report = run_verify(
+        tmp_path, ioc=ioc, expect="GPIO", extra=("--expect-pins", "PB0=GPIO_Output")
+    )
+    pins = check_of(report, vg.CHECK_PINS_PRESENT)
+    assert pins["status"] == "fail"
+    assert "__HAL_RCC_GPIOB_CLK_ENABLE()" in str(pins["detail"])
+
+
+def test_pins_present_skips_without_flag_or_ioc(tmp_path: Path) -> None:
+    """不传 `--expect-pins`、或传了但没给 `--ioc` → `skip`（向后兼容，零爆炸半径）。"""
+    _, report = run_verify(tmp_path, ioc=IOC_G474, expect="GPIO")
+    assert check_of(report, vg.CHECK_PINS_PRESENT)["status"] == "skip"
+
+    _, report2 = run_verify(
+        tmp_path, expect="GPIO", extra=("--expect-pins", "PC13=GPIO_Output")
+    )
+    pins2 = check_of(report2, vg.CHECK_PINS_PRESENT)
+    assert pins2["status"] == "skip"
+    assert "--ioc" in str(pins2["detail"])
+
+
+def test_expect_pins_parsing() -> None:
+    """`--expect-pins` 解析：可重复、可逗号、PIN 归一化大写、去重、非法格式报错。"""
+    assert vg.parse_expect_pins(["pb0=GPIO_Output"]) == [("PB0", "GPIO_Output")]
+    assert vg.parse_expect_pins(["PB0=GPIO_Output,PA5=GPIO_Output"]) == [
+        ("PB0", "GPIO_Output"),
+        ("PA5", "GPIO_Output"),
+    ]
+    assert vg.parse_expect_pins(["PB0=X", "PB0=X"]) == [("PB0", "X")]
+    assert vg.parse_expect_pins(None) == []
+    with pytest.raises(ValueError):
+        vg.parse_expect_pins(["PB0"])
+
+
+def test_port_of_pin() -> None:
+    """引脚名 → 端口宏前缀。"""
+    assert vg.port_of_pin("PB0") == "GPIOB"
+    assert vg.port_of_pin("pa13") == "GPIOA"
+    assert vg.port_of_pin("PC13") == "GPIOC"
+    assert vg.port_of_pin("VP_SYS_VS_Systick") is None
+
+
+def test_normalize_win_path_folds_dotdot(tmp_path: Path) -> None:
+    """`d:/a/b/../b` 与 `d:/a/b` 必须判同一目录（否则会误报 fail）。"""
+    assert vg.normalize_win_path("d:/a/b/../b") == vg.normalize_win_path("d:/a/b")
+    assert vg.normalize_win_path("D://a//.//b//") == vg.normalize_win_path("D://a//b")
+
+    # 真实用法：`.mx` 里写成 `..` 形式，指向的仍是本工程 → pass
+    project = make_fake_project(
+        tmp_path / "board",
+        f"project path {tmp_path / 'board'}\\.\\..\\board\nexit\n",
+    )
+    _, report = run_verify(tmp_path, project_root=project)
+    assert check_of(report, vg.CHECK_MX_SCRIPT_ABS_PATH)["status"] == "pass"
+
+
+# ---------------------------------------------------------------------------
+# 15. 引脚级检查（v1.2 `pins_present`）
+# ---------------------------------------------------------------------------
+def test_pins_present_on_unmodified_g474_baseline_must_fail(tmp_path: Path) -> None:
+    """**第 7 项唯一的存在理由**：未改动的 G474 基线 + `--expect-pins PB0=...` 必须 fail。
+
+    基线 `Mcu.PinsNb=5`、`.ioc` 里没有 `PB0.Signal`、`main.c` 里 `GPIOB` 出现 0 次，
+    所以外设级检查（`--expect GPIO`）全 pass，只有引脚级能抓出"PB0 根本没加进去"。
+    """
+    result, report = run_verify(
+        tmp_path,
+        ioc=IOC_G474,
+        expect="GPIO",
+        extra=("--expect-pins", "PB0=GPIO_Output"),
+    )
+
+    assert result.returncode == vg.EXIT_FAIL, result.stdout + result.stderr
+    assert report["verdict"] == "fail"
+    # 外设级确实全绿（证明"真空 pass"真实存在）
+    assert check_of(report, vg.CHECK_MAIN_INIT_PRESENT)["status"] == "pass"
+    assert check_of(report, vg.CHECK_MAIN_INIT_CALLED)["status"] == "pass"
+    pins = check_of(report, vg.CHECK_PINS_PRESENT)
+    assert pins["status"] == "fail"
+    assert pins["blocking"] is True
+    detail = str(pins["detail"])
+    assert "PB0" in detail
+    assert "没有 PB0.Signal" in detail
+
+
+def test_pins_present_passes_for_existing_pc13(tmp_path: Path) -> None:
+    """基线里真实存在的 PC13（`.ioc` 有 Signal + main.c 有 GPIOC 时钟）→ pass。"""
+    result, report = run_verify(
+        tmp_path,
+        ioc=IOC_G474,
+        expect="GPIO",
+        extra=("--expect-pins", "PC13=GPIO_Output"),
+    )
+    assert result.returncode == vg.EXIT_PASS, result.stdout + result.stderr
+    pins = check_of(report, vg.CHECK_PINS_PRESENT)
+    assert pins["status"] == "pass"
+    assert "PC13.Signal=GPIO_Output" in str(pins["detail"])
+    assert "__HAL_RCC_GPIOC_CLK_ENABLE()" in str(pins["detail"])
+
+
+def test_pins_present_fails_on_signal_mismatch(tmp_path: Path) -> None:
+    """引脚存在但信号不符 → fail（`Input` ≠ `GPIO_Output`）。"""
+    _, report = run_verify(
+        tmp_path, ioc=IOC_G474, expect="GPIO", extra=("--expect-pins", "PC13=GPIO_Input")
+    )
+    pins = check_of(report, vg.CHECK_PINS_PRESENT)
+    assert pins["status"] == "fail"
+    detail = str(pins["detail"])
+    assert "PC13" in detail and "GPIO_Input" in detail
+
+
+def test_pins_present_fails_when_port_clock_missing(tmp_path: Path) -> None:
+    """`.ioc` 写了 `PB0.Signal` 但 `main.c` 没有 `__HAL_RCC_GPIOB_CLK_ENABLE()` → fail。
+
+    这一条才让"引脚真的进了生成物"可验证，而不只是"`.ioc` 里写了个键"。
+    """
+    ioc = tmp_path / "pb0.ioc"
+    ioc.write_text(
+        IOC_G474.read_text(encoding="utf-8") + "PB0.GPIOParameters=PinState\nPB0.Signal=GPIO_Output\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    # main_c 用 G474 真实模板：只有 GPIOC，没有 GPIOB
+    _, report = run_verify(
+        tmp_path, ioc=ioc, expect="GPIO", extra=("--expect-pins", "PB0=GPIO_Output")
+    )
+    pins = check_of(report, vg.CHECK_PINS_PRESENT)
+    assert pins["status"] == "fail"
+    assert "__HAL_RCC_GPIOB_CLK_ENABLE()" in str(pins["detail"])
+
+
+def test_pins_present_skips_without_flag_or_ioc(tmp_path: Path) -> None:
+    """不传 `--expect-pins`、或传了但没给 `--ioc` → `skip`（向后兼容，零爆炸半径）。"""
+    _, report = run_verify(tmp_path, ioc=IOC_G474, expect="GPIO")
+    assert check_of(report, vg.CHECK_PINS_PRESENT)["status"] == "skip"
+
+    _, report2 = run_verify(
+        tmp_path, expect="GPIO", extra=("--expect-pins", "PC13=GPIO_Output")
+    )
+    pins2 = check_of(report2, vg.CHECK_PINS_PRESENT)
+    assert pins2["status"] == "skip"
+    assert "--ioc" in str(pins2["detail"])
+
+
+def test_expect_pins_parsing() -> None:
+    """`--expect-pins` 解析：可重复、可逗号、PIN 归一化大写、去重、非法格式报错。"""
+    assert vg.parse_expect_pins(["pb0=GPIO_Output"]) == [("PB0", "GPIO_Output")]
+    assert vg.parse_expect_pins(["PB0=GPIO_Output,PA5=GPIO_Output"]) == [
+        ("PB0", "GPIO_Output"),
+        ("PA5", "GPIO_Output"),
+    ]
+    assert vg.parse_expect_pins(["PB0=X", "PB0=X"]) == [("PB0", "X")]
+    assert vg.parse_expect_pins(None) == []
+    with pytest.raises(ValueError):
+        vg.parse_expect_pins(["PB0"])
+
+
+def test_port_of_pin() -> None:
+    """引脚名 → 端口宏前缀。"""
+    assert vg.port_of_pin("PB0") == "GPIOB"
+    assert vg.port_of_pin("pa13") == "GPIOA"
+    assert vg.port_of_pin("PC13") == "GPIOC"
+    assert vg.port_of_pin("VP_SYS_VS_Systick") is None
+
+
+def test_normalize_win_path_folds_dotdot(tmp_path: Path) -> None:
+    """`d:/a/b/../b` 与 `d:/a/b` 必须判同一目录（否则会误报 fail）。"""
+    assert vg.normalize_win_path("d:/a/b/../b") == vg.normalize_win_path("d:/a/b")
+    assert vg.normalize_win_path("D:/a/./b/") == vg.normalize_win_path("D:/a/b")
+
+    # 真实用法：`.mx` 里写成 `.` / `..` 形式，指向的仍是本工程 → pass
+    board_with_dots = str(tmp_path / "board").replace("\\", "/") + "/./../board"
+    project = make_fake_project(
+        tmp_path / "board",
+        "project path " + board_with_dots + "\nexit\n",
+    )
+    _, report = run_verify(tmp_path, project_root=project)
+    assert check_of(report, vg.CHECK_MX_SCRIPT_ABS_PATH)["status"] == "pass"
+
+
+# ---------------------------------------------------------------------------
+# 信号名抽取（D29.6）：圆括号形态 / 字面量 signal 不得被当成信号名
+# ---------------------------------------------------------------------------
+#: 6.18.1 的真实输出形态（出自 docs/logs/phase1/s3b-regen/cubemx-generate.log）。
+REAL_CANNOT_MAP_BODY = (
+    "(OptionalMessage_ERROR) Cannot map signal (VP_TIM4_VS_ClockSourceINT) "
+    "on pin (VP_TIM4_VS_ClockSourceINT)"
+)
+
+
+def write_cannot_map_log(tmp_path: Path) -> Path:
+    """写一份只含一条真实 ``Cannot map`` 的日志。"""
+    log = tmp_path / "cannot_map.log"
+    log.write_text(
+        "2026-11-03 12:33:47,866 [INFO] ImportTextPane:234 - " + REAL_CANNOT_MAP_BODY + "\n",
+        encoding="utf-8",
+    )
+    return log
+
+
+def test_signal_name_extracted_from_paren_form() -> None:
+    """圆括号形态必须抽出被包裹的信号名，而不是字面量 'signal'。"""
+    line = REAL_CANNOT_MAP_BODY
+    assert vg.extract_signal_name(line) == "VP_TIM4_VS_ClockSourceINT"
+
+
+def test_signal_literal_never_returned_as_name() -> None:
+    """字面量 `signal` / `pin` 一律视为"未解析"，不得作为信号名返回。"""
+    assert vg.extract_signal_name("Cannot map signal (FOO) on pin (BAR)") == "FOO"
+    for line in (
+        "Cannot map signal",
+        "Cannot map signal (",
+        "Cannot map signal on pin",
+    ):
+        assert vg.extract_signal_name(line) is None, line
+
+
+def test_signal_name_quoted_and_bare_forms() -> None:
+    """引号形态与裸写形态仍应正确抽取（不得被本次修复回归）。"""
+    assert vg.extract_signal_name('Cannot map "S_TIM3_CH1_ETR" on pin PB4') == "S_TIM3_CH1_ETR"
+    assert (
+        vg.extract_signal_name("Cannot map signal S_TIM3_CH1_ETR on pin PB4") == "S_TIM3_CH1_ETR"
+    )
+
+
+def test_allow_signal_works_on_real_paren_shape(tmp_path: Path) -> None:
+    """白名单必须对真实圆括号形态生效：降级为 warn 且 verdict 仍 pass。"""
+    log = write_cannot_map_log(tmp_path)
+    _, report = run_verify(
+        tmp_path,
+        log=log,
+        extra=("--allow-signal", "VP_TIM4_VS_ClockSourceINT"),
+    )
+    check = check_of(report, vg.CHECK_LOG_CANNOT_MAP)
+    assert check["status"] == "warn", check
+    assert report["verdict"] == "pass", report["verdict"]
+
+
+def test_allow_signal_literal_cannot_bypass_guard(tmp_path: Path) -> None:
+    """`--allow-signal signal` 绝不能放行真实命中（否则等于一键关掉 D5 守卫）。"""
+    log = write_cannot_map_log(tmp_path)
+    _, report = run_verify(tmp_path, log=log, extra=("--allow-signal", "signal"))
+    check = check_of(report, vg.CHECK_LOG_CANNOT_MAP)
+    assert check["status"] == "fail", check
+    assert report["verdict"] == "fail", report["verdict"]

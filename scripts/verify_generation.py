@@ -76,7 +76,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable, Sequence
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 #: 报告 schema 版本号；结构变更时必须递增（下游 T1.4 文档与 S1 场景按此消费）。
 SCHEMA = "platform32.verify_generation/2"
@@ -93,12 +93,14 @@ CHECK_MAIN_INIT_CALLED = "main_init_called"
 CHECK_MXPROJECT_ABS_PATH = "mxproject_abs_path"
 CHECK_MX_SCRIPT_ABS_PATH = "mx_script_abs_path"
 CHECK_SYSCALLS_PATH = "syscalls_path"
+CHECK_PINS_PRESENT = "pins_present"
 
 #: 输出顺序（便于人读与快照比对）。
 CHECK_ORDER: tuple[str, ...] = (
     CHECK_LOG_CANNOT_MAP,
     CHECK_MAIN_INIT_PRESENT,
     CHECK_MAIN_INIT_CALLED,
+    CHECK_PINS_PRESENT,
     CHECK_MXPROJECT_ABS_PATH,
     CHECK_MX_SCRIPT_ABS_PATH,
     CHECK_SYSCALLS_PATH,
@@ -147,7 +149,21 @@ _CANNOT_MAP_RE = re.compile(r"cannot\s+map", re.IGNORECASE)
 _OPTIONAL_ERROR_RE = re.compile(r"OptionalMessage_ERROR", re.IGNORECASE)
 #: 从 Cannot map 行里抽取信号名（CubeMX 多数情况下不加引号）。
 _QUOTED_SIGNAL_RE = re.compile(r"[\"'`]([A-Za-z0-9_./\\-]+)[\"'`]")
+#: 圆括号形态：``Cannot map signal (VP_TIM4_VS_ClockSourceINT) on pin (...)``。
+#: 这是 6.18.1 的真实输出形态（见 D29），必须独立成一支，否则后面的 ``_BARE_SIGNAL_RE``
+#: 会在 ``(`` 处回溯失败、退而把字面量 ``signal`` 当成信号名。
+_PAREN_SIGNAL_RE = re.compile(r"cannot\s+map\s+(?:signal\s+)?\(([^)]+)\)", re.IGNORECASE)
 _BARE_SIGNAL_RE = re.compile(r"cannot\s+map\s+(?:signal\s+)?([A-Za-z0-9_]+)", re.IGNORECASE)
+#: 语法字面量，不是信号名。命中即视为"未解析"，绝不能拿去参与 ``--allow-signal`` 匹配：
+#: 否则 ``--allow-signal signal`` 会静默放行所有圆括号形态，等于一键关掉 D5 守卫（D29.6）。
+_SIGNAL_LITERALS = frozenset({"signal", "pin", "on"})
+
+
+def _reject_literal(name: str | None) -> str | None:
+    """把语法字面量 ``signal`` / ``pin`` 判为未解析，返回 ``None``。"""
+    if name is None:
+        return None
+    return None if name.strip().lower() in _SIGNAL_LITERALS else name
 #: 盘符绝对路径（``D:\`` / ``C:/``）。用反向断言挡掉 ``http://``、``file:///``。
 _DRIVE_PATH_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]")
 #: ``.mx`` 脚本里的路径 token（``project path D:\a\b`` / ``config load "C:/x/y.ioc"``）。
@@ -338,12 +354,19 @@ def extract_signal_name(line: str) -> str | None:
     Returns:
         信号名，抽不到时返回 ``None``。
     """
+    paren = _PAREN_SIGNAL_RE.search(line)
+    if paren is not None:
+        found = _reject_literal(paren.group(1))
+        if found is not None:
+            return found
     quoted = _QUOTED_SIGNAL_RE.search(line)
     if quoted is not None:
-        return quoted.group(1)
+        found = _reject_literal(quoted.group(1))
+        if found is not None:
+            return found
     bare = _BARE_SIGNAL_RE.search(line)
     if bare is not None:
-        return bare.group(1)
+        return _reject_literal(bare.group(1))
     return None
 
 
@@ -485,7 +508,17 @@ def check_log_cannot_map(log_text: str, allow_signals: Sequence[str]) -> CheckRe
     blocking: list[tuple[int, str]] = []
     for lineno, line in hits:
         lowered_line = line.lower()
-        matched = next((orig for orig, low in allow_lower if low in lowered_line), None)
+        # 白名单匹配以"抽出的信号名"为准（精确、大小写不敏感）。
+        # 若仍拿整行做子串匹配，任何在句法里出现过的短词（如 ``signal``）都能一次放行
+        # 全部命中 —— 等于把白名单变成"一键关闭 D5 守卫"的开关（D29.6）。
+        # 只有抽不出名字时才退回子串匹配，保留对未知形态的白名单能力。
+        signal_name = extract_signal_name(line)
+        if signal_name is not None:
+            matched = next(
+                (orig for orig, low in allow_lower if low == signal_name.lower()), None
+            )
+        else:
+            matched = next((orig for orig, low in allow_lower if low in lowered_line), None)
         if matched:
             allowed_hits.append((lineno, line, matched))
         else:
@@ -646,6 +679,156 @@ def check_main_init_called(
     )
 
 
+def parse_expect_pins(raw: Sequence[str] | None) -> list[tuple[str, str]]:
+    """解析 ``--expect-pins``：``PIN=SIGNAL`` 列表，可重复、可逗号分隔。
+
+    Args:
+        raw: 原始参数值序列（如 ``["PB0=GPIO_Output", "PA5=GPIO_Output"]``）。
+
+    Returns:
+        ``[(PIN, SIGNAL), ...]``（PIN 统一大写，SIGNAL 保留原样；去重保序）。
+
+    Raises:
+        ValueError: 某一项不是 ``PIN=SIGNAL`` 形式。
+    """
+    result: list[tuple[str, str]] = []
+    if not raw:
+        return result
+    for item in raw:
+        for chunk in re.split(r"[,;\s]+", str(item)):
+            entry = chunk.strip()
+            if not entry:
+                continue
+            if "=" not in entry:
+                raise ValueError(f"--expect-pins 需要 PIN=SIGNAL 形式，收到：{entry!r}")
+            pin, _sep, signal = entry.partition("=")
+            pin = pin.strip().upper()
+            signal = signal.strip()
+            if not pin or not signal:
+                raise ValueError(f"--expect-pins 的 PIN 或 SIGNAL 为空：{entry!r}")
+            if (pin, signal) not in result:
+                result.append((pin, signal))
+    return result
+
+
+def read_ioc_signals(ioc_text: str) -> dict[str, str]:
+    """从 ``.ioc`` 文本里抽取 ``<PIN>.Signal`` 映射。
+
+    ``.ioc`` 是 Java properties 风格的行式文本（**不是 XML**，调研报告 C1），
+    这里只需要一条规则：``^<PIN>.Signal=<取值>``。
+
+    Args:
+        ioc_text: ``.ioc`` 全文。
+
+    Returns:
+        ``{"PB0": "GPIO_Output", ...}``（键统一大写；重复键取第一次出现）。
+    """
+    signals: dict[str, str] = {}
+    for line in ioc_text.splitlines():
+        content = line.strip()
+        if content.startswith("#") or "=" not in content:
+            continue
+        key, _sep, value = content.partition("=")
+        key = key.strip()
+        if not key.endswith(".Signal"):
+            continue
+        pin = key[: -len(".Signal")].strip().upper()
+        signals.setdefault(pin, value.strip())
+    return signals
+
+
+def port_of_pin(pin: str) -> str | None:
+    """从引脚名推导 GPIO 端口名：``PB0`` → ``GPIOB``，``PA13`` → ``GPIOA``。
+
+    Args:
+        pin: 引脚名（``PA0`` / ``PB12`` / ``PC13``）。
+
+    Returns:
+        端口宏前缀；不是 ``P<letter><number>`` 形式时返回 ``None``。
+    """
+    match = re.fullmatch(r"P([A-Za-z])(?:[0-9]{1,2})", pin.strip().upper())
+    if match is None:
+        return None
+    return f"GPIO{match.group(1).upper()}"
+
+
+def check_pins_present(
+    code: str, ioc_text: str | None, expect_pins: Sequence[tuple[str, str]]
+) -> CheckResult:
+    """引脚级检查：``.ioc`` 里的 ``<PIN>.Signal`` 是否真的写对了，且进了生成物。
+
+    存在理由：``cubemx_configure`` 可能回 ``ok=True``（上游判据只有"退出码 0 且无整行
+    ``KO``"）而 ``.ioc`` 实际没改；生成成功、``MX_GPIO_Init`` 本来就在（PC13 在用），
+    于是外设级检查全 pass —— 用户以为改动生效了，其实什么都没发生。这是 D5/H-6
+    的引脚级版本，比整只外设被丢更常见。
+
+    判定（任一不满足即 ``fail``）：
+
+    1. ``.ioc`` 里存在 ``<PIN>.Signal`` 且取值（大小写不敏感）与期望一致；
+    2. 该引脚所属端口的时钟使能出现在 ``main.c``（``__HAL_RCC_GPIOx_CLK_ENABLE()``）——
+       这一条才让"引脚真的进了生成物"可验证，而不只是"``.ioc`` 里写了个键"。
+
+    Args:
+        code: 已剥离注释的 ``main.c`` 源码。
+        ioc_text: ``.ioc`` 全文；``None`` 表示未提供（本项 ``skip``）。
+        expect_pins: ``[(PIN, SIGNAL), ...]``。
+
+    Returns:
+        检查结果。
+    """
+    if not expect_pins:
+        return CheckResult(
+            CHECK_PINS_PRESENT,
+            STATUS_SKIP,
+            "未提供 --expect-pins，跳过引脚级检查（v1.1 的外设级保证不含引脚增量）",
+        )
+    if not ioc_text:
+        return CheckResult(
+            CHECK_PINS_PRESENT,
+            STATUS_SKIP,
+            "传了 --expect-pins 但没给 --ioc，无法读取 <PIN>.Signal，跳过引脚级检查",
+        )
+
+    signals = read_ioc_signals(ioc_text)
+    problems: list[str] = []
+    satisfied: list[str] = []
+    for pin, signal in expect_pins:
+        actual = signals.get(pin.upper())
+        if actual is None:
+            problems.append(f"{pin}: .ioc 里没有 {pin}.Signal（期望 {signal}）")
+            continue
+        if actual.casefold() != signal.casefold():
+            problems.append(f"{pin}: .ioc 里 {pin}.Signal={actual}（期望 {signal}）")
+            continue
+        port = port_of_pin(pin)
+        if port is None:
+            satisfied.append(f"{pin}.Signal={actual}（引脚名非 P<字母><数字>，未做端口联动）")
+            continue
+        enable = f"__HAL_RCC_{port}_CLK_ENABLE"
+        if re.search(r"\b" + re.escape(enable) + r"\s*\(", code) is None:
+            problems.append(
+                f"{pin}: .ioc 写了 {pin}.Signal={actual}，但 main.c 里没有 {enable}()"
+                "（引脚没进生成物）"
+            )
+            continue
+        satisfied.append(f"{pin}.Signal={actual} + {enable}()")
+
+    if problems:
+        detail = (
+            f"{len(problems)}/{len(expect_pins)} 个期望引脚没有真正生效："
+            + "；".join(problems)
+        )
+        if satisfied:
+            detail += f"。已生效：{'；'.join(satisfied)}"
+        return CheckResult(CHECK_PINS_PRESENT, STATUS_FAIL, detail)
+
+    return CheckResult(
+        CHECK_PINS_PRESENT,
+        STATUS_PASS,
+        f"全部 {len(satisfied)} 个期望引脚都在 .ioc 与生成物中对上：{'；'.join(satisfied)}",
+    )
+
+
 def check_mxproject_abs_path(mxproject_text: str) -> CheckResult:
     """检查 ``.mxproject`` 是否含盘符绝对路径（换机即坏，模板 TOOLING §3.2）。
 
@@ -726,7 +909,17 @@ def normalize_win_path(raw: str) -> str:
     text = text.replace("/", "\\")
     text = re.sub(r"\\{2,}", r"\\", text)
     text = text.rstrip("\\")
-    return text.casefold()
+    # 折叠 `.` / `..`：`d:/a/b/../b` 与 `d:/a/b` 必须判同一目录，
+    # 否则会误报 fail（误报比漏报更伤）。
+    segments: list[str] = []
+    for segment in text.split("\\"):
+        if segment == ".":
+            continue
+        if segment == ".." and len(segments) > 1:
+            segments.pop()
+            continue
+        segments.append(segment)
+    return "\\".join(segments).casefold()
 
 
 def find_mx_scripts(project_root: str) -> list[str]:
@@ -957,6 +1150,8 @@ def verify_documents(
     expect: Sequence[str],
     allow_signals: Sequence[str] = (),
     project_root: str | None = None,
+    ioc_text: str | None = None,
+    expect_pins: Sequence[tuple[str, str]] = (),
     inputs: dict[str, str | None] | None = None,
 ) -> dict[str, object]:
     """对已读入内存的产物执行全部检查，返回报告字典。
@@ -972,6 +1167,8 @@ def verify_documents(
         allow_signals: 允许降级为 warning 的信号名（**生效值**，会写进
             ``inputs.effective_allow_signals``）。
         project_root: 工程根目录，用于扫描 ``.mx`` 脚本；``None`` 时该项 ``skip``。
+        ioc_text: ``.ioc`` 全文，引脚级检查用；``None`` 时 ``pins_present`` ``skip``。
+        expect_pins: ``[(PIN, SIGNAL), ...]`` 期望引脚（``--expect-pins``）。
         inputs: 报告 ``inputs`` 字段的补充路径。
 
     Returns:
@@ -983,6 +1180,7 @@ def verify_documents(
     log_result = check_log_cannot_map(log_text, allow_signals)
     present_result, resolved = check_main_init_present(code, definitions, expect)
     called_result = check_main_init_called(code, resolved, expect)
+    pins_result = check_pins_present(code, ioc_text, expect_pins)
     mxproject_result = check_mxproject_abs_path(mxproject_text)
     mx_script_result = check_mx_script_abs_path(project_root)
     syscalls_result = check_syscalls_path(log_text)
@@ -993,6 +1191,7 @@ def verify_documents(
             log_result,
             present_result,
             called_result,
+            pins_result,
             mxproject_result,
             mx_script_result,
             syscalls_result,
@@ -1012,9 +1211,9 @@ def verify_documents(
         "main_c": "",
         "mxproject": "",
         "project_root": project_root,
+        "ioc": None,
         "expect": list(expect),
-        # v1.2 预留：引脚级检查（`--expect-pins`）落地后这里才会非空。
-        "expect_pins": [],
+        "expect_pins": [f"{pin}={signal}" for pin, signal in expect_pins],
         "allow_signals": list(allow_signals),
         "tool": {"name": "verify_generation.py", "version": __version__},
     }
@@ -1143,6 +1342,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="期望外设清单，逗号分隔（如 GPIO,TIM4,USART2）；空串表示不检查外设",
     )
     parser.add_argument(
+        "--ioc",
+        default=None,
+        help=".ioc 路径（引脚级检查读 <PIN>.Signal 用；配 --expect-pins，不传则该项 skip）",
+    )
+    parser.add_argument(
+        "--expect-pins",
+        action="append",
+        default=None,
+        dest="expect_pins",
+        help=(
+            "期望引脚，形式 PIN=SIGNAL（如 PB0=GPIO_Output），可重复、可逗号分隔。"
+            "逐个校验 .ioc 的 <PIN>.Signal 且要求 main.c 出现 __HAL_RCC_GPIOx_CLK_ENABLE()"
+        ),
+    )
+    parser.add_argument(
         "--project-root",
         default=None,
         dest="project_root",
@@ -1192,12 +1406,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     expect = parse_expect(args.expect)
     allow_signals = parse_allow_signals(args.allow_signal)
+    try:
+        expect_pins = parse_expect_pins(args.expect_pins)
+    except ValueError as error:
+        print(f"[platform32][input-error] {error}", file=sys.stderr)
+        return EXIT_INPUT_ERROR
     project_root: str | None = os.path.abspath(args.project_root) if args.project_root else None
     inputs: dict[str, str | None] = {
         "log": os.path.abspath(args.log),
         "main_c": os.path.abspath(args.main_c),
         "mxproject": os.path.abspath(args.mxproject),
         "project_root": project_root,
+        "ioc": os.path.abspath(args.ioc) if args.ioc else None,
     }
 
     # 输入校验一律走退出码 2（与"核验不通过"的 1 区分开）。
@@ -1211,10 +1431,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return EXIT_INPUT_ERROR
+    if args.ioc and not os.path.isfile(args.ioc):
+        print(
+            f"[platform32][input-error] --ioc 指向的文件不存在：{args.ioc}",
+            file=sys.stderr,
+        )
+        return EXIT_INPUT_ERROR
     try:
         log_text = read_text(args.log)
         main_c_text = read_text(args.main_c)
         mxproject_text = read_text(args.mxproject)
+        ioc_text = read_text(args.ioc) if args.ioc else None
     except OSError as error:
         print(f"[platform32][input-error] 读取输入失败：{error}", file=sys.stderr)
         return EXIT_INPUT_ERROR
@@ -1226,6 +1453,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         expect=expect,
         allow_signals=allow_signals,
         project_root=project_root,
+        ioc_text=ioc_text,
+        expect_pins=expect_pins,
         inputs=inputs,
     )
 

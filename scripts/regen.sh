@@ -48,6 +48,7 @@ DRY_RUN=0
 REQUIRE_CLEAN=0
 DEFAULT_ALLOW=1
 ALLOW_SIGNALS=()
+EXPECT_PINS=()   # --expect-pins PIN=SIGNAL（可重复），透传给核验器
 
 log_info() { printf '[regen] %s\n' "$*" >&2; }
 log_warn() { printf '[regen][warn] %s\n' "$*" >&2; }
@@ -71,6 +72,8 @@ platform32-mcp / scripts/regen.sh —— 备份 → 前置检查 → CubeMX 生�
       --java <path>          java 可执行（默认 $ST_CUBEMX_JRE 或 C:/ST/STM32CubeMX/jre/bin/java.exe）
       --cube <path>          CubeMX 可执行（默认 $ST_CUBEMX_EXE 或 C:/ST/STM32CubeMX/STM32CubeMX.exe）
       --timeout <sec>        生成超时，最小 240（默认 300；单次生成实测约 60s）
+      --expect-pins <PIN=SIGNAL>  期望引脚（可重复/可逗号分隔，如 PB0=GPIO_Output），
+                             透传给核验器的引脚级检查 pins_present
       --allow-signal <sig>   传给核验器的 Cannot map 白名单（默认已含 VP_RIF_VS_RIF1，D8）
       --no-default-allow     不预置 D8 白名单
       --require-clean        .ioc 有未提交内容改动时直接退出 2（默认**允许**脏，失败从备份恢复）
@@ -123,6 +126,7 @@ while [ "$#" -gt 0 ]; do
     --cube)             CUBE_BIN="${2:-}"; shift 2 ;;
     --timeout)          TIMEOUT_SEC="${2:-}"; shift 2 ;;
     --allow-signal)     ALLOW_SIGNALS+=("${2:-}"); shift 2 ;;
+    --expect-pins)      EXPECT_PINS+=("${2:-}"); shift 2 ;;
     --no-default-allow) DEFAULT_ALLOW=0; shift ;;
     --require-clean)    REQUIRE_CLEAN=1; shift ;;
     --skip-generate)    SKIP_GENERATE=1; shift ;;
@@ -252,6 +256,11 @@ log_info "工程：${PROJECT_DIR}"
 log_info "期望外设：${EXPECT}"
 log_info "证据输出：${OUT_DIR}"
 log_info "生效 allowlist：${ALLOW_DISPLAY}（同时写进 verify.json 的 inputs.effective_allow_signals）"
+if [ "${#EXPECT_PINS[@]}" -gt 0 ]; then
+  log_info "期望引脚（${#EXPECT_PINS[@]} 项）：${EXPECT_PINS[*]}"
+else
+  log_info "期望引脚：未指定（pins_present 将 skip；引脚级改动无法由核验器保证）"
+fi
 
 # ---------------------------------------------------------------------------
 # 回滚：优先从备份恢复（默认允许脏 .ioc，git checkout 会抹掉用户编辑）
@@ -344,14 +353,18 @@ run_verify() {
     --log "$GEN_LOG"
     --main-c "$MAIN_C"
     --mxproject "$MXPROJECT"
+    --ioc "$IOC_FILE"
     --expect "$EXPECT"
     --project-root "$PROJECT_DIR"
     --json-out "$VERIFY_JSON"
     --report-md "$VERIFY_MD"
   )
-  local sig
+  local sig pin
   for sig in ${ALLOW_SIGNALS[@]+"${ALLOW_SIGNALS[@]}"}; do
     [ -n "$sig" ] && args+=(--allow-signal "$sig")
+  done
+  for pin in ${EXPECT_PINS[@]+"${EXPECT_PINS[@]}"}; do
+    [ -n "$pin" ] && args+=(--expect-pins "$pin")
   done
 
   if [ "$DRY_RUN" -eq 1 ]; then
