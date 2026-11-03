@@ -120,9 +120,9 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
   子串。这是防"用短词关掉守卫"（`--allow-signal signal` 不再放行全部圆括号形态）。
 - **`summary.notes`** 收集所有 `skip` 的原因（`"<check_id>: <detail>"`），是"skip 必须解释"的机读落点。
   **自检**：有 `skip` 而 `notes` 为空 = 实现退化，**报 issue**，不要手写补。
-- **`inputs.effective_allow_signals`** 是实际生效的白名单：直调为空、`regen.sh` 预置 D8。
-  两处默认值不同**是有意设计**（核验器纯净 / 封装层便利），差异靠这个字段可见。取参一律从 `inputs` 读。
-- JSON 全文、六项细则、`/1→/2` 迁移：`references/verify-contract.md`。
+- **`inputs.effective_allow_signals`** 是实际生效的白名单：直调为空、`regen.sh` 预置 D8。两处默认值不同**是有意设计**（核验器纯净 / 封装层便利），差异靠这个字段可见；取参一律从 `inputs` 读。
+- **版本自证**：`verify_generation.py --version` → `1.2.0 (schema platform32.verify_generation/2)`；本文的 7 项判据与 `--expect-pins` 即该版本行为。
+- JSON 全文、七项细则、`/1→/2` 迁移：`references/verify-contract.md`。
 
 ### 1.4 七项检查（`checks` 恒为 7 条，顺序固定）
 
@@ -144,11 +144,11 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
 
 #### 🔴 保证边界（最重要的一条免责声明）
 
-> **`verdict: pass` 的保证范围取决于你传了什么：**
-> - **外设级**（整只外设没被丢）：**总是**保证（第 2/3 项）。
-> - **引脚级**（在已有外设内部加一个引脚）：**仅当同时传 `--expect-pins` 与 `--ioc`** 才保证（第 4 项）；
->   不传 → 该项 `skip`，**引脚增量仍是真空**。
-> - **参数级**（`Prescaler` / `PinState` 是否生效）：**不保证**，v2 known limitation。
+> **`verdict: pass` 的保证范围取决于你传了什么（三段式，D30.2）：**
+> - **无条件保证**：外设级（整只外设没被丢，第 2/3 项）。
+> - **有条件保证**：引脚级——**仅当显式传 `--expect-pins`（+ `--ioc`）**；不传 → `skip`，**不冒充通过**。
+> - **明确不保证**：参数级与 `.ioc` 内部计数/排序自洽（`Prescaler` 是否进 `IPParameters`、
+>   `Mcu.PinsNb` 是否 +1），v2 known limitation。
 
 **为什么引脚级默认是真空**：`MX_GPIO_Init` 本来就有（PC13 在用），所以"加一个 PB0"时外设级检查全都
 不变红——`configure` 说成功、生成成功、核验 PASS，**而 `.ioc` 可能一个字都没改**。这就是第 4 项存在的

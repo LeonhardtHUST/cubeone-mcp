@@ -70,7 +70,7 @@
 | T1.6 | **场景 S1（改配置）**：G474 testbed 加 GPIO 输出/改 PinState：审计 → 备份 → 改配置 → 生成 → 核验 → `pio run` → `git diff` 汇报 → 按规范 commit | scenario-tester | T1.3、T1.4、T1.5 | 进行中 | L3 | 基线构建已落盘 `docs/logs/phase1/t1.6-s1-baseline-build.log`；改配置方案待定论（`cubemx_configure` 已证为脚本透传）。**DoD 补充（lead 采纳）**：`--project-root` 下**预期**出现 **1 条** `mx_script_abs_path: warn`（来源 `scripts/cubemx-init.mx:5` 的 `__PROJECT_DIR__` 占位符未替换），`verdict` 仍须 `pass`；**≥2 条 = 异常要查** |
 | T1.7 | **场景 S2（只读审计）**：`stm32-digital-clock` testbed 上 `cubemx_load` + `pio_build`，产出审计报告（引脚表、时钟树键值、构建结果） | scenario-tester | T1.5 | 已完成 | L1（构建 L3） | `docs/reports/t1.7-s2-audit-stm32-digital-clock.md` + `docs/logs/phase1/t1.7-s2-build.log` |
 | T1.8 | **场景 S3（负路径）**：故意写错信号名（去 `S_` 前缀）/ 漏 `IPParameters` 白名单 → 确认核验器能抓住静默丢弃 | scenario-tester | T1.3、T1.6 | 待开始 | L2 | 待补：两种注入各一份 FAIL 输出 → `docs/reports/` |
-| T1.9 | SKILL.md 定稿：吸收 S1–S3 实测教训 | skill-author | T1.6–T1.8 | 待开始 | L1 | 待补：定稿 commit |
+| T1.9 | SKILL.md 定稿：吸收 S1–S3 实测教训。**另含「v1.2 能力占位」**：`pins_present` 在 v1.2（能力代号，与脚本版本号 `1.2.0` 同名纯属巧合，二者须在文中区分）落地，定稿时要写清"传 `--expect-pins` 才有引脚级保证"这一档 | skill-author | T1.6–T1.8 | 待开始 | L1 | 待补：定稿 commit |
 
 ### Phase 2：烧录与串口（**本会话整体挂起**，接板后 1–2 天）
 
@@ -88,7 +88,7 @@
 | 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
 |---|---|---|---|---|---|---|
 | T3.1 | `.github/workflows/build.yml`：checkout → `pio run` matrix（G474VE + F103C8）→ 主机 gcc 回归 → 上传 ELF/HEX/map；**CubeMX 不进 CI**（ST 专有许可 + JVM 镜像成本，原因写注释） | ci-agent | T1.6 | 待开始 | L3 | 待补：Actions run URL + 两环境构建数字 |
-| T3.2 | README 定稿：架构图（三 server 职责 + 编排层）、快速上手（注册 MCP → 跑 S1）、已知限制 | skill-author | T1.9、T2.5 | 待开始 | L1 | 待补：`README.md`（当前 52 字节占位）+ 评审记录 |
+| T3.2 | README 定稿：架构图（三 server 职责 + 编排层）、快速上手（注册 MCP → 跑 S1）、已知限制 | release-engineer（`README.md` 独占；原 owner skill-author） | T1.9、T2.5 | 进行中 | L1 | 待补：`README.md`（当前 52 字节占位）+ 评审记录 |
 | T3.3 | SKILL.md 终版：合并 Phase 2 串口/烧录增补；附 L 等级自查清单 | skill-author | T2.4 | 待开始 | L1 | 待补：定稿 commit |
 | T3.4 | 选做评估（只读，产出报告不改代码）：① CubeMX 2.1.1 兼容性（同一 `.ioc` 双版本生成 diff）② CMake 流可行性 ③ strtt RTT 是否引入 | evaluator | 各自独立 | 待开始 | L1 | 待补：`docs/evaluations/`，每项给"做/不做/推迟"结论 |
 | T3.5 | 发布：打 tag `v0.1.0` + release notes（含验证等级汇总表：哪些 L3、哪些 L5） | platform-lead | T3.1–T3.3 | 待开始 | L1 | 待补：tag + release notes（remote 已在 T1.1 建好，无需再建） |
@@ -153,3 +153,6 @@ GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/platform32
 | 2026-11-03 | T1.6 DoD 补充：允许且**预期** 1 条 `mx_script_abs_path` warn（`__PROJECT_DIR__` 占位符），≥2 条即异常（lead 采纳，见 SKILL.md §1.4） | skill-author |
 | 2026-11-03 | T1.2、T1.3 置已完成（核验器 v1.1：6 check id / `blocking` / `--project-root`；regen.sh：`AskForMigrate` 生成前硬拦 + 失败回滚 + 成功后复位）；Phase 1 进度同步 | verifier-dev |
 | 2026-11-03 | T1.4 → `SKILL.md` v0.6.0（350 行）：手册拆分到 5 个 `references/` 页（commit `4e8f4ee`，无语义变更）+ 对齐 FROZEN `31fd1ee`（7 项含 `pins_present`、`--expect-pins`/`--ioc`、`--allow-signal` 精确匹配、保证边界改为"引脚级需显式传参"） | skill-author |
+| 2026-11-03 | `e20adba test(scripts)`：删除 `tests/test_verify_generation.py` 中同名重复定义造成的 **122 行死代码**（8 个函数各出现两次、前一份永不执行）；删 123 行、44 个唯一用例、**74 passed 不变** | verifier-dev |
+| 2026-11-03 | `67dd940 test(scripts)`：归档 v1.1 冻结版**独立第三方复核**（pytest 74、`.mx` 六态 6/6、`pins_present` 正反对照、`--allow-signal` 短词拦截） | env-agent |
+| 2026-11-03 | 采纳 lead 的 D30.1/D30.2：`--ioc` 恢复（`pins_present` 的必需搭档；"删参判据必须是没有消费者，而非当前没有"）；保证边界定稿为**三段式**（无条件保证 / 有条件保证 / 明确不保证）；T3.2 移交 `release-engineer`（`README.md` 独占） | skill-author |
