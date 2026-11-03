@@ -267,6 +267,10 @@ fi
 # ---------------------------------------------------------------------------
 rollback_project() {
   log_warn "开始回滚到生成前状态（从备份恢复，不动 git 历史）..."
+  # ioc_backup.py --restore 的退出码 2 有两种含义：参数/IO 错误，或**备份完整性校验失败**
+  # （.ioc.bak 与旁路摘要 .ioc.bak.sha256 不一致 → 拒绝还原、.ioc 不动）。
+  # 这里不区分、只判"非 0 即失败"，因为两者的正确续作相同：都别信备份，改用 git。
+  # 差异只体现在 stderr 的 [ioc_backup][integrity] 标记上，人读日志时据此定位。
   if "$PYTHON" "${SCRIPT_DIR}/ioc_backup.py" --project "$PROJECT_DIR" --restore >&2; then
     log_info "已从 ${IOC_BAK} 恢复 .ioc"
   else
