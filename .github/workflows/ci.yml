@@ -59,6 +59,48 @@ jobs:
       - name: 运行单元测试
         run: python -m pytest tests/ -q
 
+  # ── Node 层单测：MCP 封装层的门禁 ─────────────────────────────────────
+  # 为什么单开一个 job：lib/server.mjs 里的路径白名单、写策略、退出码映射是**安全门禁**，
+  # 而它们在 M1 之前零测试（审定发现 F4：「安全门禁在 JS 侧却零测试」）。
+  # 上面两个 job 验的是 Python 判据，验不到 checkPath / isExecFailure / validateArgs。
+  node:
+    name: node (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      # 18 是 package.json engines 的下限，必须守住：语法（如 ??=、structuredClone）
+      # 与 test runner 行为都可能在新版本才有，只看 20/22 绿等于没测下限。
+      fail-fast: false
+      matrix:
+        node-version: ["18", "20", "22"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+          # ⚠️ 不开 cache: npm —— 它要求仓内有 package-lock.json，而本仓的
+          # package-lock.json 被 .gitignore:49 忽略（不入库）。开了会在 setup 阶段直接红：
+          # "Dependencies lock file is not found ... package-lock.json"。
+
+      # ⚠️ 用 npm install 而不是 npm ci：npm ci **要求** package-lock.json 存在，
+      # 而本仓的 lock 是本地产物（.gitignore 忽略，见上）。这不是偷懒：
+      # @modelcontextprotocol/sdk 在 package.json 里是**精确版本** "1.32.2"（无 ^/~/范围），
+      # 所以 install 的解析结果仍然是确定的，不会出现 semver 漂移。
+      # 若将来决定把 lock 入库（会显著提升可复现性），这里应改回 npm ci + 开 cache。
+      - name: 安装依赖
+        run: npm install --no-audit --no-fund
+
+      # 传**显式文件**（由 shell glob 展开），不传目录 —— 实测结论（2026-11-03）：
+      #   `node --test <dir>` 在 Node 18.20.8 上会递归展开、在 Node 22.22.2（Windows）上
+      #   却把目录当模块加载并报 MODULE_NOT_FOUND。同一份 workflow 要在 18/20/22 三档跑，
+      #   目录参数因此不可移植；`node --test <file...>` 两档都实测通过。
+      # 用 glob 而不是写死 server.test.mjs：QA 以后加文件不会被静默漏测。
+      # 若 glob 无匹配，bash 会把字面量传给 node → 报错判红，不会假装绿。
+      # 本 job 不跑 e2e（tools/npm_mcp_handshake.mjs 要真实 CubeMX 素材与 .ioc，仅本地跑）。
+      - name: Node 层单测
+        run: node --test tests/node/*.test.mjs
+
   # ── 静态检查 + 冒烟：脚本连语法都不对时，上面的用例可能压根没跑起来 ──────
   lint:
     name: 脚本检查
