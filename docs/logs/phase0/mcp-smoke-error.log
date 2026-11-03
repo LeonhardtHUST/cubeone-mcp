@@ -1,0 +1,80 @@
+===== MCP 工具调用冒烟自检 (T0.4) — 负向错误响应 (3 条失败路径) =====
+# cube server 正常启动并握手（9 个工具可枚举），三个子情形都让 cubemx_load 真的被调用：
+#   [越界]     .ioc=C:\Users\Leon\AppData\Local\Temp\no-such-project.ioc（临时目录、不存在）→ _check_path 按白名单拒绝 → 期望 isError=True
+#   [缺失]     .ioc=D:\Projects\.mcp-smoke-tmp\no-such-project.ioc（白名单内、不存在）→ _ioc_path 抛「.ioc 文件不存在」→ 期望 isError=True
+#   [执行失败] .ioc=D:\Projects\.mcp-smoke-tmp\bad-project.ioc（白名单内、存在、内容是垃圾）→ CubeMX 弹模态框挂住 → 超时强杀 → 期望 isError=False 但文本以 [FAIL 开头
+# 目的：实测 ok = (not isError) and (文本不是失败形态)。只看 isError 会把 [执行失败] 判成通过（假绿）。
+# 垃圾 .ioc 与其父目录在运行期创建、finally 删除；环境仅调整 ST_CUBEMX_TIMEOUT=25（让挂在模态框上的 CubeMX 快速被强杀，不必真等 5 分钟），ALLOWED_ROOTS 保持原样。
+# 预期：三条子情形均判 FAIL、末行 VERDICT: SMOKE FAIL、exit=1。
+time     : 2026-11-03T15:06:55
+mode     : negative-error
+runner   : C:\Users\Leon\AppData\Roaming\uv\tools\vscode-cube-mcp\Scripts\python.exe
+script   : D:\Projects\GitHub\platform32-mcp\tools\mcp_smoke.py
+script_sha256 : 43e0641cfb71912ca60cdbd4940f5ba0ab4e83935bb3f3c907f8816d3b5f63f9
+repo_root: D:\Projects\GitHub\platform32-mcp
+mcp_sdk  : 2.2.0
+cwd      : D:\Projects\GitHub\platform32-mcp
+
+--- A. vscode-cube-mcp ---
+INFO ioc_fake_path          : C:\Users\Leon\AppData\Local\Temp\no-such-project.ioc | exists=False（期望 False） | in_testbeds=False（期望 False）
+INFO ioc                    : C:\Users\Leon\AppData\Local\Temp\no-such-project.ioc（负向错误响应子情形 [越界]：该文件故意不存在，期望 isError=True）
+OK   entry                  : {"command": "C:\\Users\\Leon\\.local\\bin\\vscode-cube-mcp.exe", "args": [], "env": {"ST_CUBEMX_EXE": "C:\\ST\\STM32CubeMX\\STM32CubeMX.exe", "ST_CUBEMX_ALLOWED_ROOTS": "D:\\Projects;C:\\Users\\Leon\\WorkBuddy", "ST_CUBEMX_TIMEOUT": "25"}}
+OK   tools_count            : 9
+OK   cubemx_help            : 230ms | isError=False | text_fail=False | chars=2148 | timeout=120s
+     preview: Vscode_cube_mcp — 封装 STM32CubeMX 命令行(-q)的 MCP server ============================================================= 【能力边界(先读)】 本工具只负责 **.ioc 工程配置与 HAL 骨架生成**： 引脚 / 外设 / 时钟 / 工具链的配置，以及 generate 出可编译的 H…
+
+--- A-1. [越界] .ioc 在临时目录、不存在 → 期望 isError=True ---
+FAIL cubemx_load[越界]      : server 返回 isError=True [11ms | isError=True | text_fail=False | chars=32 | timeout=120s | server 返回 isError=True]
+     preview: Error executing tool cubemx_load
+
+--- A-2. [缺失] .ioc 在白名单内、不存在 → 期望 isError=True ---
+INFO missing_ioc            : D:\Projects\.mcp-smoke-tmp\no-such-project.ioc | exists=False（期望 False） | in_testbeds=False（期望 False）
+FAIL cubemx_load[缺失]      : server 返回 isError=True [5ms | isError=True | text_fail=False | chars=32 | timeout=120s | server 返回 isError=True]
+     preview: Error executing tool cubemx_load
+
+--- A-3. [执行失败] .ioc 在白名单内、存在、内容是垃圾 → 期望 isError=False ---
+INFO bad_ioc                : D:\Projects\.mcp-smoke-tmp\bad-project.ioc | in_testbeds=False（期望 False） | 118 字节垃圾内容
+INFO bad_ioc_preexisting    : D:\Projects\.mcp-smoke-tmp 已存在，先清扫上一轮残留
+OK   bad_ioc_preswept       : 已删除 D:\Projects\.mcp-smoke-tmp（bad exists=False，dir exists=False，等待 3.4s）
+OK   bad_ioc_written        : 118 字节
+FAIL cubemx_load[执行失败]  : isError=False 但返回文本判失败：返回文本以 [FAIL 开头（[FAIL exit=None]） [26691ms | isError=False | text_fail=True | chars=54 | timeout=120s | isError=False 但返回文本判失败：返回文本以 [FAIL 开头（[FAIL exit=None]）]
+     preview: [FAIL exit=None] TIMEOUT: CubeMX 子进程超过 25s 被终止(已强杀进程树)
+OK   bad_ioc_cleaned        : 已删除 D:\Projects\.mcp-smoke-tmp（bad exists=False，dir exists=False，等待 48.3s）
+INFO error_branch           : cubemx_load[越界] 真的发出了 tools/call：isError=True | text_failed=False | 判据 (not is_error) and not text_failed 得 ok=False
+INFO raw[:500]              : cubemx_load[越界] = Error executing tool cubemx_load
+INFO error_branch           : cubemx_load[缺失] 真的发出了 tools/call：isError=True | text_failed=False | 判据 (not is_error) and not text_failed 得 ok=False
+INFO raw[:500]              : cubemx_load[缺失] = Error executing tool cubemx_load
+INFO error_branch           : cubemx_load[执行失败] 真的发出了 tools/call：isError=False | text_failed=True | 判据 (not is_error) and not text_failed 得 ok=False
+INFO raw[:500]              : cubemx_load[执行失败] = [FAIL exit=None] TIMEOUT: CubeMX 子进程超过 25s 被终止(已强杀进程树)
+SKIP ioc_readonly           : 负向错误响应模式：.ioc 故意不存在，没有调用前哈希可比对
+
+--- B. platformio.mcp ---
+OK   entry                  : {"command": "C:\\Users\\Leon\\.pyenv\\pyenv-win\\shims\\uvx.BAT", "args": ["platformio.mcp"], "env": {"PLATFORMIO_MCP_POLICY": "build_only", "PLATFORMIO_MCP_PIO": "C:\\Users\\Leon\\.platformio\\penv\\Scripts\\pio.exe"}}
+OK   pio_exe                : C:\Users\Leon\.platformio\penv\Scripts\pio.exe
+OK   tools_count            : 40
+OK   pio_system_info        : 4441ms | isError=False | text_fail=False | chars=628 | timeout=120s
+     preview: { "ok": true, "summary": "PlatformIO Core 6.2.0 at C:\\Users\\Leon\\.platformio\\penv\\Scripts\\platformio.exe (python 3.11.7-final.0, 2 platforms installed). Policy: build_only.", "server_version": …
+OK   pio_list_devices       : 2274ms | isError=False | text_fail=False | chars=2047 | timeout=120s | 已枚举到设备
+     preview: { "ok": true, "summary": "8 serial port(s). No port looks like a USB dev board; check the cable (data, not charge-only) and drivers.", "devices": [ { "port": "COM21", "description": "蓝牙链接上的标准串行 (COM2…
+
+--- 汇总 ---
+OK   cubemx_help            : 通过
+FAIL cubemx_load[越界]      : server 返回 isError=True
+FAIL cubemx_load[缺失]      : server 返回 isError=True
+FAIL cubemx_load[执行失败]  : isError=False 但返回文本判失败：返回文本以 [FAIL 开头（[FAIL exit=None]）
+OK   pio_system_info        : 通过
+OK   pio_list_devices       : 通过
+FAIL 必需调用通过           : 3 / 6（缺：cubemx_load[越界]、cubemx_load[缺失]、cubemx_load[执行失败]）
+INFO 预期                   : 负向错误响应模式：三条子情形 [越界]（isError=True）、[缺失]（isError=True）、[执行失败]（isError=False 但文本 [FAIL…]）都应判 FAIL，故本轮 VERDICT 应为 SMOKE FAIL、exit=1
+INFO 判据                   : ok = (not isError) and not 文本失败形态（文本以 [FAIL 开头，或存在整行 KO）；cubemx_load 另需 .ioc 的 sha256 不变；pio_list_devices 允许空结果，调用成功即通过
+INFO 耗时                   : vscode-cube-mcp/cubemx_help = 230ms
+INFO 耗时                   : vscode-cube-mcp/cubemx_load[越界] = 11ms
+INFO 耗时                   : vscode-cube-mcp/cubemx_load[缺失] = 5ms
+INFO 耗时                   : vscode-cube-mcp/cubemx_load[执行失败] = 26691ms
+INFO 耗时                   : platformio.mcp/pio_system_info = 4441ms
+INFO 耗时                   : platformio.mcp/pio_list_devices = 2274ms
+INFO 失败项                 : cubemx_load[越界]: server 返回 isError=True
+INFO 失败项                 : cubemx_load[缺失]: server 返回 isError=True
+INFO 失败项                 : cubemx_load[执行失败]: isError=False 但返回文本判失败：返回文本以 [FAIL 开头（[FAIL exit=None]）
+
+VERDICT: SMOKE FAIL

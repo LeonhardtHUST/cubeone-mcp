@@ -367,6 +367,45 @@ NOISE_RE = re.compile(
 
 - **理由**：两段式的"引脚级"会让人以为"跑一次就有"，而实际需要声明期望引脚。三段式把"条件"显式化，使用者在报告里就能看出自己拿的是哪一档。
 
+### D31 · MCP 工具失败时 `isError` 为 `False`——"返回值说成功、实际失败"第三例（实测）
+
+#### 31.1 实测证据（lead 直连 MCP server 探针，非转述）
+
+构造：在 `ALLOWED_ROOTS` 内放一个**存在、后缀 `.ioc`、内容为垃圾**的文件，`ST_CUBEMX_TIMEOUT=25`，调用 `cubemx_load`。
+
+```
+elapsed_s     = 26.2 s          ← 被 25s 超时杀掉，说明期间一直卡着
+isError       = False           ← 注意
+text          = "[FAIL exit=None]\nTIMEOUT: CubeMX 子进程超过 25s 被终止(已强杀进程树)"
+failed_by_text= True
+judge_ok      = False           ← 仅当判据含文本检查时才为 False
+```
+
+⇒ **`ok = not is_error` 会把一次彻底失败的调用判成"通过"。** 这是本项目抓到的第三例同型缺陷：
+1. `set ip parameters` 回 `OK` 但 `.ioc` 一字未改（D25）
+2. `git status` 报 8 个改动、实际 2 个（D22）
+3. **本条：`isError=False` 但工具没成功**
+
+#### 31.2 根因：CubeMX 对无效 `.ioc` 弹**模态对话框**
+
+用户提供的截图显示：加载垃圾 `.ioc` 时 CubeMX 弹出 `Load Project — Not a valid ioc file — [OK]`。
+
+- 无头 `-q` 跑到这里**不会返回**，而是挂在对话框上等人点 OK
+- 直到 `ST_CUBEMX_TIMEOUT` 把进程树强杀 → `_run_script` 得 `exit_code=None`、`ok=False`
+- 但 server 仍**以正常字符串返回** `"[FAIL exit=None]…"`，**不置 `isError`**
+
+#### 31.3 决策
+
+1. **`tools/mcp_smoke.py` 的判据必须改**：`ok = (not is_error) and not failed_by_text`，其中
+   `failed_by_text = text.lstrip().startswith("[FAIL") or any(ln.strip() == "KO" for ln in text.splitlines())`。
+   - `startswith("[FAIL")` 不用子串：成功是 `[OK exit=0]`
+   - `KO` 只认**整行等于**（与 server 内部判据一致）
+2. **任何消费 MCP 返回值的一方都不能只看 `isError`**。这条要写进 `references/capability-boundary.md` 与 `pitfalls.md`：**MCP 层的 `isError` 只覆盖参数校验类失败，不覆盖工具执行失败。**
+3. 无效 `.ioc` 会导致 25–300s 阻塞，排障时先想到"是不是弹了对话框"，别当成"生成慢"。
+
+#### 31.4 影响面（重要）
+`cubemx_load` / `cubemx_configure` / `cubemx_generate` 失败时都走同一条 `return f"[{'OK' if r['ok'] else 'FAIL'} exit=…]"` 路径，**都不置 `isError`**。所以"看 isError 判成败"这个直觉在 vscode-cube-mcp 上整体不成立，不只是 `cubemx_load`。
+
 ---
 
 ## 后续决策追加区
