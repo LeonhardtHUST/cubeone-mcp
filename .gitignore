@@ -46,7 +46,9 @@ venv/
 
 # ── npm / MCP server ─────────────────────────────────────────
 node_modules/
-package-lock.json
+# package-lock.json **入库**（C2.1，2026-11-04 起）：CI 的 `npm ci` 与 `cache: npm`
+# 都要求仓内有 lock；lock 不在库时依赖树只靠 package.json 的精确版本保证，多一层
+# 传递依赖（@modelcontextprotocol/sdk 一支 95 包）就没有校验依据了。
 
 # ── 编辑器与系统 ─────────────────────────────────────────────
 .vscode/
@@ -60,3 +62,14 @@ desktop.ini
 # 不靠提交日志文件。已在 index 中的旧文件用 `git rm --cached` 摘除。
 docs/logs/**/*-pytest.log
 docs/logs/**/pytest-*.log
+
+# pytest-cov 的产物（C2.2 起）：`.coverage` 是本地二进制库，`coverage.xml` / `htmlcov/`
+# 是报告输出。三者都是**每次跑都变**的本地文件；覆盖率数字以 CI 日志为准，不入库。
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# `pytest --basetemp=.pytest-tmp-X` 会在仓根留下临时工程（README FAQ 推荐用干净 basetemp 跑）。
+# 这类目录是测试脚手架，不该进库：忽略掉，避免 `git add -A` 顺手带走一堆假工程。
+.pytest-tmp-*/

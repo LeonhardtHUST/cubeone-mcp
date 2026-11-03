@@ -10,7 +10,9 @@
 #      验证不了"生成物是否正确"这个本项目的核心命题。
 #      ⇒ L3（pio run）与 L5（实板）证据不来自 CI。
 #
-# 做什么：单元测试（pytest 矩阵）+ 脚本静态检查 + 脚本可执行性冒烟。
+# 做什么：Python 单测（3.11/3.13 双档 + 覆盖率回退底线）、Node 单测（18/20/22 三档）、
+# Windows 真机 job（win32 分支唯一真跑处）、MCP 工具通道冒烟（fixtures 版）、
+# 脚本静态检查 + 脚本文档账目检查。
 # 本流水线全绿只说明"脚本与核验器的逻辑没退化"，不说明"某个 .ioc 改对了"。
 # 验证等级见 README「验证等级」一节。
 
@@ -31,7 +33,7 @@ permissions:
   contents: read
 
 jobs:
-  # ── 单元测试：74 个用例覆盖核验器、.ioc 读写、regen.sh 前置检查 ──────────
+  # ── 单元测试：核验器、.ioc 读写、regen.sh 前置检查 ─────────────────────
   pytest:
     name: pytest (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -50,19 +52,36 @@ jobs:
 
       # tests/ 只用 pytest 一个第三方依赖（scripts/ 全部是标准库）。
       # 版本钉死到本机实测通过的 9.2.0，避免 pytest 大版本升级把用例判据改掉。
+      #
+      # pytest-cov（C2.2）：**测试工具链**，不是运行时依赖 —— scripts/ 依旧是纯标准库、
+      # 装不上任何 pip 包也能跑。这条边界见 README「仓库结构」的声明。
+      # 版本同样钉死：coverage 的统计口径（哪些行算"可执行"）跨版本会变，
+      # 不钉的话一次工具升级就可能让下面的 fail-under 无端翻红。
       - name: 安装测试依赖
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "pytest==9.2.0"
+          python -m pip install "pytest==9.2.0" "pytest-cov==7.0.0"
 
       # conftest.py 已把 scripts/ 加进 sys.path，工作目录用仓库根即可，不需要 PYTHONPATH。
-      - name: 运行单元测试
-        run: python -m pytest tests/ -q
+      #
+      # 覆盖率：**只防回退，不追指标**（C2.2）。
+      #   · 基线实测（2026-11-04，本机 win32，Python 3.11.9 与 3.13.14 两档同值）：
+      #     TOTAL 37%（ioc_backup 29% / ioc_field 40% / verify_generation 39%）。
+      #   · 底线取 36%（基线 -1pp）：只允许统计噪音级的漂移，任何"函数被删了却没补测试"
+      #     都会撞线。
+      #   · ⚠️ 这个数字**低估**了真实覆盖面：多数用例是**用子进程**调脚本的（`python scripts/xxx.py …`），
+      #     子进程内的执行不计入 coverage。所以不要拿它当"覆盖率只有 37%"读，
+      #     更不要为了刷数字去改测试的调用方式（那是为指标服务，不是为质量服务）。
+      - name: 运行单元测试（含覆盖率回退底线）
+        run: |
+          python -m pytest tests/ -q \
+            --cov=scripts --cov-report=term-missing:skip-covered \
+            --cov-fail-under=36
 
   # ── Node 层单测：MCP 封装层的门禁 ─────────────────────────────────────
   # 为什么单开一个 job：lib/server.mjs 里的路径白名单、写策略、退出码映射是**安全门禁**，
   # 而它们在 M1 之前零测试（审定发现 F4：「安全门禁在 JS 侧却零测试」）。
-  # 上面两个 job 验的是 Python 判据，验不到 checkPath / isExecFailure / validateArgs。
+  # pytest 验的是 Python 判据，验不到 checkPath / isExecFailure / validateArgs。
   node:
     name: node (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
@@ -79,17 +98,16 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
-          # ⚠️ 不开 cache: npm —— 它要求仓内有 package-lock.json，而本仓的
-          # package-lock.json 被 .gitignore:49 忽略（不入库）。开了会在 setup 阶段直接红：
-          # "Dependencies lock file is not found ... package-lock.json"。
+          # lock 已入库（C2.1），故可以开缓存：命中后 `npm ci` 只需解包，不再访问 registry。
+          # 缓存键含 lock 的 hash，lock 一变自动重建。
+          cache: npm
 
-      # ⚠️ 用 npm install 而不是 npm ci：npm ci **要求** package-lock.json 存在，
-      # 而本仓的 lock 是本地产物（.gitignore 忽略，见上）。这不是偷懒：
-      # @modelcontextprotocol/sdk 在 package.json 里是**精确版本** "1.32.2"（无 ^/~/范围），
-      # 所以 install 的解析结果仍然是确定的，不会出现 semver 漂移。
-      # 若将来决定把 lock 入库（会显著提升可复现性），这里应改回 npm ci + 开 cache。
+      # 用 `npm ci`（C2.1 起）：lock 已在库（`package-lock.json` 于 2026-11-04 入库），
+      # 于是可以拿到**可复现**的依赖树 —— install 与 ci 的区别就在"安的必须与 lock 完全一致"，
+      # 顺带在 lock 与 package.json 不一致时立刻报错，而不是默默装出一个新树。
+      # （历史：M1 期间 lock 被 .gitignore:49 忽略，只能用 npm install；那条限制已解除。）
       - name: 安装依赖
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       # 传**显式文件**（由 shell glob 展开），不传目录 —— 实测结论（2026-11-03）：
       #   `node --test <dir>` 在 Node 18.20.8 上会递归展开、在 Node 22.22.2（Windows）上
@@ -97,8 +115,77 @@ jobs:
       #   目录参数因此不可移植；`node --test <file...>` 两档都实测通过。
       # 用 glob 而不是写死 server.test.mjs：QA 以后加文件不会被静默漏测。
       # 若 glob 无匹配，bash 会把字面量传给 node → 报错判红，不会假装绿。
-      # 本 job 不跑 e2e（tools/npm_mcp_handshake.mjs 要真实 CubeMX 素材与 .ioc，仅本地跑）。
+      - name: Node 层单测（18 / 20）
+        if: matrix.node-version != '22'
+        run: node --test tests/node/*.test.mjs
+
+      # C1.3：覆盖率**只在 22 档**开（`--experimental-test-coverage` 在 18 上不一定有），
+      # 且**只报告不设门槛** —— 先让数字稳定出现几轮，再谈底线。
+      # 拍脑袋设阈值的结果通常是：为过线去测 getter，覆盖率涨了、缺陷没少。
+      - name: Node 层单测 + 覆盖率报告（22，不设门槛）
+        if: matrix.node-version == '22'
+        run: node --test --experimental-test-coverage tests/node/*.test.mjs
+
+      # ── MCP 工具通道冒烟（C1.2）────────────────────────────────────────
+      # 只跑 22 档：验的是 server 的行为，不是 Node 版本差异，跑三遍纯浪费。
+      # 素材来自**入库的** tests/fixtures/e2e/board.ioc（T4/T5），不再依赖 gitignored 的 testbeds。
+      # **不带 `--require-materials`**：T6 需要"CubeMX 原始日志 + 真实工程 main.c/.mxproject"三者自洽，
+      # 手工拼假素材极容易拼出 `verdict=pass` 的假绿，所以 T6 在 CI 上如实记 SKIP（见脚本注释）。
+      # 期望形态：`pass=11 fail=0 skip=1`；`SKIPPED` 行会点名是哪一项，不会被读成通过。
+      - uses: actions/setup-python@v6
+        if: matrix.node-version == '22'
+        with:
+          # 冒烟要 spawn Python 跑三个脚本；显式装一个，别赌 runner 镜像里的默认解释器。
+          python-version: "3.13"
+
+      - name: MCP 工具通道冒烟（fixtures 版，允许 SKIP）
+        if: matrix.node-version == '22'
+        env:
+          CUBEONE_PYTHON: python
+        run: node tools/npm_mcp_handshake.mjs --ci
+
+  # ── Windows 真机 job（C1.1）──────────────────────────────────────────
+  # **为什么必须有这个 job**：win32 专属分支在 ubuntu 上全是 skip，等于零覆盖——
+  #   · `checkPath` 的大小写归一（Windows 路径大小写不敏感，`D:\Proj` 与 `d:\proj` 是同一处）；
+  #   · junction（`mklink /J`）绕出白名单的拦截（R-C2 的核心用例）；
+  #   · `path.delimiter`（`;` vs `:`）决定的 `CUBEONE_ALLOWED_ROOTS` 拆分；
+  #   · `regen.sh` 相关用例需要 Git Bash（ubuntu 天然有，Windows 上要靠 runner 预装的 Git for Windows）。
+  # 只跑一遍（3.13 / Node 22），不做矩阵：这里验的是"平台分支对不对"，不是版本组合。
+  windows:
+    name: windows（win32 分支唯一真跑处）
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: 安装测试依赖
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pytest==9.2.0"
+
+      # 与 ubuntu 的 pytest job 同命令，不开覆盖率：覆盖率口径按 ubuntu 定，两平台各算一套
+      # 只会制造"哪个才算基线"的争论。
+      - name: 运行单元测试
+        run: python -m pytest tests/ -q
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci --no-audit --no-fund
+
+      # ⚠️ `shell: bash` 是必须的，不是风格选择：Windows 上默认 shell 是 pwsh，
+      # **pwsh 不展开 glob**，`tests/node/*.test.mjs` 会被当字面量传给 node →
+      # MODULE_NOT_FOUND（这正是 M1 期间在真机上踩到的形态）。
+      # windows-latest 预装 Git for Windows，bash 可用。
       - name: Node 层单测
+        shell: bash
         run: node --test tests/node/*.test.mjs
 
   # ── 静态检查 + 冒烟：脚本连语法都不对时，上面的用例可能压根没跑起来 ──────
@@ -107,12 +194,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # ⚠️ 本 job **故意**拉全历史（fetch-depth: 0），与 pytest / node job 不同：
+      # ⚠️ 本 job **故意**拉全历史（fetch-depth: 0），与 pytest / node / windows job 不同：
       #   看板一致性校验的判据③（发布一致性）依赖 `git tag`——打了 v0.6.*/v0.7.* 的 tag
       #   就必须能在看板上看到 T3.5 已记账。checkout 默认 fetch-depth: 1 且不拉 tag，
       #   那样该判据会**静默降级成 note**（等于加了一个在 CI 里从不生效的检查，正是本项目
       #   反复强调的"静默跳过等于假装检查过"）。代价只有本 job 多克隆一些历史。
-      #   pytest / node job 不需要 tag，故保持默认浅克隆，不跟着全量拉。
+      #   pytest / node / windows job 不需要 tag，故保持默认浅克隆，不跟着全量拉。
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
@@ -166,6 +253,12 @@ jobs:
       # 而步骤**仍然绿**——所以那条 note 出现在 CI 日志里就是配置被改坏的信号，别当正常输出。
       - name: 看板一致性校验（TASKBOARD ↔ 快照 ↔ 证据路径）
         run: python tools/check_taskboard.py
+
+      # 版本轴 / 发布收口校验（C2.3）——**故意不挂 CI**，只在此处留一句说明，免得下一个人以为漏了。
+      #   `tools/check_release.py` 的判据①要求"最新 tag == package.json == SKILL.md == README 两处"，
+      #   而本仓的正常状态是**长期存在未发版改动**（改了代码但还没打 tag）——那种状态下判据①
+      #   本来就会红。若挂进 CI，每次 push 都会红，红灯随即失去信息量（本项目最反对的形态）。
+      #   正确用法：**发布前手动跑**，作为 GATE-3.1 证据包的一项。SOP 见 docs/DECISIONS.md D35。
 
       # 冒烟：这几个脚本都是纯标准库、不碰 CubeMX，能在 ubuntu-latest 上真跑通。
       # 目的是防"文件还在但入口坏了"这类只有到用户机器上才发现的退化。
