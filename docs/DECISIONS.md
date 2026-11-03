@@ -427,9 +427,14 @@ judge_ok      = False           ← 仅当判据含文本检查时才为 False
 需要追溯"当时到底叫什么"时，看 `a8c1621` 之前的 git 历史即可——**变更记录在版本库里，不该靠正文里的化石来保存**。
 
 #### 32.3 影响
-- 旧的 GitHub 地址会重定向到新仓库名（GitHub 自动行为），已有的 `git remote` 需手动更新
-- 本地克隆目录名仍是 `platform32-mcp`，与仓库名不一致；如需一致，重命名目录后重开工作区
-- 已发布的 `v0.1.0` / `v0.1.1` 两个 tag 与 release 不受影响（tag 与仓库名无关）
+- 旧的 GitHub 地址会重定向到新仓库名（GitHub 自动行为），已有的 `git remote` 需手动更新（本仓已改为 HTTPS + `gh` 凭据）
+- **本地克隆目录名仍是 `platform32-mcp`**：改名时被运行中的 IDE 占用（`Device or resource busy` / `item is in use`），Bash 与 PowerShell 两种方式均失败。需**关闭工作区后**手动执行：
+  ```
+  cd D:\Projects\GitHub
+  mv platform32-mcp cubeone-mcp
+  ```
+  在改名完成前，证据里出现的 `D:\Projects\GitHub\cubeone-mcp\...` 是**按新名书写**的目标路径，本机尚未存在；换机克隆时按新名落地即自然一致
+- 两个 release 的**标题与正文**已同步改为 `cubeone-mcp v0.1.x`（tag 名不变，tag 与仓库名无关）
 
 ---
 
