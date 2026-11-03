@@ -4,7 +4,7 @@
 > 上游：`docs/2026-11-03-agent-team-plan.md`（下称"计划"）、`docs/2026-11-03-execution-research.md`（下称"调研报告"）。
 > 交接协议见计划 §5.2：新 Agent 入场按 `本文件` → `docs/DECISIONS.md` → 计划对应 Phase 节 的顺序读，即可无缝接手。
 
-最后更新：2026-11-03 22:40 · 更新者：software-engineer（**M3 机制固化**：新增 `tools/check_taskboard.py` 并入 CI、D34 入册、批次表补 M3 行并**修好两处被脚本抓出的真缺陷**——M2 行被空行拆出表外、§4 快照缺「阻塞」列）
+最后更新：2026-11-04 00:12 · 更新者：lead（**M2 收口与 0.7.0 三证回填**：M2 置已完成、0.7.0 tag/Release/npm 三证落行、GATE-3.1 补记第二次正规执行；M3 批次行与两次首跑缺陷入册）
 
 ---
 
@@ -146,7 +146,7 @@
 | 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
 |---|---|---|---|---|---|---|
 | M1 | 接缝修复 R-B1–R-B6 + Node 测试基建 R-D1/R-D2 + R-C1 第一步 + 版本 bump **0.6.2** | software-engineer（实现）/ software-qa-engineer（单测） | M0（D33 在册） | 已完成（三证齐全） | L2（本地四连验 + CI 全绿） | **发布三证（2026-11-03 22:04）**：tag `v0.6.2`（`b8f1857`，三处版本同值 0.6.2）→ GitHub Release `cubeone-mcp v0.6.2`（正文入库 `docs/releases/2026-11-03-v0.6.2.md`）→ npm `cubeone-mcp@0.6.2`（`2026-11-03T14:04:53Z`，Trusted Publisher，17 files / 82.1 kB）→ 本行回填。**CI**：run `41649454775` 全绿 6 job（pytest 3.11/3.13 各 **74 passed**；node 18/20/22 各 **31 passed / 1 skipped**，skip 为仅 win32 有意义的大小写用例；脚本检查绿）。**`lib/server.mjs` 六项**：R-B1 退出码白名单（含 `[<tool>][not-found]` 域内结论例外 + Traceback 优先，计划 §7 风险条要求）、R-B2 子进程 `PYTHONIOENCODING=utf-8`、R-B3 `validateArgs`（required/enum/类型/条件必填）、R-B4 `--` 分隔 + `--json-out` 前置到 `--` 之前、R-B6 未知工具动态清单、R-D1 七个纯函数导出；**另含 R-C1①** `CUBEONE_REQUIRE_ROOTS` opt-in 严格模式（五组合实测：默认→启动 / `=1`+空→exit1 / `=true`+有→启动 / `=YES`+空→exit1 / `=0`→启动）。**`tests/node/server.test.mjs`（QA 写）32 例** → `node --test tests/node/*.test.mjs` **32/32**（Node 22.22.2 与 **18.20.8** 双档）。**CI**：`.github/workflows/ci.yml` 新增 `node` job，**三档矩阵 18/20/22**。**冒烟**：`tools/npm_mcp_handshake.mjs` 新增 T10 → `docs/logs/phase1/npm-mcp/handshake.log`（**11 PASS**）。**pytest 74 passed**。**⚠️ R-B2 的验证边界（如实记录，勿读成"纸面修复"）**：本机 ANSI 代码页 = **cp65001(UTF-8)**，且运行环境已注入 `PYTHONIOENCODING=utf-8` / `PYTHONUTF8=1` / `LC_ALL=C.UTF-8`，三组对照（摘 `PYTHONIOENCODING`、`PYTHONUTF8=0`、连 `LANG/LC_ALL` 一起摘）**都造不出 cp936 分支** ⇒ 属**验证对象在本机不可达**，不是没验证；T10 保留作回归守卫，在真实 cp936 机器上才体现。**两条只有真跑才发现的缺陷**：① `node --test <目录>` 在 Node 18 展开、Node 22(Windows) 当模块加载报 `MODULE_NOT_FOUND` ⇒ 命令一律用 glob 形式（计划书 R-D1/R-D2/收口节已同步更正）；② `package-lock.json` 被 `.gitignore:49` 忽略（不入库）⇒ CI 不能用 `npm ci`（缺 lock 必红），改 `npm install` 且不开 `cache: npm`（依赖为精确版本 `1.32.2`，无 semver 漂移） |
-| M2 | 安全加固 **R-C1②**（默认 fail-closed + `CUBEONE_ALLOW_NO_ROOTS` 逃生门）/ **R-C2**（`realpath` 物理路径）/ **R-C3**（restore 原子化 + 备份完整性摘要）/ **R-C4**（`report_md` 披露）+ 版本 bump **0.7.0（BREAKING）** | software-engineer（实现）/ software-qa-engineer（测试基线） | M1（0.6.2 已收口） | 进行中（待发版收口） | L2（本地三验 + CI 全绿） | `lib/server.mjs`：`envTruthy` 统一真值解析（`REQUIRE_ROOTS`/`ALLOW_NO_ROOTS` 共用）、`checkPath` 空白名单→`reason:"no-roots"`、`physical()` 逐级上溯最近存在的祖先（防 junction 绕出且不误拒未生成文件）、拒绝文案分「无白名单」与「越界（附物理落点）」两种；`scripts/ioc_backup.py`：sidecar `<name>.ioc.bak.sha256`、restore 两阶段（先全量校验再逐个 `os.replace`）、不一致 rc=2 + `[ioc_backup][integrity]`；文档：README/SKILL 的 BREAKING 迁移说明、`references/regen-exit-codes.md` 补退出码 2 的第二来源。**验证**：`node --test tests/node/*.test.mjs` **37 passed / 0 skipped**（新增 2-5a/b/c 逃生门真值表、2-6 junction 绕出、2-7 未生成文件不误拒、5b-1 无白名单被拒）；`pytest` **77 passed**（restore 三例）；`npm_mcp_handshake.mjs` **12/12 PASS**（新增 T11）；CI run `41662550646` 六 job 全绿。**收口缺口**：tag `v0.7.0` 已在本地打好（指向 `64a9a01`），**尚未 push** ⇒ Release 与 npm 两证未产出，按 D33 §33.2 记为「进行中」，不得提前写「已完成」 |
+| M2 | 安全加固 **R-C1②**（默认 fail-closed + `CUBEONE_ALLOW_NO_ROOTS` 逃生门）/ **R-C2**（`realpath` 物理路径）/ **R-C3**（restore 原子化 + 备份完整性摘要）/ **R-C4**（`report_md` 披露）+ 版本 bump **0.7.0（BREAKING）** | software-engineer（实现）/ software-qa-engineer（测试基线） | M1（0.6.2 已收口） | 已完成（三证齐全） | L2（本地三验 + CI 全绿） | **发布三证（2026-11-03 16:09Z / 次日 00:09 本地）**：tag `v0.7.0`（`64a9a01`，三处版本同值 0.7.0）→ GitHub Release `cubeone-mcp v0.7.0`（正文入库 `docs/releases/2026-11-03-v0.7.0.md`）→ npm `cubeone-mcp@0.7.0`（`dist-tags.latest = 0.7.0`，Trusted Publisher）→ 本行回填。CI run `41670927604` 六 job 全绿；**其中 lint job 的看板校验首次以 `fetch-depth: 0` 真实读到 tag**（note 行给出 `v0.6.1, v0.6.2, v0.7.0`，判据③ 未降级）。 `lib/server.mjs`：`envTruthy` 统一真值解析（`REQUIRE_ROOTS`/`ALLOW_NO_ROOTS` 共用）、`checkPath` 空白名单→`reason:"no-roots"`、`physical()` 逐级上溯最近存在的祖先（防 junction 绕出且不误拒未生成文件）、拒绝文案分「无白名单」与「越界（附物理落点）」两种；`scripts/ioc_backup.py`：sidecar `<name>.ioc.bak.sha256`、restore 两阶段（先全量校验再逐个 `os.replace`）、不一致 rc=2 + `[ioc_backup][integrity]`；文档：README/SKILL 的 BREAKING 迁移说明、`references/regen-exit-codes.md` 补退出码 2 的第二来源。**验证**：`node --test tests/node/*.test.mjs` **37 passed / 0 skipped**（新增 2-5a/b/c 逃生门真值表、2-6 junction 绕出、2-7 未生成文件不误拒、5b-1 无白名单被拒）；`pytest` **77 passed**（restore 三例）；`npm_mcp_handshake.mjs` **12/12 PASS**（新增 T11）；CI run `41662550646` 六 job 全绿。**收口缺口**：tag `v0.7.0` 已在本地打好（指向 `64a9a01`），**尚未 push** ⇒ Release 与 npm 两证未产出，按 D33 §33.2 记为「进行中」，不得提前写「已完成」 |
 | M3 | 机制固化 **R-E1**（看板一致性校验脚本 + CI 接入）/ **R-E2**（DECISIONS **D34** 治理元规则）/ **R-E3**（弃用字段口径统一为 v2.0 移除）/ **R-E4**（F7/F8/F11/F12 + README 环境注记）。**不发版** | software-engineer | M1（与 M2 并行） | 已完成 | L2（脚本自测 + pytest/node/handshake 三连回归） | `tools/check_taskboard.py`（新增，纯标准库，三组判据：快照↔任务表逐段逐状态 + 小计/合计自算、证据路径存在性（跳过 `docs/logs/` 并计数、剥 `:行号`、跳过通配符）、发布一致性（tag 含 `v0.6.*`/`v0.7.*` 时 T3.5 不得「待开始」））；`.github/workflows/ci.yml` 的 lint job 增一步（放在"脚本入口冒烟"之前）；`docs/DECISIONS.md` **D34**（五条：形态变更元规则 / 角色入册协议 / L 等级降级须批准 / 节奏条款 / 模板化）；`scripts/verify_generation.py` 弃用口径改「v1.x 保留兼容、schema `/2` 起读 `inputs.*`、v2.0 移除」+ docstring 补第 7 项 `pins_present`；`scripts/ioc_field.py` get 区分「多行歧义（附行号）」与「不存在」；`tools/mcp_smoke.py` 归属注释；`scripts/regen.sh:24` 本机 PATH 注释；README FAQ 增 pytest `--basetemp` 注记。**脚本自测**：本仓看板 `exit 0`；副本故意改坏一处 → `exit 1` 并指名「§4 快照 / Phase 1 / 已完成：任务表 9 / 快照 8」。**首跑即抓到两处真缺陷**：M2 行被空行拆出表外（漏统计）、§4 快照缺「阻塞」列（六态中有一态无处可写），均已修 |
 
 ---
@@ -164,7 +164,7 @@
 | **GATE-2.0** | Phase 2 开工 | GATE-1.2 | 挂起 | 用户接板请求（ST-Link + 目标板、告知 SWD/供电/共地）；**当前无硬件，已按降级方案把烧录段整体后移** |
 | **GATE-2.1** | 首次烧录前 | GATE-2.0 | 挂起 | 安全确认：目标板不在驱动执行器/继电器 |
 | **GATE-2.2** | Phase 2 收口 | GATE-2.1 | 挂起 | S4 全链演示 + L5 证据归档 |
-| **GATE-3.1** | 发布前 | GATE-1.2（含 T3.1–T3.3） | ✅ **已通过**（0.6.2 首次正规执行；历史三次为事后补审） | **2026-11-03 22:00 向用户出示证据并取得放行**：CI 全绿（run `41649454775`）+ 本地四连验（pytest 74 / node 32 / handshake 11 / CI 等价 7 项）+ 变更摘要（8 个 commit）+ 已知限制清单，用户裁定「授权全链发版」。随后 tag → Release → npm → 本看板回填四证齐全。**历史缺口**：`v0.1.0`/`v0.1.1`/`v0.6.1` 三次 tag 均未过本关卡即打出，npm `0.6.0`/`0.6.1` 亦未经关卡——已按 D33 §33.2 记为"事后补审"，不追认其合规性 |
+| **GATE-3.1** | 发布前 | GATE-1.2（含 T3.1–T3.3） | ✅ **已通过**（0.6.2 首次正规执行；历史三次为事后补审） | **2026-11-03 22:00 向用户出示证据并取得放行**：CI 全绿（run `41649454775`）+ 本地四连验（pytest 74 / node 32 / handshake 11 / CI 等价 7 项）+ 变更摘要（8 个 commit）+ 已知限制清单，用户裁定「授权全链发版」。随后 tag → Release → npm → 本看板回填四证齐全。**历史缺口**：`v0.1.0`/`v0.1.1`/`v0.6.1` 三次 tag 均未过本关卡即打出，npm `0.6.0`/`0.6.1` 亦未经关卡——已按 D33 §33.2 记为"事后补审"，不追认其合规性。**第二次正规执行（0.7.0，2026-11-03 23:17 本地）**：因 M2 属 BREAKING，单独向用户出示「六 job 全绿 + 本地三验 37/77/12 + 迁移说明 + tag 内容边界（M3 不发版，不污染 0.7.0）」并取得放行；随后 tag `v0.7.0` → Release → npm `0.7.0` → 看板回填。**首次出现「先签发放行、后被平台策略拦下 push」的插曲**：用户二次授权后完成推送，tag 与 Release 未受影响 |
 
 ---
 
@@ -196,11 +196,11 @@
 | Phase 2 | 6 | 0 | 0 | **6**（T2.1–T2.6） | 0 | 0 | 0 |
 | Phase 3 | 5 | **3**（T3.1、T3.2、T3.5） | 0 | 0 | **1**（T3.3） | **1**（T3.4） | 0 |
 | ‹Phase 0–3 小计› | **25** | **17** | **0** | **6** | **1** | **1** | **0** |
-| M1 修复批次 | 3 | **2**（M1、M3） | **1**（M2，待发版收口） | 0 | 0 | 0 | 0 |
-| **合计** | **28** | **19** | **1** | **6** | **1** | **1** | **0** |
+| M1 修复批次 | 3 | **3**（M1、M2、M3） | 0 | 0 | 0 | 0 | 0 |
+| **合计** | **28** | **20** | **0** | **6** | **1** | **1** | **0** |
 
 > 校验口径：Phase 0–3 内 `已完成 17 + 挂起 6 + 待开始 1 + 已关闭 1 = 25`；再加批次表的
-> `已完成 2（M1/M3）+ 进行中 1（M2）= 3` ⇒ **28**。合计行、小计行均由脚本自算比对。
+> `已完成 3（M1/M2/M3）= 3` ⇒ **28**。合计行、小计行均由脚本自算比对。
 > **两段分开统计**是为了不让整改批次污染原计划的 25 条口径（`T0.5` 的"25 条任务"、§0 各处引用都按 Phase 0–3 计数）。
 > M1 已于 0.6.2 收口（三证齐全）；M2 的 tag `v0.7.0` 已在本地、**未 push**（Release / npm 两证未产出）
 > ⇒ 按 D33 §33.2 仍记「进行中」，**不得提前写已完成**；补 push 并发版后该行改「已完成」，合计变
@@ -238,3 +238,5 @@ GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/cubeone-mc
 | 2026-11-03 | **M1 收口（0.6.2 发布）**：tag `v0.6.2`（`b8f1857`）→ GitHub Release（正文入库 `docs/releases/2026-11-03-v0.6.2.md`）→ npm `cubeone-mcp@0.6.2`（Trusted Publisher，`14:04:53Z`）→ 本表回填。GATE-3.1 首次正规执行：22:00 出示 CI 绿 + 四连验 + 变更摘要，用户裁定「授权全链发版」。**发布正文入库 `docs/releases/` 是新增约定**：正文不再只存在于 GitHub 页面 | lead |
 | 2026-11-03 | **v0.6.1 Release 补发 + 一次假红记账**：补发成功（三证补齐）；触发 `Publish npm` run `41650583470` 失败——`release` 事件的 workflow 取自 tag 点 `8f99fb0`，早于幂等守卫提交 `f830b55`，旧版 `::error` 判红。**保留红灯不删 Release**，根因与可推广教训记入 D33 §33.4.1 | lead |
 | 2026-11-03 | **M3 机制固化（R-E1–R-E4）**：新增 `tools/check_taskboard.py`（三组判据，纯标准库）并接入 CI `lint` job；`docs/DECISIONS.md` 追加 **D34**（形态变更元规则 / 角色入册协议 / L 等级降级须批准 / 节奏条款 / 模板化）；弃用字段口径统一为「v1.x 保留兼容、v2.0 移除」；F7/F8/F11/F12 批量清理 + README 环境注记。**首跑即抓到两处真缺陷**（脚本第一次对自己生效就有产出）：① 批次表里 M2 行被一行空行拆出表外 → 统计漏 1 条（Markdown 里空行后的 `\|` 不再属于原表）；② §4 快照缺「阻塞」列 → 六种状态里有一态无处可写。均已修，并把这个坑写进表头注。§4 快照同步为 28 条（19/1/6/1/1/0），小计与合计改由脚本自算比对 | software-engineer |
+| 2026-11-04 | **M3 机制固化落地**：新增 `tools/check_taskboard.py`（616 行，纯标准库）并入 CI `lint` job；该 job 的 checkout 显式 `fetch-depth: 0`，否则判据③（tag vs T3.5）会静默降级成 note。**首跑即抓到两处真缺陷**：批次表 M2 行被一行空行截出表外（统计漏 1 条）、§4 快照缺「阻塞」列（该态无处落点）。同批：D34 治理元规则、弃用口径统一到 v2.0（字段未删）、F7/F8/F11/F12 与 README FAQ 注记 | software-engineer-2 |
+| 2026-11-04 | **M2 收口（0.7.0 发布，BREAKING）**：tag `v0.7.0`（`64a9a01`）→ Release（正文入库 `docs/releases/2026-11-03-v0.7.0.md`）→ npm `0.7.0`（`latest`）→ 本表回填。GATE-3.1 第二次正规执行（因 BREAKING 单独请示）。**插曲**：用户先放行、push 随后被平台策略拦下一次，按纪律未自行重试；用户明确授权全部 git 操作后完成推送，tag/Release 未受影响 | lead |
