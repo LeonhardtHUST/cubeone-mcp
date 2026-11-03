@@ -1,0 +1,40 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.14, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\Leon\.workbuddy\binaries\python\versions\3.13.12\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Projects\GitHub\platform32-mcp
+collecting ... collected 32 items
+
+tests/test_ioc_backup.py::test_backup_creates_bak PASSED                 [  3%]
+tests/test_ioc_backup.py::test_backup_json_payload PASSED                [  6%]
+tests/test_ioc_backup.py::test_list_does_not_write PASSED                [  9%]
+tests/test_ioc_backup.py::test_restore_roundtrip PASSED                  [ 12%]
+tests/test_ioc_backup.py::test_restore_without_bak_returns_1 PASSED      [ 15%]
+tests/test_ioc_backup.py::test_no_ioc_returns_1 PASSED                   [ 18%]
+tests/test_ioc_backup.py::test_missing_project_dir_returns_2 PASSED      [ 21%]
+tests/test_ioc_backup.py::test_find_ioc_ignores_backup PASSED            [ 25%]
+tests/test_verify_generation.py::test_positive_g474_template PASSED      [ 28%]
+tests/test_verify_generation.py::test_positive_multi_peripheral PASSED   [ 31%]
+tests/test_verify_generation.py::test_h6_missing_s_prefix_fails_cannot_map PASSED [ 34%]
+tests/test_verify_generation.py::test_missing_ip_parameters_whitelist_fails PASSED [ 37%]
+tests/test_verify_generation.py::test_tim4_silently_dropped PASSED       [ 40%]
+tests/test_verify_generation.py::test_vp_rif_noise_allowlisted PASSED    [ 43%]
+tests/test_verify_generation.py::test_vp_rif_without_allowlist_fails PASSED [ 46%]
+tests/test_verify_generation.py::test_mxproject_abs_path_fails PASSED    [ 50%]
+tests/test_verify_generation.py::test_mxproject_relative_paths_pass PASSED [ 53%]
+tests/test_verify_generation.py::test_syscalls_overlay_warning_only PASSED [ 56%]
+tests/test_verify_generation.py::test_main_init_call_commented_out_fails PASSED [ 59%]
+tests/test_verify_generation.py::test_dead_definition_in_comment_not_counted PASSED [ 62%]
+tests/test_verify_generation.py::test_usart2_resolves_uart_suffix PASSED [ 65%]
+tests/test_verify_generation.py::test_parse_expect_normalizes PASSED     [ 68%]
+tests/test_verify_generation.py::test_parse_allow_signals_repeatable PASSED [ 71%]
+tests/test_verify_generation.py::test_empty_expect_skips_peripheral_checks PASSED [ 75%]
+tests/test_verify_generation.py::test_empty_log_warns_not_passes PASSED  [ 78%]
+tests/test_verify_generation.py::test_input_error_missing_file[--log] PASSED [ 81%]
+tests/test_verify_generation.py::test_input_error_missing_file[--main-c] PASSED [ 84%]
+tests/test_verify_generation.py::test_input_error_missing_file[--mxproject] PASSED [ 87%]
+tests/test_verify_generation.py::test_missing_required_argument_exits_2 PASSED [ 90%]
+tests/test_verify_generation.py::test_markdown_report_written PASSED     [ 93%]
+tests/test_verify_generation.py::test_strip_c_comments_preserves_line_numbers PASSED [ 96%]
+tests/test_verify_generation.py::test_resolve_init_symbol_variants PASSED [100%]
+
+============================= 32 passed in 17.42s =============================

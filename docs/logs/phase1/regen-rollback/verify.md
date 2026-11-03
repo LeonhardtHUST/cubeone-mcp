@@ -1,0 +1,18 @@
+# 生成核验报告（G1）
+
+- **verdict**：`FAIL`
+- **errors / warnings**：1 / 0
+- **期望外设**：GPIO, TIM4
+- **schema**：`platform32.verify_generation/1`
+- **生成时间**：2026-11-03T12:00:45+08:00
+- **生成日志**：`D:\Projects\GitHub\platform32-mcp\docs\logs\phase1\regen-rollback\cubemx-generate.log`
+- **main.c**：`D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\Core\Src\main.c`
+- **.mxproject**：`D:\Projects\GitHub\platform32-mcp\testbeds\_verifier-regen\g474\.mxproject`
+
+| 检查项 | 结果 | 级别 | 说明 |
+|---|---|---|---|
+| `log_cannot_map` | pass | error | 生成日志无 'Cannot map' 命中（另有 1 条 OptionalMessage_ERROR，属 CubeMX 已知噪音，如 G474 的 VP_RIF_VS_RIF1 见模板 D8，不计入判定） |
+| `main_init_present` | fail | error | 1/2 个期望外设没有 MX_..._Init 定义 → 配置未生效或被静默丢弃（D5/H-6）：TIM4(missing)。已满足：GPIO → MX_GPIO_Init（exact，定义 L152） |
+| `main_init_called` | pass | error | 全部 1 个初始化函数都在 main() 内被调用：GPIO → MX_GPIO_Init（调用 L88）；另有 1 个外设无定义、未参与本项：TIM4 |
+| `mxproject_abs_path` | pass | error | '.mxproject' 无盘符绝对路径（换机可复现） |
+| `syscalls_path` | pass | error | 生成日志无 syscalls.c / sysmem.c 叠加路径异常 |

@@ -1,0 +1,9 @@
+[INFO] STM32CubeMX 6.18.1 (DB.6.0.181) started in headless mode
+[INFO] LoadConfig: loading stm32-g474-template.ioc
+[INFO] ProjectManager: ProjectName=stm32-g474-template
+[INFO] ImportTextPane:157 - (OptionalMessage_ERROR) Cannot map signal TIM4_CH1 on pin PA0
+[INFO] ImportTextPane:234 - (OptionalMessage_ERROR) Pin5 (VP_RIF_VS_RIF1) cannot be retrieved for this MCU
+[INFO] Generating code under D:\Projects\GitHub\testbeds\template-mcu-STM32G474-series
+[INFO] Generate Main.c
+[INFO] Code generation finished successfully
+[INFO] Project generation finished in 58 s

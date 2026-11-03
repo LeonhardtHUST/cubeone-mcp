@@ -1,0 +1,6 @@
+[INFO] STM32CubeMX 6.18.1 (DB.6.0.181) started in headless mode
+[INFO] LoadConfig: loading stm32-g474-template.ioc
+[INFO] ImportTextPane:234 - (OptionalMessage_ERROR) Cannot map signal "VP_RIF_VS_RIF1" to a pin
+[INFO] Generate Main.c
+[INFO] Code generation finished successfully
+[INFO] Project generation finished in 60 s
