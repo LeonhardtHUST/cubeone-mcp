@@ -76,16 +76,33 @@ jobs:
           echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      # 幂等护栏：重复触发时直接红在这里，而不是让 registry 拒绝一版已存在的发布。
+      # 幂等护栏：版本已在 registry 上时**跳过发布**，而不是让 registry 拒绝一次重复发布。
+      #
+      # 为什么从"直接红"改成"跳过 + warning"（2026-11-03，0.6.2 收口时改）：
+      #   D33 的发布收口要求每个 tag 都有 GitHub Release。补发历史版本的 Release
+      #   （如 v0.6.1：tag 与 npm 都在、只缺 Release 正文）会**必然**走进这个分支——
+      #   留着 exit 1 就等于"按治理规则补账，反而把流水线刷红"，红灯会失去信息量。
+      #   现有语义仍然满足原目的：**绝不会**对已发布版本再发一次；
+      #   区别只是从 `::error` 降为 `::warning`，并在 Job Summary 里留痕。
       - name: 幂等检查（已发布的版本必须先 bump）
+        id: dup
         run: |
           if npm view "${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}" version --registry "https://registry.npmjs.org/" >/dev/null 2>&1; then
-            echo "::error::${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }} 已存在 —— 先 bump package.json version 再触发发布"
-            exit 1
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning title=版本已存在::${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }} 已在 registry 上 —— 本次跳过发布。若这是新版本，说明 package.json 忘了 bump。"
+            {
+              echo "### 跳过发布"
+              echo ""
+              echo "\`${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}\` 已存在于 registry。"
+              echo "本次运行未发布任何东西（历史版本补发 Release 属预期路径）。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: 包内容预检（打包清单进日志，人工可查）
         run: npm pack --dry-run
 
       - name: 发布（OIDC，无 token）
+        if: steps.dup.outputs.skip != 'true'
         run: npm publish --access public --provenance
