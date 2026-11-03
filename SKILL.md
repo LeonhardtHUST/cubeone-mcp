@@ -1,7 +1,7 @@
 ---
 name: platform32-mcp
 description: "STM32 工程全流程编排：把 .ioc 改配置 → CubeMX 代码生成 → 生成核验（G1 强制关卡，verify_generation.py）→ PlatformIO 构建 →（接板后）烧录与串口验证 串成一条带 L0–L5 验证等级声明的流水线，并输出符合模板 AGENTS.md 提交规范的 commit。同时提供双通道执行：已注册 MCP（vscode-cube-mcp / platformio.mcp）走工具通道，未注册走 CubeMX CLI + pio CLI 等价通道，两条通道的判据与证据要求完全相同。当用户说「改一下这个 ioc」「加一个 GPIO / UART / ADC 通道」「CubeMX 重新生成代码」「生成完帮我核一遍」「有没有被静默丢弃的外设」「pio 构建一下」「Flash/RAM 占多少」「烧进去看看」「串口有输出吗」「这个模板工程跑不起来」时使用。只读审计不写盘；任何写操作前必须先备份 .ioc 并报告将改动的对象，生成后必须跑核验器并如实声明验证等级；不替用户提交未经核验的代码，不碰 testbeds/ 之外的模板原仓。"
-version: 0.3.1
+version: 0.3.2
 agent_created: true
 license: MIT
 compatibility: Python 3.8+（核验器只依赖标准库）；CubeMX 6.18.1（路径不固定，见 §0.2）；PlatformIO Core 6.x；MCP 通道可选，未注册时用 §0.4 的 CLI 等价命令
@@ -158,7 +158,10 @@ python scripts/verify_generation.py \
 > **读报告的坑**：`level` 是由 `status` **派生**的（`warn`/`skip` → `warning`，其余 → `error`），
 > 它表达"这条检查失败时阻不阻塞"，**不表达"本次有没有问题"**。
 > 判定请只看 `verdict` 与各条 `status`；`level` 只用于粗筛和展示。
-> 真实产物样例：`docs/logs/phase1/regen-success/verify.json`。
+> 真实产物样例：通过样本 `docs/logs/phase1/regen-success/verify.json`；
+> **失败样本 `docs/logs/phase1/regen-rollback/verify.json`**（可直接用来对照"fail 长什么样"，
+> 写负路径场景文档时引这份，不要自己臆造失败输出）。
+> 完整判定细节（含容错匹配规则、`regen.sh` 全部选项）：`docs/reports/t1.2-verifier-contract.md`。
 
 ### 1.4 检查项判据
 
@@ -174,6 +177,24 @@ python scripts/verify_generation.py \
 
 > `log_cannot_map` 的 detail 会附带说明：另有 `OptionalMessage_ERROR`（如 G474 的
 > `VP_RIF_VS_RIF1`，D8）**不计入判定**。看到它不算失败，也不要为它删外设。
+
+**读报告的三个细节（✅ 已与 verifier-dev 核对实现，2026-11-03）**
+
+1. **`skip` 不等于"通过"，也不等于"失败"**，它表示"这项没检"。两种触发：
+   - `--expect ""` → `main_init_present` 与 `main_init_called` 都 `skip`；
+   - 期望外设**一个定义都没找到** → `main_init_called` 也是 `skip`（不是 fail）。
+     同一个根因只在 `main_init_present` 报一次 fail，避免双计；detail 会写明
+     "另有 N 个外设无定义、未参与本项：TIM4"——**这行是重要线索，别跳过**。
+   - 写证据时：`skip` 必须解释原因，不能记成"检查通过"。
+2. **空日志 → `warn`，不是 `pass`**。日志为空/纯空白时 `log_cannot_map` 报
+   "生成日志为空，无法确认生成是否真的跑过"，`verdict` 仍可能是 pass。
+   **"日志干净"必须由真实日志证明，不能由空文件证明**——写证据时别把这种 warn 当干净。
+3. **`syscalls_path` 要"文件名 + 异常关键字"同时出现才 warn**（`syscalls.c`/`sysmem.c`
+   且同一行含 `FileNotFoundException` / `exception` / `拒绝访问` 等）。
+   只提到文件名不会误报——所以这条 warn 基本可以当 D9 的确定性证据。
+
+另：JSON 里**没有时间戳**（便于 diff 与快照比对），时间戳只在 `--report-md` 里。
+`expect` / `allow_signals` / `tool` 是留痕字段，已写进契约文档。
 
 **书面契约之外的扩展需求（3 项，v1.0.0 未实现）** —— ⚠️ 注意：这 3 项**不在**
 `docs/reports/t1.2-verifier-contract.md` 的契约里（该文档 §1.4 只定义 5 个 check id），
@@ -297,6 +318,8 @@ python scripts/verify_generation.py \
   静默丢弃的外设**能构建成功**，这正是它危险的地方（H-6）。
 - 退出码 2 = 我们自己的输入错了（路径写错/文件不存在），**不是**"配置有问题"，别误报给用户。
 - `syscalls_path` 报 warn **不阻塞**，但要写进汇报（D9）。
+- 任何一条 `status: "skip"` 都要在汇报里解释原因（`--expect` 空？外设全无定义？），
+  **不能当成"通过"**；`log_cannot_map` 因**日志为空**而报 warn 时，先去确认 `--log` 指对了文件。
 - **1.4 里那 3 项扩展检查（v1.1 才可能落地）当前必须手工补**，
   用 1.4 末的三条 `grep`，结果一并贴进汇报——**不要**因为"核验器过了"就跳过这三条。
 
@@ -480,6 +503,7 @@ P1–P4 是本项目 Phase 1 的**实跑记录**（✅）。
 | 0.2.0 | 2026-11-03 | 初稿：§0 硬前提、§2 八步流程、§3 L0–L5、§4 提交模板、§5 D/H 速查；§1 留 `TODO(T1.2)` | T1.4 |
 | 0.3.0 | 2026-11-03 | §0 改双通道（MCP / CLI 等价，D12）；§1 按 T1.2 实现回填（契约 + 5 项已实现判据 + 3 项待实现）；§2 第 3 步标"方案待 T1.6"不再写死工具名；§2 第 5 步改为真实核验器调用；§5 增 P1–P4 | T1.4 |
 | 0.3.1 | 2026-11-03 | 勘误：`docs/guides/mcp-registration.md` 已落盘（取消"尚未落盘"）；那 3 项检查改为"书面契约之外的扩展意向"（`t1.2-verifier-contract.md` 只定义 5 项）；补 `regen.sh` 的 `-e` 自动推导与 `--out` 默认值 | T1.4 |
+| 0.3.2 | 2026-11-03 | 与 verifier-dev 逐条核对后补：`skip` 的两种触发与"skip 不等于通过"、空日志 → warn（不能当"日志干净"）、`syscalls_path` 的双条件判据、JSON 无时间戳；引 `regen-rollback/verify.json` 作失败样本 | T1.4 |
 | 待定 | — | 同行评审（lead 逐条对照 `docs/reports/t1.2-verifier-contract.md`） | T1.4 |
 | 待定 | — | 定稿（吸收 S1–S3 实测教训 + `cubemx_configure` 定论） | T1.9 |
 | 待定 | — | 合并 Phase 2 串口/烧录增量 + L 等级自查清单 | T3.3 |
