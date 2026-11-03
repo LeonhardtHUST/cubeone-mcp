@@ -1,11 +1,16 @@
 // cubeone-mcp — Node 层最小单测（R-D1）
 //
-// 覆盖 5 组门禁逻辑 + 1 组环境派生（合计 24 + 2 = 26 例）：
+// 0.7.0 基线（M2 安全加固，行为变更版）：**未设白名单默认拒绝**（fail-closed，R-C1），
+// 只有显式设 CUBEONE_ALLOW_NO_ROOTS=1 才回到 0.6.x 的宽松语义；白名单比较改用物理路径（R-C2）。
+//
+// 覆盖 6 组门禁逻辑 + 1 组环境派生（合计 37 例）：
 //   组1 isExecFailure  退出码矩阵 11 例（R-B1，含 [not-found] 例外白名单正反两面）
-//   组2 checkPath      路径白名单 5 例（前缀撞车 / `..` 越界 / win32 大小写 / roots 未设快照）
+//   组2 checkPath      路径白名单 9 例（前缀撞车 / `..` 越界 / win32 大小写 /
+//                      roots 未设 fail-closed 三例（R-C1）/ 物理路径两例（R-C2））
 //   组3 buildArgs      参数组装 5 例（R-B4 的 `--` 分隔）
 //   组4 validateArgs   入口校验 5 例（R-B3，缺 required / enum / 类型 / 条件必填）
 //   组5 e2e            真实 stdio 1 例（SDK Client，不依赖 Python）
+//   组5b e2e fail-closed 1 例（R-C1 的可观察面：无 roots 无逃生门 → 调用被拒）
 //   组6 启动期 opt-in  2 例（CUBEONE_REQUIRE_ROOTS=1 的 fail-closed 与不误伤）
 //   组7 requireRoots 取值 1 例（'1'/'true'/'yes' 与 '0'/空/乱值的解析边界）
 //   附  policy/allowedRoots 2 例（环境派生，顺带守住 env 读取时机）
@@ -16,7 +21,7 @@
 import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -190,7 +195,11 @@ describe("组1 isExecFailure 退出码矩阵（R-B1）", () => {
   });
 });
 
-// ── 组2 · checkPath 路径白名单（5 例） ─────────────────────────────
+// ── 组2 · checkPath 路径白名单（9 例） ─────────────────────────────
+//
+// 0.7.0：默认 fail-closed，逃生门需显式（R-C1）。
+// 「未设 roots」不再是"不校验"的暗示性提示，而是**明确拒绝**；想回到宽松语义必须
+// 显式设 CUBEONE_ALLOW_NO_ROOTS=1 —— 这样"忘了配白名单"就不会悄悄变成"全盘可写"。
 
 describe("组2 checkPath 路径白名单", () => {
   // 全部用临时目录构造，不依赖本机 D:\Projects 实际结构
@@ -239,15 +248,117 @@ describe("组2 checkPath 路径白名单", () => {
     },
   );
 
-  test("组2-5 roots 未设置 → 放行且 note 说明未校验（0.6.2 行为快照）", () => {
-    // ⚠️ 行为快照：0.6.2 是 fail-open（未设 = 不校验）。
-    // 0.7.0 若改为 fail-closed，此用例的期望必须反过来（ok === false），并同步改 R-D1 表格。
-    withEnv({ CUBEONE_ALLOWED_ROOTS: undefined }, () => {
+  // ── roots 未设：0.7.0 fail-closed 三态（R-C1） ────────────────────
+  //
+  // 三例合起来钉住一张完整的真值表，缺一条就会留下"半开"的缝：
+  //   5a 都不设 → 拒绝（默认安全）
+  //   5b 显式逃生门 → 放行且必须说明后果（宽松不能静默）
+  //   5c 逃生门取值解析 → 只有真值才开，乱值不得当开
+
+  test("组2-5a roots 未设 + 无逃生门 → 拒绝，且 reason 可机读为 no-roots", () => {
+    withEnv({ CUBEONE_ALLOWED_ROOTS: undefined, CUBEONE_ALLOW_NO_ROOTS: undefined }, () => {
       const chk = checkPath(target);
-      assert.equal(chk.ok, true);
-      assert.equal(typeof chk.note, "string");
-      assert.ok(chk.note.includes("未设置"), `note 应说明"未设置"，实际：${chk.note}`);
+      assert.equal(chk.ok, false, "0.7.0 默认 fail-closed：未设白名单必须拒绝路径参数");
+      assert.equal(
+        chk.reason,
+        "no-roots",
+        `调用方要能区分"没配白名单"与"配了但越界"，reason 必须是 "no-roots"，实际 ${JSON.stringify(chk.reason)}`,
+      );
+      assert.equal(chk.abs, path.resolve(target), "被拒时仍应回显解析后的绝对路径，便于排障");
       assert.equal(allowedRoots().length, 0);
+    });
+  });
+
+  test("组2-5b roots 未设 + CUBEONE_ALLOW_NO_ROOTS=1 → 放行且 note 标注宽松模式", () => {
+    withEnv({ CUBEONE_ALLOWED_ROOTS: undefined, CUBEONE_ALLOW_NO_ROOTS: "1" }, () => {
+      const chk = checkPath(target);
+      assert.equal(chk.ok, true, "逃生门开启后应恢复 0.6.x 的宽松语义");
+      assert.ok(
+        typeof chk.note === "string" && chk.note.length > 0,
+        "宽松模式必须在 note 里说清后果，不允许静默放行",
+      );
+      assert.ok(
+        /宽松|ALLOW_NO_ROOTS/.test(chk.note),
+        `note 应标注宽松模式或点名逃生门变量，实际：${chk.note}`,
+      );
+    });
+  });
+
+  test("组2-5c 逃生门取值解析：'true'/' yes ' 同 5b；'0'/'false'/'whatever' 同 5a", () => {
+    for (const value of ["true", " yes "]) {
+      withEnv({ CUBEONE_ALLOWED_ROOTS: undefined, CUBEONE_ALLOW_NO_ROOTS: value }, () => {
+        assert.equal(
+          checkPath(target).ok,
+          true,
+          `CUBEONE_ALLOW_NO_ROOTS=${JSON.stringify(value)} 应视为开启（trim + 小写后比较）`,
+        );
+      });
+    }
+    for (const value of ["0", "false", "whatever"]) {
+      withEnv({ CUBEONE_ALLOWED_ROOTS: undefined, CUBEONE_ALLOW_NO_ROOTS: value }, () => {
+        const chk = checkPath(target);
+        assert.equal(
+          chk.ok,
+          false,
+          `CUBEONE_ALLOW_NO_ROOTS=${JSON.stringify(value)} 不是开启值，必须仍然 fail-closed（宁可少开，不可乱开）`,
+        );
+        assert.equal(chk.reason, "no-roots");
+      });
+    }
+  });
+
+  // ── R-C2：白名单必须比较物理路径，否则目录链接可绕出 ──────────────
+  //
+  // ⚠️ 前提：链接的**目标文件要真实存在**。realpathSync 只能解析存在的路径；
+  // 目标不存在时实现会退化为词法 resolve（见 2-7），那种情况下链接绕出本来就不可见——
+  // 那是"写操作目标常常还不存在"的取舍，不是漏检。所以 2-6 预先在界外建好 x.ioc。
+
+  test("组2-6 界内链接指向界外 → 拒绝（R-C2 物理路径）", (t) => {
+    const inside = tmpDir("rp-inside");
+    const outside = tmpDir("rp-outside");
+    const linkPath = path.join(inside, "link");
+    const outsideFile = path.join(outside, "x.ioc");
+    writeFileSync(outsideFile, "# 界外文件\n", "utf8");
+
+    try {
+      // win32 用 junction（不需要管理员/开发者模式）；POSIX 用 "dir"。
+      symlinkSync(outside, linkPath, process.platform === "win32" ? "junction" : "dir");
+    } catch (err) {
+      // 建不了链接（EPERM/EACCES/ENOTSUP…）说明是环境限制，跳过比判红诚实
+      t.skip(`无法创建目录链接（${err?.code || err?.message}），跳过本项：${err?.message || err}`);
+      return;
+    }
+
+    const escaped = path.join(linkPath, "x.ioc");
+    if (!existsSync(escaped)) {
+      t.skip(`链接未生效（${escaped} 读不到），跳过本项`);
+      return;
+    }
+
+    withEnv({ CUBEONE_ALLOWED_ROOTS: rootsEnv(inside), CUBEONE_ALLOW_NO_ROOTS: undefined }, () => {
+      const chk = checkPath(escaped);
+      assert.equal(
+        chk.ok,
+        false,
+        `经界内链接绕到界外必须拒绝：${escaped} 物理落点是 ${outsideFile}，不在白名单 ${inside} 内`,
+      );
+    });
+  });
+
+  test("组2-7 白名单内不存在的路径 → 不因 realpath 失败而误拒", () => {
+    const root = tmpDir("rp-missing");
+    const ghost = path.join(root, "not", "yet", "board.ioc");
+    withEnv({ CUBEONE_ALLOWED_ROOTS: rootsEnv(root), CUBEONE_ALLOW_NO_ROOTS: undefined }, () => {
+      const chk = checkPath(ghost);
+      assert.equal(
+        chk.ok,
+        true,
+        "写操作的目标文件常常尚不存在；realpath 失败必须退化为词法 resolve，不能反过来拒绝",
+      );
+      // abs 的精确形态由组2-1 钉（那里目标同样是未创建路径），这里只要求是个绝对路径，
+      // 免得把"abs 改取物理路径"这种实现选择误判成 bug。
+      assert.equal(typeof chk.abs, "string");
+      assert.equal(path.isAbsolute(chk.abs), true);
     });
   });
 });
@@ -407,6 +518,10 @@ describe("组4 validateArgs 入口校验（R-B3）", () => {
 });
 
 // ── 组5 · e2e 真实 stdio（1 例，不依赖 Python） ────────────────────
+//
+// 本用例刻意留空 CUBEONE_ALLOWED_ROOTS 也不开逃生门：它验的是「参数校验发生在
+// 门禁之前」——空参数必须报"缺 log"，而不是先报"越界"。这条顺序是 0.6.x 既有的
+// 有意设计（参数形状不对时，越界/策略文案只会误导），0.7.0 的 fail-closed 不该改变它。
 
 describe("组5 e2e 真实 stdio（SDK Client）", () => {
   test("组5-1 initialize → tools/list 3 工具且 required 非空 → 空参数调用报参数错误", async (t) => {
@@ -452,13 +567,89 @@ describe("组5 e2e 真实 stdio（SDK Client）", () => {
   });
 });
 
+// ── 组5b · e2e fail-closed 可观察面（R-C1，1 例） ──────────────────
+//
+// 组2 测的是 checkPath 的**返回对象**；这一组测**用户真的看到什么**。
+// 两者必须分别钉：返回对象对了但 gateArgs 把 roots 拼成空串，用户看到的是
+// "白名单：" 后面什么都没有 —— 比不提示还糟（会让人以为工具坏了）。
+//
+// 本组只依赖"起得来 + 调用被拒"，不需要 Python（门禁在 spawn 之前），
+// 所以它同时是"默认 fail-closed 不会把 server 卡死在启动阶段"的守卫。
+
+/** 在 testbeds 下找一份真实 `.ioc`；找不到返回 null（调用方跳过，不判红）。 */
+function findRealIoc() {
+  const candidates = [
+    path.join(REPO_ROOT, "testbeds", "_verifier-regen", "g474"),
+    path.join(REPO_ROOT, "testbeds", "stm32-g474-template"),
+  ];
+  for (const dir of candidates) {
+    if (!existsSync(dir)) continue;
+    const hit = readdirSync(dir).find((f) => f.endsWith(".ioc"));
+    if (hit) return path.join(dir, hit);
+  }
+  return null;
+}
+
+describe("组5b e2e fail-closed（无白名单被拒，R-C1）", () => {
+  test("组5b-1 不设 roots 也不设逃生门 → ioc_field get 被拒且文案点名两个变量", async (t) => {
+    const ioc = findRealIoc();
+    if (!ioc) {
+      t.skip("testbeds 下找不到真实 .ioc 素材，跳过本项");
+      return;
+    }
+
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [BIN],
+      // 三个变量都真正删除（空串不等于删除：合法的空 roots 与"没配"必须走同一分支，
+      // 但这里要模拟的是**完全没配**的用户，删掉才是真实场景）。
+      // REQUIRE_ROOTS 一并删掉：它会让进程启动即退出，那样本用例会变成"连不上"而不是
+      // "连上了但调用被拒"——测的就不是默认行为了。
+      env: childEnv({
+        CUBEONE_ALLOWED_ROOTS: undefined,
+        CUBEONE_ALLOW_NO_ROOTS: undefined,
+        CUBEONE_REQUIRE_ROOTS: undefined,
+      }),
+      stderr: "pipe",
+    });
+    const client = new Client({ name: "cubeone-node-test-noroots", version: "0.0.0" }, { timeout: 60_000 });
+
+    await client.connect(transport);
+    t.after(async () => {
+      await client.close();
+    });
+
+    const res = await client.callTool({
+      name: "ioc_field",
+      arguments: { ioc, action: "get", key: "MxCube.Version" },
+    });
+    assert.equal(res.isError, true, `未配白名单时必须拒绝，实际放行了 ${ioc}`);
+
+    const text = (res.content || [])
+      .filter((c) => c.type === "text")
+      .map((c) => c.text)
+      .join("\n");
+    assert.ok(
+      text.includes("CUBEONE_ALLOWED_ROOTS"),
+      `文案必须告诉用户配哪个变量（否则会去改路径），实际：${text}`,
+    );
+    assert.ok(
+      text.includes("CUBEONE_ALLOW_NO_ROOTS"),
+      `文案必须给出逃生门，否则从 0.6.x 升上来的用户只有"报错"没有"出路"，实际：${text}`,
+    );
+    assert.equal(text.includes("undefined"), false, `文案不得透出 undefined，实际：${text}`);
+  });
+});
+
 // ── 组6 · 启动期 opt-in 严格模式（CUBEONE_REQUIRE_ROOTS=1，2 例） ──
 //
 // 0.6.2 的白名单是 fail-open（未配 roots = 不校验），危险在于**连提示都不给**。
 // 这一组守两件事：
 //   6-1 显式 opt-in 后，没配 roots 必须**拒绝启动**并说明怎么配（fail-closed 不得静默）；
 //   6-2 opt-in 不能误伤正常配置（配了 roots 就必须照常起得来）。
-// 默认路径（CUBEONE_REQUIRE_ROOTS 未设）由组5-1 兜底：那条能过即说明默认行为未被改坏。
+// 注意区分两种"拒绝"：本组是**启动期**拒绝（进程退出，严格模式 opt-in 才有）；
+// 0.7.0 的默认 fail-closed 是**调用期**拒绝（进程照常起，路径参数被拒）——
+// 后者由组5-1（能起来）与组5b（起得来但调用被拒）共同兜住。
 
 describe("组6 启动期 opt-in 严格模式（CUBEONE_REQUIRE_ROOTS=1）", () => {
   test("组6-1 未配 roots + REQUIRE_ROOTS=1 → 拒绝启动，并在 stderr 说明怎么配", async (t) => {

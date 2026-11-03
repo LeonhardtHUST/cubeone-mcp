@@ -2,7 +2,7 @@
 # g474=D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474
 # log=D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-success\cubemx-generate.log
 
-[PASS] T1 握手 — server=cubeone-mcp v0.6.2
+[PASS] T1 握手 — server=cubeone-mcp v0.7.0
 [PASS] T2 tools/list — ioc_backup, ioc_field, verify_generation
 [PASS] T3 resources/list — 7 个资源
 [PASS] T3b 读 SKILL.md — text/markdown
@@ -13,5 +13,6 @@
 [PASS] T10 中文报错可读 — [platform32][input-error] --log 指向的文件不存在：D:\Projects\GitHub\cubeone-mcp\no-such-dir\no-suc
 [PASS] T8 full+dry_run 放行
 [PASS] T9 白名单拦截 — [cubeone-mcp][越界] 参数 ioc=C:\Windows\win.ini 不在 CUBEONE_ALLOWED_ROOTS 内。
+[PASS] T11 无白名单默认拒绝 — [cubeone-mcp][策略拦截] 未配置 CUBEONE_ALLOWED_ROOTS，0.7.0 起默认拒绝所有路径参数。
 
-VERDICT: HANDSHAKE SMOKE PASS (pass=11 fail=0)
+VERDICT: HANDSHAKE SMOKE PASS (pass=12 fail=0)
