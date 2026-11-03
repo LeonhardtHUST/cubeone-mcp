@@ -2,7 +2,7 @@
 # g474=D:\Projects\GitHub\cubeone-mcp\testbeds\_verifier-regen\g474
 # log=D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-success\cubemx-generate.log
 
-[PASS] T1 握手 — server=cubeone-mcp v0.7.0
+[PASS] T1 握手 — server=cubeone-mcp v0.7.1
 [PASS] T2 tools/list — ioc_backup, ioc_field, verify_generation
 [PASS] T3 resources/list — 7 个资源
 [PASS] T3b 读 SKILL.md — text/markdown
