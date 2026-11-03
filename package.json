@@ -1,6 +1,6 @@
 {
   "name": "cubeone-mcp",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "STM32 CubeMX generation verifier (G1 gate) and safe .ioc read/write tools as an MCP stdio server. Thin Node wrapper around the battle-tested stdlib-only Python scripts of the cubeone-mcp repo (STM32 工程全流程编排的 MCP 工具通道).",
   "keywords": [
     "mcp",
@@ -28,6 +28,8 @@
     "scripts/verify_generation.py",
     "scripts/ioc_backup.py",
     "scripts/ioc_field.py",
+    "scripts/regen.sh",
+    "docs/guides/mcp-registration.md",
     "SKILL.md",
     "references/"
   ],
