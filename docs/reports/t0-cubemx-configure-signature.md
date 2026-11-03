@@ -125,6 +125,29 @@ NOISE_RE = re.compile(
 | `[DEBUG]` / `[TRACE]` | **会删** | 同上 |
 | `[ERROR]` | **不会删** | 正则级别集合**不含 ERROR**（这是个可利用的缝隙） |
 
+**样本量与适用范围（只到观测，不外推）**
+
+| 指标 | 实测值 | 来源 |
+|---|---|---|
+| 样本 | CubeMX 6.18.1 单次运行，**606 行** | `docs/logs/phase1/s1-dryrun-setcube.log` |
+| 行首匹配 `<timestamp> [LEVEL]` 的行 | **586 行** | 同上（其余 20 行是脚本回显与 log4j 提示） |
+| 以 `[LEVEL]` **裸开头**（无时间戳）的行 | **0 行** | 同上 |
+| `[WARN]` 行数 | **140 行，全部带时间戳前缀** | 同上 |
+| `[INFO]` 行数 | **446 行** | 同上 |
+| `[ERROR]` 行数 | **0 行** | 同上（故"ERROR 不被过滤"是**代码事实**，非样本观测） |
+| `Cannot map` 命中 | **0 次** | 同上；另两份 S3 探针日志（598 / 603 行）同样是 **0 次** |
+
+⇒ **可以说**：在该样本中，140 条 `[WARN]` **全部**带时间戳前缀，`NOISE_RE` 会整行删除它们；`[ERROR]` 不在级别集合内（代码事实）。
+⇒ **不能说**：`Cannot map signal` 一定以 `[WARN]` 记录、因而一定被 MCP 通道吃掉 —— **三份样本里 `Cannot map` 一次都没出现**，该行的真实级别仍是空白，需 S3 造出该行才能定案（见 §7 第 3 项）。
+**结论不因"样本里没有"而变弱也不因"看着像"而变强：G1 读原始日志的处置对两种情形都成立，故无需等 S3 再动手。**
+
+> 顺带验证了 `NOISE_RE` 的设计：它其余分支在真实日志里**确有对应**——
+> `log4j user configuration file not found`（命中 `log4j[: ]`）、
+> `Configure log4j with default settings`（命中 `Configure log4j`）、
+> `Nov 03, 2026 12:10:56 PM java.util.prefs...`（命中 `MMM DD, YYYY h:mm:ss (AM|PM)`）、
+> `WARNING: Could not open/create prefs root node ...`（命中 `WARNING: Could not open`）。
+> 而脚本回显 `config load "..."` / `OK` **不匹配任何分支、会保留** —— 这正是 `KO` 检测得以工作的前提（`:161` 靠整行 `KO` 判失败）。
+
 两项直接后果：
 
 1. 模板仓已知的 `VP_RIF_VS_RIF1` 诊断噪音（`[INFO] ... cannot be retrieved`）**在 MCP 返回文本里看不到，在原始日志里看得到**。若 G1 从 MCP 返回值取日志，会"看不到这条噪音"——看似是好事，实则说明**过滤规则正在改变证据**，不可接受。
