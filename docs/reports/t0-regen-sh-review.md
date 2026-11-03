@@ -296,3 +296,72 @@ python /d/.../scripts/verify_generation.py --log /tmp/platform32-regen/cubemx-ge
 | 2 | JVM 超时后是否留残留进程/锁文件 | 用 node.exe 替身证明 `timeout` 有效；CubeMX 本体未实测，建议首跑后 `tasklist \| grep -i java` 复核 |
 | 3 | CubeMX 报错时的退出码 | 若 `config load` 失败 CubeMX 仍返回 0，则 `run_generate` 会误判成功（`:270` 直接透传 rc）→ 只能靠步骤 3 核验兜底。这是"CubeMX 静默非致命"的另一面，S3 可顺手验证 |
 | 4 | `verify_generation.py` 内部逻辑 | 不在本次审计范围（owner: verifier-dev，其单测见 `docs/logs/phase1/t1.2-pytest.log`） |
+
+---
+
+## 6. 追加：S1 的 diff 判据基线（`config saveas` 重写的精确清单）
+
+> 补充时间：2026-11-03 12:25 · 起因：lead 指出"若 `config saveas` 会重写整个 `.ioc` / `main.c`，则 S1 的『diff 只含预期文件』DoD 会**假失败**"。本节给实测基线，并**纠正两个被引错的数字**。
+
+**实测对象**：`testbeds/_s1-dryrun/g474`（`scenario-tester` 的一次性丢弃副本，执行过 `config saveas`），只读 `git diff --numstat`：
+
+| 文件 | 增 / 删 | 说明 |
+|---|---|---|
+| `stm32-g474-template.ioc` | **9 / 6** | 16 行变更，见下方逐条归类 |
+| `Core/Src/main.c` | **11 / 0** | 全部是 PB0 的 GPIO 初始化，**USER CODE 区无丢失** |
+| `.mxproject` | **0** | 未变 |
+
+### 6.1 `.ioc` 的 16 行变更逐条归类
+
+| 变更 | 类别 |
+|---|---|
+| `Mcu.Pin1..Pin4` 整体后移，`PB0` 插入为 `Mcu.Pin1` | 功能（连带重排） |
+| `Mcu.PinsNb=5` → `Mcu.PinsNb=6` | 功能（连带）**← 见 6.2 纠正 1** |
+| `+PB0.Signal=GPIO_Output` | **功能**（唯一真正表达"用户意图"的一行） |
+| `+PB0.Locked=true` | **噪音**：CubeMX 自动打的锁标记，非用户操作 |
+| `-ProjectManager.AskForMigrate=false` → `+true` | **噪音**：`saveas` 副作用（D7） |
+
+**结论：G474（6.18 原生仓）的 `saveas` 重写规模很小（16 行），"diff 只含预期文件"这个 DoD 成立、不会假失败。** 建议 S1 把 diff 白名单写成：
+
+- `.ioc` 允许：`Mcu.Pin[0-9]+`、`Mcu.PinsNb`、`<新引脚>.{Signal,Locked}`、`ProjectManager.AskForMigrate`
+- `main.c` 允许：USER CODE 区之外新增的新引脚 GPIO 初始化段
+- 其它任何键出现变更 → 视为意外，走回滚
+
+### 6.2 必须纠正的两个数字
+
+**纠正 1 —— `Mcu.PinsNb` 确实从 5 变成 6**
+
+```text
+$ grep -nE '^Mcu\.Pin[0-9]+=|^Mcu\.PinsNb=' testbeds/_s1-dryrun/g474/stm32-g474-template.ioc
+16:Mcu.Pin0=PC13
+17:Mcu.Pin1=PB0
+18:Mcu.Pin2=PA13
+19:Mcu.Pin3=PA14
+20:Mcu.Pin4=VP_SYS_VS_Systick
+21:Mcu.Pin5=VP_SYS_VS_DBSignals
+22:Mcu.PinsNb=6
+```
+
+"`PinsNb` 仍是 5 / 不会自动加 1"**不成立**。若 S1 按此写断言，会**假失败**。
+正确断言：`Mcu.PinsNb` == 变更前引脚数 + 新增引脚数（本例 5 + 1 = 6），且 `Mcu.Pin*` 序列连续无重复。
+
+**纠正 2 —— "`main.c` 619 增 / 106 删"不是 G474 的数据**
+
+该数字出自 `docs/DECISIONS.md:75`，原文对象是 **`stm32-digital-clock`**：
+
+> `stm32-digital-clock` 的 `.ioc` 版本戳为 `6.17.0`（共 5 处），本机 CubeMX 锁 6.18.1（D1）。重新生成会产生 **619 增 / 106 删**的整文件重写，而真实功能改动可能只有 9 增 / 1 删。
+
+那是**跨 CubeMX 版本（6.17 → 6.18）迁移**导致的整文件重写。G474 模板是 6.18 原生，实测只有 11 增 / 0 删。
+**⇒ 整文件重写的成因是"版本不匹配"，不是 `saveas` 本身。** 两个数字混用会让人误以为原生仓也会整文件重写，从而把 S1 的 diff 判据放得过宽（等于放弃了"diff 只含预期文件"的约束力）。
+
+### 6.3 顺带定案：`GPIOParameters` 白名单（此前列为未实测项）
+
+```text
+$ grep -n 'PB0.GPIOParameters' testbeds/_s1-dryrun/g474/stm32-g474-template.ioc
+（不存在 —— 未加白名单）
+```
+
+`set pin PB0 GPIO_Output` **不写** `PB0.GPIOParameters`；而生成的 `main.c` 仍然完整输出了 PB0 的 GPIO 初始化（`__HAL_RCC_GPIOB_CLK_ENABLE` / `GPIO_MODE_OUTPUT_PP` / `HAL_GPIO_Init`）。
+
+**⇒ 白名单只在需要"额外参数"时才必要**（如 PC13 的 `GPIOParameters=PinState` + `PinState=GPIO_PIN_SET`）。纯输出模式不写白名单也能正确生成。
+这解释了模板仓 `TOOLING-cubemx.md` §3.5 为何强调"要初始电平就必须两行一起写"——它约束的是**参数**，不是**引脚模式**。

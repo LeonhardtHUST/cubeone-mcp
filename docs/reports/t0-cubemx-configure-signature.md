@@ -264,7 +264,7 @@ exit
 
 | # | 未定项 | 谁来定 | 怎么定 |
 |---|---|---|---|
-| 1 | `set pin PBx GPIO_Output` 是否会自动补 `PBx.GPIOParameters` 白名单 | scenario-tester（T1.6/S1 首跑） | 改完 `git diff *.ioc`，看是否出现 `PB0.GPIOParameters=`。**命令本身已被证明可用**（`s1-dryrun-setcube.log` 回显 `OK`），只剩白名单这一环 |
+| 1 | `set pin PBx GPIO_Output` 是否会自动补 `PBx.GPIOParameters` 白名单 | ~~scenario-tester~~ **已定案（2026-11-03 12:25）** | **不写白名单**，且**不需要**：实测 `testbeds/_s1-dryrun/g474` 无 `PB0.GPIOParameters`，而 `main.c` 仍完整生成 PB0 的 GPIO 初始化（`__HAL_RCC_GPIOB_CLK_ENABLE` / `GPIO_MODE_OUTPUT_PP` / `HAL_GPIO_Init`）。白名单只在需要**额外参数**（如 `PinState`）时才必要。详见 `t0-regen-sh-review.md` §6.3 |
 | 2 | `set gpio parameters PBx PinState=GPIO_PIN_SET` 语法是否被 6.18 接受 | scenario-tester（同上，若需要初始电平） | 看是否返回 `KO`；再看 `main.c` 有无 `HAL_GPIO_WritePin` |
 | 3 | `Cannot map signal` 行的**级别**（INFO/WARN 会被 MCP 过滤，ERROR 不会） | scenario-tester（T1.8/S3 负路径） | 故意写错信号名，抓原始日志看该行是 `[WARN]` 还是 `[ERROR]`；**G1 读原始日志则无需关心**（见 §3.2.1） |
 | 4 | `cubemx_configure` 在 G474 上的单次耗时 | scenario-tester | 调研记录单次生成约 60s；超时已设 300s。S1 干跑实测 `12:05:53 → 12:06:25` ≈ **32s**（仅 set pin + saveas，未 generate） |
