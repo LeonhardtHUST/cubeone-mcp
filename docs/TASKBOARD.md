@@ -1,0 +1,144 @@
+# 任务看板（TASKBOARD）— 唯一状态真源
+
+> **owner：`skill-author`**（建板与格式维护）。**状态列的更新权归各任务 Owner**，别人不得代改。
+> 上游：`docs/2026-11-03-agent-team-plan.md`（下称"计划"）、`docs/2026-11-03-execution-research.md`（下称"调研报告"）。
+> 交接协议见计划 §5.2：新 Agent 入场按 `本文件` → `docs/DECISIONS.md` → 计划对应 Phase 节 的顺序读，即可无缝接手。
+
+最后更新：2026-11-03 · 更新者：skill-author（建板，T0.5）
+
+---
+
+## 0. 读板须知
+
+### 0.1 状态取值（只有这五种，不要自创）
+
+| 状态 | 含义 | 谁可以写 |
+|---|---|---|
+| `已完成` | DoD 全部满足**且证据已落盘**（证据列有可点开的路径） | 任务 Owner |
+| `进行中` | 已开工，尚无完整证据 | 任务 Owner |
+| `待开始` | 未被认领或依赖未满足 | 任务 Owner / lead |
+| `挂起` | 有明确的**外部阻塞**（如无硬件、等用户决策），不是"没做" | lead（挂起通常来自关卡） |
+| `阻塞` | 依赖任务失败或卡壳 >30 分钟，已在升级路径上 | 任务 Owner |
+
+### 0.2 铁律
+
+1. **不许编造进度**：没有证据文件就不许写 `已完成`。证据列写"待补"是合法的，写假链接不是。
+2. **L 等级必须如实**：L 等级是"这份证据能证明到哪一步"，来自三个模板仓 `AGENTS.md` 的定义。
+   只跑了脚本没看结果 → 不是 L3；没有实板现象记录 → 不是 L5。
+3. **证据一律落盘**：命令输出 → `docs/logs/<phase>/`；核验 JSON → `docs/reports/`；评估报告 → `docs/evaluations/`。
+   路径写进本表"证据链接"列。注意 `docs/logs/` 被 `.gitignore` 局部忽略（仅本地证据），
+   其余证据目录入库。
+4. **单写者原则**（计划 §0.2-1）：`scripts/`、`tests/` → verifier-dev；`SKILL.md`/`docs/`/`README.md`/`references/` → skill-author；
+   `testbeds/` → scenario-tester；`.github/` → ci-agent。跨 owner 改动须经 lead 转派。
+5. **原仓只读**：`D:\Projects\GitHub\` 下三个模板仓、`NUEDC_2027`、`HUSTRadio`、`leonskill-*` 一律只读。
+   实验只能在 `testbeds/` 的克隆副本里做。
+
+### 0.3 本次会话范围声明
+
+**当前会话无硬件**（GATE-D 已确认，Phase 2 整体后移）：
+
+- Phase 2 的**烧录 / 串口 / HIL 段**（T2.1、T2.3–T2.6）全部 `挂起`，等 GATE-2.0 接板日。
+- T2.2（FW_H7 安装）按计划属 Phase 2，一并 `挂起`；接板日与 T2.5 同批处理。
+- 不阻塞 Phase 1 与 Phase 3 推进（计划 §5.3 "接板日无板" 风险条）。
+
+---
+
+## 1. 任务表
+
+> 列：`任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接`
+> `—` 表示无依赖；`待补` 表示证据尚未产出（不是"已完成但忘了贴"）。
+
+### Phase 0：装配（0.5 天，全部 L1 可验）
+
+| 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
+|---|---|---|---|---|---|---|
+| T0.1 | 执行 GATE-D 决策问询，结论写入 `docs/DECISIONS.md` | platform-lead | — | 已完成 | L0 | `docs/DECISIONS.md`（用户已确认 6 项；文件正文待 lead 落盘，当前为 T1.1 占位） |
+| T0.2 | 改 `~/.workbuddy/mcp.json`：新增 `vscode-cube-mcp`（内联 `ST_CUBEMX_EXE`/`ST_CUBEMX_ALLOWED_ROOTS`/`ST_CUBEMX_TIMEOUT=300`）、新增 `platformio.mcp`（`uvx`，`PLATFORMIO_MCP_POLICY=build_only`）；`stm32-stlink` 保持 disabled | env-agent | T0.1 | 进行中 | L1 | 待补：`docs/backups/`（改前备份）+ JSON 校验输出 → `docs/logs/phase0/` |
+| T0.3 | 安装并自检 `uvx platformio.mcp doctor` | env-agent | T0.2 | 进行中 | L1 | 待补：`docs/logs/phase0/platformio-mcp-doctor.log` |
+| T0.4 | 逐 server 冒烟：`cubemx_help`、`pio_system_info` + `pio_list_devices`、对 G474 模板仓**只读** `cubemx_load` | scenario-tester | T0.2、T0.3 | 待开始 | L1 | 待补：三段输出 → `docs/logs/phase0/`；`cubemx_load` 后原仓 `git status` 干净 |
+| T0.5 | 建 `docs/TASKBOARD.md` 任务看板 | skill-author | T0.1 | 进行中 | L0 | 本文件（建板完成，待 lead 验收格式） |
+
+### Phase 1：MVP 无硬件闭环（2–3 天）
+
+| 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
+|---|---|---|---|---|---|---|
+| T1.1 | 建仓库骨架 + `.gitignore`（testbeds、logs 局部）+ GitHub remote push | skill-author | Phase 0 | 进行中 | L0 | 本仓首个 commit `chore: 建仓骨架与 .gitignore`；remote 见第 4 节 |
+| T1.2 | **核验器 v1** `scripts/verify_generation.py`：① 日志无 `Cannot map`（白名单容忍 `VP_RIF_VS_RIF1`，调研报告 D8）② 期望外设均有 `MX_xxx_Init()` 定义**且**在 `main()` 被调用 ③ `.mxproject` 无盘符绝对路径 ④ `syscalls.c`/`sysmem.c` 叠加路径降级为 warning；输出 JSON | verifier-dev | T1.1 | 待开始 | L2 | 待补：正/负样本 ≥5 例 + `pytest` 全绿输出 → `docs/logs/phase1/` |
+| T1.3 | `scripts/regen.sh`：备份 `.ioc` → `cubemx_generate` → 核验；失败即 `git checkout .ioc` 回滚 | verifier-dev | T1.2 | 待开始 | L3 | 待补：G474 testbed 成功一次 + 失败回滚一次的输出 |
+| T1.4 | **SKILL.md 初稿**：流程编排知识（何时 `cubemx_load/configure/generate`、G1 核验强制、L 等级声明、提交文案模板、陷阱速查 D1–D9/H-1–H-6 链接） | skill-author | T1.2 | 待开始 | L0 | 待补：`SKILL.md`（当前为 v0.1.0 骨架，8 处 `TODO(T1.4)`）+ lead/verifier-dev 评审记录 |
+| T1.5 | 建 `testbeds/`：克隆三个模板仓 + `stm32-digital-clock` 副本（本地路径 clone，不碰原仓） | scenario-tester | T1.1 | 待开始 | L1 | 待补：四副本 `git remote -v` 输出 + 原仓 `git status` 无变化 |
+| T1.6 | **场景 S1（改配置）**：G474 testbed 加 GPIO 输出/改 PinState：`cubemx_load` 审计 → 备份 → `configure`/`generate` → 核验 → `pio_build` → `git diff` 汇报 → 按规范 commit | scenario-tester | T1.3、T1.4、T1.5 | 待开始 | L3 | 待补：`pio run` Flash/RAM 字节 + 核验 JSON → `docs/reports/` + diff |
+| T1.7 | **场景 S2（只读审计）**：`stm32-digital-clock` testbed 上 `cubemx_load` + `pio_build`，产出审计报告（引脚表、时钟树键值、构建结果） | scenario-tester | T1.5 | 待开始 | L1 | 待补：`docs/reports/S2-audit-digital-clock.md` |
+| T1.8 | **场景 S3（负路径）**：故意写错信号名（去 `S_` 前缀）/ 漏 `IPParameters` 白名单 → 确认核验器能抓住静默丢弃 | scenario-tester | T1.3、T1.6 | 待开始 | L2 | 待补：两种注入各一份 FAIL 输出 → `docs/reports/` |
+| T1.9 | SKILL.md 定稿：吸收 S1–S3 实测教训 | skill-author | T1.6–T1.8 | 待开始 | L1 | 待补：定稿 commit |
+
+### Phase 2：烧录与串口（**本会话整体挂起**，接板后 1–2 天）
+
+| 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
+|---|---|---|---|---|---|---|
+| T2.1 | 启用 `stm32-stlink`（改前备份）；doctor 实测探针；确认 X Pulse 探针类型（D6） | env-agent | GATE-2.0 | 挂起 | L1 | 待补：doctor probes 序列号 → `docs/logs/phase2/` |
+| T2.2 | 安装 FW_H7（优先 `swmgr install` 无头）；H723 testbed 跑通 `pio run` | env-agent | T1.5 | 挂起 | L3 | 待补：H723 Flash/RAM 报告 |
+| T2.3 | 烧录基线：G474 testbed 产物 → `flash_standalone`（reset=hard, run=true）→ 观察 LED/复位 | hil-agent | T2.1 | 挂起 | L5 | 待补：烧录日志 + 现象描述 → `docs/logs/phase2/`、`docs/reports/` |
+| T2.4 | 串口链路：确认 UART→USB 通道与 COM 口；`pio_monitor_capture` 抓 boot log；SKILL.md 增补"串口验证" | hil-agent + skill-author | T2.3 | 挂起 | L5 | 待补：boot log 或"该板无 VCP + 外接 USB-TTL 方案"记录 |
+| T2.5 | **HIL 场景 S4**：`NUEDC_2027/G474/G474_01_gpio`～`G474_03_uart` 选一个跑全链（改配置→生成→核验→构建→烧录→串口） | scenario-tester + hil-agent | T1.3、T2.3、T2.4 | 挂起 | L5 | 待补：全链证据链 + L5 声明进 commit |
+| T2.6 | 负路径硬件版：烧录时拔探针 / 占用串口 → 确认 `pio_port_diagnose`/doctor 错误分类可读 | hil-agent | T2.4 | 挂起 | L2 | 待补：分类结果 → `docs/logs/phase2/` |
+
+### Phase 3：CI 与收尾（1–2 天，可与 Phase 2 降级段并行）
+
+| 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
+|---|---|---|---|---|---|---|
+| T3.1 | `.github/workflows/build.yml`：checkout → `pio run` matrix（G474VE + F103C8）→ 主机 gcc 回归 → 上传 ELF/HEX/map；**CubeMX 不进 CI**（ST 专有许可 + JVM 镜像成本，原因写注释） | ci-agent | T1.6 | 待开始 | L3 | 待补：Actions run URL + 两环境构建数字 |
+| T3.2 | README 定稿：架构图（三 server 职责 + 编排层）、快速上手（注册 MCP → 跑 S1）、已知限制 | skill-author | T1.9、T2.5 | 待开始 | L1 | 待补：`README.md`（当前 52 字节占位）+ 评审记录 |
+| T3.3 | SKILL.md 终版：合并 Phase 2 串口/烧录增补；附 L 等级自查清单 | skill-author | T2.4 | 待开始 | L1 | 待补：定稿 commit |
+| T3.4 | 选做评估（只读，产出报告不改代码）：① CubeMX 2.1.1 兼容性（同一 `.ioc` 双版本生成 diff）② CMake 流可行性 ③ strtt RTT 是否引入 | evaluator | 各自独立 | 待开始 | L1 | 待补：`docs/evaluations/`，每项给"做/不做/推迟"结论 |
+| T3.5 | 发布：打 tag `v0.1.0` + release notes（含验证等级汇总表：哪些 L3、哪些 L5） | platform-lead | T3.1–T3.3 | 待开始 | L1 | 待补：tag + release notes（remote 已在 T1.1 建好，无需再建） |
+
+---
+
+## 2. 关卡（GATE）状态表
+
+> 关卡未过 = 下游任务不得开工。由 `platform-lead` 向用户发起问询。
+
+| 关卡 | 触发时机 | 前置 | 状态 | 结论 / 备注 |
+|---|---|---|---|---|
+| **GATE-D** | Phase 0 开工 | — | ✅ **已通过** | 6 项决策已由用户确认（D1 锁 6.18.1 / D2 装 platformio.mcp / D3 CMake 砍出 MVP / D4 FW_H7 接板日 / D5 现在建 Public remote / D6 ST-Link+SWD）。落盘见 `docs/DECISIONS.md` |
+| **GATE-0** | T0.2 改动 `mcp.json` **前** | GATE-D | 待触发 | 需向用户展示 diff 确认（个人配置文件）；T0.4 全绿后宣布 Phase 0 完成 |
+| **GATE-1.1** | T1.2 完成后 | GATE-0 | 待触发 | 核验器单测全绿演示；lead 确认 API 稳定后才允许 T1.3/T1.6 依赖 |
+| **GATE-1.2** | Phase 1 收口 | GATE-1.1 | 待触发 | S1–S3 三场景证据链齐（命令输出、核验 JSON、diff、commit），并向用户演示一次 S1 全链 |
+| **GATE-2.0** | Phase 2 开工 | GATE-1.2 | 挂起 | 用户接板请求（ST-Link + 目标板、告知 SWD/供电/共地）；**当前无硬件，已按降级方案把烧录段整体后移** |
+| **GATE-2.1** | 首次烧录前 | GATE-2.0 | 挂起 | 安全确认：目标板不在驱动执行器/继电器 |
+| **GATE-2.2** | Phase 2 收口 | GATE-2.1 | 挂起 | S4 全链演示 + L5 证据归档 |
+| **GATE-3.1** | 发布前 | GATE-1.2（含 T3.1–T3.3） | 待触发 | 演示 CI 绿 + 全文档包，确认后打 tag |
+
+---
+
+## 3. 证据目录约定
+
+| 目录 | 内容 | owner | 是否入库 |
+|---|---|---|---|
+| `docs/logs/phase0/` … `docs/logs/phase3/` | 命令输出、doctor 自检、构建日志 | 各任务 owner | 否（`.gitignore` 局部忽略，仅本地） |
+| `docs/reports/` | 核验 JSON、审计报告、场景证据链 | verifier-dev / scenario-tester | 是 |
+| `docs/evaluations/` | T3.4 选做评估报告 | evaluator | 是 |
+| `docs/backups/` | `mcp.json` 等个人配置的改前备份 | env-agent | 是（据 T0.2 DoD"备份到仓内"） |
+
+---
+
+## 4. 进度快照（截至 2026-11-03）
+
+| 阶段 | 任务数 | 已完成 | 进行中 | 挂起 | 待开始 |
+|---|---|---|---|---|---|
+| Phase 0 | 5 | 1（T0.1） | 3（T0.2、T0.3、T0.5） | 0 | 1（T0.4） |
+| Phase 1 | 9 | 0 | 1（T1.1） | 0 | 8 |
+| Phase 2 | 6 | 0 | 0 | 6 | 0 |
+| Phase 3 | 5 | 0 | 0 | 0 | 5 |
+| **合计** | **25** | **1** | **4** | **6** | **14** |
+
+GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/platform32-mcp`（Public），由 T1.1 创建。
+
+---
+
+## 5. 变更记录
+
+| 日期 | 变更 | 变更者 |
+|---|---|---|
+| 2026-11-03 | 建板：Phase 0–3 共 25 条任务 + GATE 状态表 + 证据目录约定（T0.5） | skill-author |

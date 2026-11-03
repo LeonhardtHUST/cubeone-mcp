@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────────────
+# platform32-mcp / .gitignore
+# 原则：只入库"可复用知识与脚本"，不入库"本机证据与克隆副本"。
+# ─────────────────────────────────────────────────────────────
+
+# ── 场景克隆区（T1.5，owner: scenario-tester）────────────────
+# 三个模板仓 + stm32-digital-clock 的本地克隆副本，体积大且会漂移。
+# 原仓改动必须发生在原仓自己，这里只是实验靶场。
+/testbeds/
+
+# ── 本机证据日志（Phase 0–3 的命令输出）──────────────────────
+# 体积大、与本机环境强绑定；只在本地留存，路径写进 docs/TASKBOARD.md。
+# 保留 .gitkeep 让目录结构在 clone 后可预期。
+docs/logs/*
+!docs/logs/.gitkeep
+
+# ── Python 产物 ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# ── CubeMX 备份噪音（.ioc.bak 由 ioc_backup.py / regen.sh 生成）──
+*.ioc.bak
+.ioc.bak/
+*.mxproject.bak
+
+# ── WorkBuddy / 助手工作区产物 ────────────────────────────────
+.workbuddy/
+*.genie
+
+# ── 编辑器与系统 ─────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
