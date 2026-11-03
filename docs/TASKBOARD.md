@@ -4,7 +4,7 @@
 > 上游：`docs/2026-11-03-agent-team-plan.md`（下称"计划"）、`docs/2026-11-03-execution-research.md`（下称"调研报告"）。
 > 交接协议见计划 §5.2：新 Agent 入场按 `本文件` → `docs/DECISIONS.md` → 计划对应 Phase 节 的顺序读，即可无缝接手。
 
-最后更新：2026-11-03 · 更新者：skill-author（建板，T0.5）
+最后更新：2026-11-03 · 更新者：skill-author（T1.4 初稿落盘，同步 T1.1/T0.5 状态）
 
 ---
 
@@ -56,16 +56,16 @@
 | T0.2 | 改 `~/.workbuddy/mcp.json`：新增 `vscode-cube-mcp`（内联 `ST_CUBEMX_EXE`/`ST_CUBEMX_ALLOWED_ROOTS`/`ST_CUBEMX_TIMEOUT=300`）、新增 `platformio.mcp`（`uvx`，`PLATFORMIO_MCP_POLICY=build_only`）；`stm32-stlink` 保持 disabled | env-agent | T0.1 | 进行中 | L1 | 待补：`docs/backups/`（改前备份）+ JSON 校验输出 → `docs/logs/phase0/` |
 | T0.3 | 安装并自检 `uvx platformio.mcp doctor` | env-agent | T0.2 | 进行中 | L1 | 待补：`docs/logs/phase0/platformio-mcp-doctor.log` |
 | T0.4 | 逐 server 冒烟：`cubemx_help`、`pio_system_info` + `pio_list_devices`、对 G474 模板仓**只读** `cubemx_load` | scenario-tester | T0.2、T0.3 | 待开始 | L1 | 待补：三段输出 → `docs/logs/phase0/`；`cubemx_load` 后原仓 `git status` 干净 |
-| T0.5 | 建 `docs/TASKBOARD.md` 任务看板 | skill-author | T0.1 | 进行中 | L0 | 本文件（建板完成，待 lead 验收格式） |
+| T0.5 | 建 `docs/TASKBOARD.md` 任务看板 | skill-author | T0.1 | 已完成 | L0 | 本文件（25 条任务 + GATE 表 + 证据约定，已投入实际使用） |
 
 ### Phase 1：MVP 无硬件闭环（2–3 天）
 
 | 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
 |---|---|---|---|---|---|---|
-| T1.1 | 建仓库骨架 + `.gitignore`（testbeds、logs 局部）+ GitHub remote push | skill-author | Phase 0 | 进行中 | L0 | 本仓首个 commit `chore: 建仓骨架与 .gitignore`；remote 见第 4 节 |
+| T1.1 | 建仓库骨架 + `.gitignore`（testbeds、logs 局部）+ GitHub remote push | skill-author | Phase 0 | 已完成 | L0 | commit `9b89a10` `chore: 建仓骨架与 .gitignore`（12 files/+842）；remote `https://github.com/LeonhardtHUST/platform32-mcp`（Public，default `main`） |
 | T1.2 | **核验器 v1** `scripts/verify_generation.py`：① 日志无 `Cannot map`（白名单容忍 `VP_RIF_VS_RIF1`，调研报告 D8）② 期望外设均有 `MX_xxx_Init()` 定义**且**在 `main()` 被调用 ③ `.mxproject` 无盘符绝对路径 ④ `syscalls.c`/`sysmem.c` 叠加路径降级为 warning；输出 JSON | verifier-dev | T1.1 | 待开始 | L2 | 待补：正/负样本 ≥5 例 + `pytest` 全绿输出 → `docs/logs/phase1/` |
 | T1.3 | `scripts/regen.sh`：备份 `.ioc` → `cubemx_generate` → 核验；失败即 `git checkout .ioc` 回滚 | verifier-dev | T1.2 | 待开始 | L3 | 待补：G474 testbed 成功一次 + 失败回滚一次的输出 |
-| T1.4 | **SKILL.md 初稿**：流程编排知识（何时 `cubemx_load/configure/generate`、G1 核验强制、L 等级声明、提交文案模板、陷阱速查 D1–D9/H-1–H-6 链接） | skill-author | T1.2 | 待开始 | L0 | 待补：`SKILL.md`（当前为 v0.1.0 骨架，8 处 `TODO(T1.4)`）+ lead/verifier-dev 评审记录 |
+| T1.4 | **SKILL.md 初稿**：流程编排知识（何时 `cubemx_load/configure/generate`、G1 核验强制、L 等级声明、提交文案模板、陷阱速查 D1–D9/H-1–H-6 链接） | skill-author | T1.2 | 进行中 | L0 | 初稿已落盘（`SKILL.md` v0.2.0，§0/§2/§3/§4/§5 完成）；§1 核验器接口留 `TODO(T1.2)` 待回填，同行评审未做 |
 | T1.5 | 建 `testbeds/`：克隆三个模板仓 + `stm32-digital-clock` 副本（本地路径 clone，不碰原仓） | scenario-tester | T1.1 | 待开始 | L1 | 待补：四副本 `git remote -v` 输出 + 原仓 `git status` 无变化 |
 | T1.6 | **场景 S1（改配置）**：G474 testbed 加 GPIO 输出/改 PinState：`cubemx_load` 审计 → 备份 → `configure`/`generate` → 核验 → `pio_build` → `git diff` 汇报 → 按规范 commit | scenario-tester | T1.3、T1.4、T1.5 | 待开始 | L3 | 待补：`pio run` Flash/RAM 字节 + 核验 JSON → `docs/reports/` + diff |
 | T1.7 | **场景 S2（只读审计）**：`stm32-digital-clock` testbed 上 `cubemx_load` + `pio_build`，产出审计报告（引脚表、时钟树键值、构建结果） | scenario-tester | T1.5 | 待开始 | L1 | 待补：`docs/reports/S2-audit-digital-clock.md` |
@@ -127,11 +127,11 @@
 
 | 阶段 | 任务数 | 已完成 | 进行中 | 挂起 | 待开始 |
 |---|---|---|---|---|---|
-| Phase 0 | 5 | 1（T0.1） | 3（T0.2、T0.3、T0.5） | 0 | 1（T0.4） |
-| Phase 1 | 9 | 0 | 1（T1.1） | 0 | 8 |
+| Phase 0 | 5 | 2（T0.1、T0.5） | 2（T0.2、T0.3） | 0 | 1（T0.4） |
+| Phase 1 | 9 | 1（T1.1） | 1（T1.4） | 0 | 7 |
 | Phase 2 | 6 | 0 | 0 | 6 | 0 |
 | Phase 3 | 5 | 0 | 0 | 0 | 5 |
-| **合计** | **25** | **1** | **4** | **6** | **14** |
+| **合计** | **25** | **3** | **3** | **6** | **13** |
 
 GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/platform32-mcp`（Public），由 T1.1 创建。
 
@@ -142,3 +142,4 @@ GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/platform32
 | 日期 | 变更 | 变更者 |
 |---|---|---|
 | 2026-11-03 | 建板：Phase 0–3 共 25 条任务 + GATE 状态表 + 证据目录约定（T0.5） | skill-author |
+| 2026-11-03 | T1.1 已完成（commit `9b89a10` + Public remote）；T0.5 已完成；T1.4 转进行中（SKILL.md v0.2.0 初稿落盘，§1 待 T1.2 回填） | skill-author |
