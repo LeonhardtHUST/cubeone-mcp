@@ -12,6 +12,7 @@
 //   T7 写策略：read_only 下 ioc_field set → isError 且文本含"策略拦截"
 //   T8 dry-run 放行：CUBEONE_POLICY=full + dry_run=true → exit=0
 //   T9 路径白名单：CUBEONE_ALLOWED_ROOTS 外的路径 → isError 且含"越界"
+//   T10 中文可读：Python 侧中文报错到 MCP 返回文本里必须是正常汉字（R-B2 的 PYTHONIOENCODING）
 //
 // 运行：node tools/npm_mcp_handshake.mjs
 // 证据：docs/logs/phase1/npm-mcp/handshake.log（同内容落盘）
@@ -165,6 +166,27 @@ async function main() {
       "T7 read_only 拒绝 set",
       denied.isError === true && textOf(denied).includes("策略拦截"),
       textOf(denied).split("\n")[0],
+    );
+
+    // T10 中文可读（R-B2）：不加 PYTHONIOENCODING 时，中文 Windows 上 Python 以 cp936
+    // 写管道、JS 按 utf8 解码 → "指向的文件不存在" 变成乱码；本项就是这条的守卫。
+    // 只看 structuredContent 是老冒烟的盲区：那里是 JSON（脚本自己按 utf8 写的），
+    // 永远不乱，乱的是 stdout/stderr 文本 —— 所以必须断言**文本**。
+    const zh = await c.callTool({
+      name: "verify_generation",
+      arguments: {
+        log: path.join(ROOT, "no-such-dir", "no-such.log"),
+        main_c: path.join(G474, "Core", "Src", "main.c"),
+        mxproject: path.join(G474, ".mxproject"),
+        expect: "GPIO",
+      },
+    });
+    const zhText = textOf(zh);
+    const zhLine = zhText.split("\n").find((l) => l.includes("[input-error]")) || "";
+    check(
+      "T10 中文报错可读",
+      zh.isError === true && zhLine.includes("指向的文件不存在") && !zhText.includes("\uFFFD"),
+      zhLine.trim().slice(0, 90) || zhText.split("\n")[0],
     );
   });
 
