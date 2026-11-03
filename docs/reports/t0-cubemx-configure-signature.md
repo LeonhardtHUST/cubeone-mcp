@@ -105,7 +105,35 @@ NOISE_RE = re.compile(
 - `Cannot load` 被显式列入噪声（它其实可能是真错误），需注意区分。
 
 **⇒ 给 verifier-dev 的硬要求：G1 核验器必须读取 CubeMX 的原始 stdout / 日志文件，不要解析 MCP 工具返回的清洗后文本。** 否则 S3 负路径可能因"证据被上游过滤掉"而误判为 PASS。
-（`Cannot map` 行的真实前缀形态本次未实测，见 §7 第 3 项；S3 首跑即可定案。）
+
+#### 3.2.1 补充实证（2026-11-03 12:10，基于真实 CubeMX 日志）
+
+`scenario-tester` 的 S1 干跑留下了真实 CubeMX 原始日志 `docs/logs/phase1/s1-dryrun-setcube.log`（606 行），据此把上面的"未实测"补成**已确认**：
+
+**CubeMX 真实日志行格式（确认为带前缀）**：
+
+```
+2026-11-03 12:06:13,445 [INFO] ImportTextPane:234 - (OptionalMessage_ERROR) Pin5 (VP_RIF_VS_RIF1) cannot be retrieved for this MCU
+```
+
+⇒ 行首**确实是** `YYYY-MM-DD HH:MM:SS,mmm [LEVEL]`，**精确命中 `NOISE_RE` 第一条分支**。结论细化：
+
+| 级别 | 是否被 `NOISE_RE` 删除 | 依据 |
+|---|---|---|
+| `[INFO]` | **会删** | 正则级别集合含 INFO |
+| `[WARN]` | **会删** | 同上 |
+| `[DEBUG]` / `[TRACE]` | **会删** | 同上 |
+| `[ERROR]` | **不会删** | 正则级别集合**不含 ERROR**（这是个可利用的缝隙） |
+
+两项直接后果：
+
+1. 模板仓已知的 `VP_RIF_VS_RIF1` 诊断噪音（`[INFO] ... cannot be retrieved`）**在 MCP 返回文本里看不到，在原始日志里看得到**。若 G1 从 MCP 返回值取日志，会"看不到这条噪音"——看似是好事，实则说明**过滤规则正在改变证据**，不可接受。
+2. 若 `Cannot map signal` 由 CubeMX 以 `[WARN]` 记录 → MCP 通道会吃掉；若以 `[ERROR]` 记录 → 会保留。**级别仍未定案**，但判据已明确：**只要 G1 读原始日志，两种情形都能覆盖**。
+
+**同批实证的其他收获**：
+
+- **`set pin PB0 GPIO_Output` 被 6.18 接受**，CubeMX 逐条回显 `OK`（日志末尾可见 `OK` / `set pin PB0 GPIO_Output` / `OK` / `config saveas "..."` / `OK`），退出码 0。⇒ §7 未实测项 1、2 中"命令语法是否可用"已定：**语法可用**（但 `.ioc` 是否新增 `GPIOParameters` 白名单仍需看 diff，仍未定案）。
+- 成功命令回显裸行 `OK`、失败回显 `KO` → `_run_script` 的 `ok = 无整行 KO` 判定**在本机语义上成立**；但它抓不到静默丢弃这一点不变。
 
 ---
 
@@ -236,9 +264,9 @@ exit
 
 | # | 未定项 | 谁来定 | 怎么定 |
 |---|---|---|---|
-| 1 | `set pin PBx GPIO_Output` 是否会自动补 `PBx.GPIOParameters` 白名单 | scenario-tester（T1.6/S1 首跑） | 改完 `git diff *.ioc`，看是否出现 `PB0.GPIOParameters=` |
+| 1 | `set pin PBx GPIO_Output` 是否会自动补 `PBx.GPIOParameters` 白名单 | scenario-tester（T1.6/S1 首跑） | 改完 `git diff *.ioc`，看是否出现 `PB0.GPIOParameters=`。**命令本身已被证明可用**（`s1-dryrun-setcube.log` 回显 `OK`），只剩白名单这一环 |
 | 2 | `set gpio parameters PBx PinState=GPIO_PIN_SET` 语法是否被 6.18 接受 | scenario-tester（同上，若需要初始电平） | 看是否返回 `KO`；再看 `main.c` 有无 `HAL_GPIO_WritePin` |
-| 3 | `Cannot map signal` 行的真实前缀形态（决定 G1 能否消费 MCP 输出） | scenario-tester（T1.8/S3 负路径） | 故意写错信号名，**同时**抓 MCP 返回文本与 CubeMX 原始 stdout，比对是否被 `NOISE_RE` 吃掉 |
-| 4 | `cubemx_configure` 在 G474 上的单次耗时 | scenario-tester | 调研记录单次生成约 60s；超时已设 300s |
+| 3 | `Cannot map signal` 行的**级别**（INFO/WARN 会被 MCP 过滤，ERROR 不会） | scenario-tester（T1.8/S3 负路径） | 故意写错信号名，抓原始日志看该行是 `[WARN]` 还是 `[ERROR]`；**G1 读原始日志则无需关心**（见 §3.2.1） |
+| 4 | `cubemx_configure` 在 G474 上的单次耗时 | scenario-tester | 调研记录单次生成约 60s；超时已设 300s。S1 干跑实测 `12:05:53 → 12:06:25` ≈ **32s**（仅 set pin + saveas，未 generate） |
 
 前三项都应在 S1/S3 首跑时顺手定案，**定案后回填本文件并升到 L2/L3**。
