@@ -138,6 +138,8 @@
 |---|---|---|---|---|---|---|
 | M1 | 接缝修复 R-B1–R-B6 + Node 测试基建 R-D1/R-D2 + R-C1 第一步 + 版本 bump **0.6.2** | software-engineer（实现）/ software-qa-engineer（单测） | M0（D33 在册） | 已完成（三证齐全） | L2（本地四连验 + CI 全绿） | **发布三证（2026-11-03 22:04）**：tag `v0.6.2`（`b8f1857`，三处版本同值 0.6.2）→ GitHub Release `cubeone-mcp v0.6.2`（正文入库 `docs/releases/2026-11-03-v0.6.2.md`）→ npm `cubeone-mcp@0.6.2`（`2026-11-03T14:04:53Z`，Trusted Publisher，17 files / 82.1 kB）→ 本行回填。**CI**：run `41649454775` 全绿 6 job（pytest 3.11/3.13 各 **74 passed**；node 18/20/22 各 **31 passed / 1 skipped**，skip 为仅 win32 有意义的大小写用例；脚本检查绿）。**`lib/server.mjs` 六项**：R-B1 退出码白名单（含 `[<tool>][not-found]` 域内结论例外 + Traceback 优先，计划 §7 风险条要求）、R-B2 子进程 `PYTHONIOENCODING=utf-8`、R-B3 `validateArgs`（required/enum/类型/条件必填）、R-B4 `--` 分隔 + `--json-out` 前置到 `--` 之前、R-B6 未知工具动态清单、R-D1 七个纯函数导出；**另含 R-C1①** `CUBEONE_REQUIRE_ROOTS` opt-in 严格模式（五组合实测：默认→启动 / `=1`+空→exit1 / `=true`+有→启动 / `=YES`+空→exit1 / `=0`→启动）。**`tests/node/server.test.mjs`（QA 写）32 例** → `node --test tests/node/*.test.mjs` **32/32**（Node 22.22.2 与 **18.20.8** 双档）。**CI**：`.github/workflows/ci.yml` 新增 `node` job，**三档矩阵 18/20/22**。**冒烟**：`tools/npm_mcp_handshake.mjs` 新增 T10 → `docs/logs/phase1/npm-mcp/handshake.log`（**11 PASS**）。**pytest 74 passed**。**⚠️ R-B2 的验证边界（如实记录，勿读成"纸面修复"）**：本机 ANSI 代码页 = **cp65001(UTF-8)**，且运行环境已注入 `PYTHONIOENCODING=utf-8` / `PYTHONUTF8=1` / `LC_ALL=C.UTF-8`，三组对照（摘 `PYTHONIOENCODING`、`PYTHONUTF8=0`、连 `LANG/LC_ALL` 一起摘）**都造不出 cp936 分支** ⇒ 属**验证对象在本机不可达**，不是没验证；T10 保留作回归守卫，在真实 cp936 机器上才体现。**两条只有真跑才发现的缺陷**：① `node --test <目录>` 在 Node 18 展开、Node 22(Windows) 当模块加载报 `MODULE_NOT_FOUND` ⇒ 命令一律用 glob 形式（计划书 R-D1/R-D2/收口节已同步更正）；② `package-lock.json` 被 `.gitignore:49` 忽略（不入库）⇒ CI 不能用 `npm ci`（缺 lock 必红），改 `npm install` 且不开 `cache: npm`（依赖为精确版本 `1.32.2`，无 semver 漂移） |
 
+| M2 | 安全加固 **R-C1②**（默认 fail-closed + `CUBEONE_ALLOW_NO_ROOTS` 逃生门）/ **R-C2**（`realpath` 物理路径）/ **R-C3**（restore 原子化 + 备份完整性摘要）/ **R-C4**（`report_md` 披露）+ 版本 bump **0.7.0（BREAKING）** | software-engineer（实现）/ software-qa-engineer（测试基线） | M1（0.6.2 已收口） | 进行中（待发版收口） | L2（本地三验 + CI 全绿） | `lib/server.mjs`：`envTruthy` 统一真值解析（`REQUIRE_ROOTS`/`ALLOW_NO_ROOTS` 共用）、`checkPath` 空白名单→`reason:"no-roots"`、`physical()` 逐级上溯最近存在的祖先（防 junction 绕出且不误拒未生成文件）、拒绝文案分「无白名单」与「越界（附物理落点）」两种；`scripts/ioc_backup.py`：sidecar `<name>.ioc.bak.sha256`、restore 两阶段（先全量校验再逐个 `os.replace`）、不一致 rc=2 + `[ioc_backup][integrity]`；文档：README/SKILL 的 BREAKING 迁移说明、`references/regen-exit-codes.md` 补退出码 2 的第二来源。**验证**：`node --test tests/node/*.test.mjs` **37 passed / 0 skipped**（新增 2-5a/b/c 逃生门真值表、2-6 junction 绕出、2-7 未生成文件不误拒、5b-1 无白名单被拒）；`pytest` **77 passed**（restore 三例）；`npm_mcp_handshake.mjs` **12/12 PASS**（新增 T11）；CI run `41662550646` 六 job 全绿 |
+
 ---
 
 ## 2. 关卡（GATE）状态表
@@ -180,12 +182,12 @@
 | Phase 2 | 6 | 0 | 0 | **6**（T2.1–T2.6） | 0 | 0 |
 | Phase 3 | 5 | **3**（T3.1、T3.2、T3.5） | 0 | 0 | **1**（T3.3） | **1**（T3.4） |
 | ‹Phase 0–3 小计› | **25** | **17** | **0** | **6** | **1** | **1** |
-| M1 修复批次 | 1 | 0 | **1**（M1，待发版收口） | 0 | 0 | 0 |
-| **合计** | **26** | **17** | **1** | **6** | **1** | **1** |
+| M1 修复批次 | 2 | **1**（M1） | **1**（M2，待发版收口） | 0 | 0 | 0 |
+| **合计** | **27** | **18** | **1** | **6** | **1** | **1** |
 
-> 校验口径：Phase 0–3 内 `已完成 17 + 挂起 6 + 待开始 1 + 已关闭 1 = 25`；再加 M1 批次的 1 条「进行中」= **26**。
+> 校验口径：Phase 0–3 内 `已完成 17 + 挂起 6 + 待开始 1 + 已关闭 1 = 25`；再加批次表的 `M1 已完成 + M2 进行中 = 2` ⇒ **27**。
 > **两段分开统计**是为了不让整改批次污染原计划的 25 条口径（`T0.5` 的"25 条任务"、§0 各处引用都按 Phase 0–3 计数）。
-> M1 一旦发版收口，该行改为「已完成」，合计变 18 已完成 / 0 进行中。
+> M1 已于 0.6.2 收口（三证齐全）；M2 一旦发版收口，该行改为「已完成」，合计变 19 已完成 / 0 进行中。
 > 上一版快照（`7 已完成 / 4 进行中 / 8 待开始`）与任务表实际状态**三重不符**——审定发现②的直接证据。
 
 > **T1.2 / T1.3 已由 verifier-dev 回填（v1.1 定稿）**：核验器 6 个 check id + `blocking` + schema `/2`；
