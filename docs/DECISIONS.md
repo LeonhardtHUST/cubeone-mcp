@@ -593,3 +593,79 @@ DoD 声明的 L 等级**下调**必须：lead 批准 + `DECISIONS` 条目 + 看�
 - **时间**：**2026-11-03**（计划通过时间；本条落盘于 M3 批次）
 - **方式**：计划文档授权，**未逐条过目本条正文**——本条属治理机制，不改变交付物形态，故未单独开 GATE（依 34.2(1) 的适用范围）。
 - **记录人**：`software-engineer`（M3 批次执行者）。
+
+### D35 · 发布流程 SOP：把两次实跑固化成一条流水线
+
+> 来源：完备计划 `docs/2026-11-04-engineering-completeness-plan.md` §4 C2.4
+> 关系：D33 定**规则**（三证 + 版本轴同值 + 收口判据），本条定**动作顺序**——按 D33 做但没有顺序，仍会在"先打 tag 还是先补看板"上反复试错。
+
+#### 35.1 为什么需要 SOP：0.6.2 与 0.7.0 的两次实跑并不同构
+
+两次发版都成功了，但**顺序是每次现场推出来的**：
+
+| 版本 | 差异点 | 代价 |
+|---|---|---|
+| `0.6.2` | 先把 npm 发出去、再补 GitHub Release 正文入库 | 正文有一段时间只存在于 GitHub 页面（`docs/releases/` 里是事后补的） |
+| `0.7.0` | 先打 tag、再走 CI OIDC 发布；期间**push 被平台策略拦下一次** | 一度出现"tag 在本地、Release 与 npm 两证未产出"的中间态，看板只能记「进行中」 |
+
+结论：**顺序不是风格问题，它决定了"中间态"长什么样**。把顺序写死，中间态就只有一个已知形态，
+看板该记什么、别人接手该从哪一步续，都不需要现场推理。
+
+#### 35.2 发布流水线（照抄执行，勿跳步）
+
+| # | 步骤 | 命令 / 动作 | 产出证据 |
+|---|---|---|---|
+| 0 | **确认版本轴三处同值** | `node -p "require('./package.json').version"` + `grep -m1 '^version:' SKILL.md` + README 表两处 | 三条输出一致 |
+| 1 | **本地四项自验** | `python -m pytest tests/ -q --basetemp=<干净目录>`（含覆盖率底线）· `node --test tests/node/*.test.mjs` · `node tools/npm_mcp_handshake.mjs --require-materials` · `npm pack --dry-run \| grep -E "guides/"` | 全绿 + 清单里指南在位 |
+| 2 | **CI 全绿**（含 Windows job） | 等 `CI` workflow 六个 job 绿 | run 链接 |
+| 3 | **GATE-3.1 证据包** | 向用户出示：CI run + 本地自验 + 变更摘要（`git log --oneline <上tag>..HEAD`）+ 已知限制 + **BREAKING 与否** | 用户明确放行 |
+| 4 | **打 tag** | `git tag -a vX.Y.Z -m "…"` → `git push origin vX.Y.Z`（若 push 被策略拦下：**停手报告，不自行重试**） | `git tag -l` 含新 tag |
+| 5 | **GitHub Release** | 正文取自 `docs/releases/<日期>-vX.Y.Z.md`（**先入库，再发 Release**） | Release 页面 + 正文入库 commit |
+| 6 | **npm 发布** | Trusted Publisher（`publish.yml`）或人工 `npm publish --registry "https://registry.npmjs.org/"`；发完确认 `dist-tags.latest` | `npm view cubeone-mcp dist-tags` |
+| 7 | **看板回填**（**当场做**） | 该批次行 → 「已完成」+ 三证链接进证据列；§4 快照同步 | 见 35.3 坑② |
+| 8 | **两道机器校验** | `python tools/check_taskboard.py` → `rc=0`；`python tools/check_release.py --network` → `rc=0` | 两条输出 |
+| 9 | **npmmirror 同步**（可选，国内可见性） | `curl -X PUT https://registry.npmmirror.com/cubeone-mcp/sync` | 秒同步 |
+
+**顺序里唯一不能交换的两对**：
+
+- **4 必须在 5、6 之前**：Release 与 npm 都以 tag 为锚（`release` 事件的 workflow 取自 tag 点，见坑①）。
+- **7 必须在 8 之前**：看板没回填时 `check_taskboard.py` 的判据③ 会红（tag 已存在而 T3.5/批次行未记账）。
+
+#### 35.3 两个已踩的坑（别再踩）
+
+**① `release` 事件的 workflow 取自 tag 点，不是取自默认分支的最新提交**
+
+GitHub 在 `release` 事件里用的是**该 tag 指向的那个 commit** 上的 workflow 文件。所以：
+tag 打得早、workflow 修得晚，发布时跑的就是**旧版** workflow。
+
+- 实例：`v0.6.1` 补发 Release 时触发 `Publish npm` run `41650583470` 失败——tag 点 `8f99fb0`
+  早于幂等守卫提交 `f830b55`，旧版 `::error` 判红。
+- **处置**：保留红灯不删（删了等于抹掉历史），把根因记账。详见 **D33 §33.4.1**。
+- **可操作推论**：**改过 `publish.yml` 的批次，必须让 workflow 修复先落进将要打 tag 的那个 commit**，
+  否则 tag 一点下去就注定跑旧逻辑。
+
+**② 发布后看板回填必须当场做，否则 `check_taskboard.py` 会红**
+
+`tools/check_taskboard.py` 的判据③：`git tag` 里存在 `v0.6.*` / `v0.7.*` 时，`T3.5` 不得为「待开始」
+（防"tag 打了但看板没记账"）。于是**发版是唯一会主动制造红灯的动作**：
+tag 落地的瞬间，看板就从绿变红，直到批次行回填完成。
+
+- 正确姿势：tag / Release / npm 三证拿到后，**同一次会话内**就回填看板并跑一遍脚本；
+  不要"发完先去干别的"。中间态若确实要留（如 push 被拦），该行按 D33 §33.2 记「进行中」，
+  **不得提前写「已完成」**。
+- 反例形态：把 `check_taskboard.py` 从 CI 里摘掉来"解决"红灯——那是把温度计砸了。
+
+#### 35.4 与 D33 / D34 的关系
+
+- **D33** 管"什么算收口"（三证 + 版本轴同值 + 看板回填）；本条管"按什么顺序做"。
+- **D34 §34.2(4)** 管"节奏"（时间盈余优先加强验证、不默认扩范围）；本条是它的下游：
+  SOP 让"发版"这件事本身不再消耗判断力，盈余才能真的用在验证上。
+- **机器化落点**：`tools/check_release.py`（C2.3）把步骤 0 与步骤 8 的一半交给机器；
+  `tools/check_taskboard.py`（M3）管步骤 7 的另一半。两者都**只校验、不改写**。
+
+#### 35.5 谁确认 / 何时
+
+- **确认人**：用户 **Leon**（完备计划 §4 C2.4 授权"发布 SOP 成文"，随 C2 批次落盘）
+- **时间**：**2026-11-04**
+- **方式**：计划文档授权；本条不改变交付物形态、只固化已发生的两次实跑顺序，故未单独开 GATE（依 D34 §34.2(1)）。
+- **记录人**：`software-engineer`（C2 批次执行者）。
