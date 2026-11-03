@@ -344,6 +344,7 @@ H-5 `Error_Handler` 后无诊断 ｜ **H-6 新增外设没落进生成物且日�
 
 - 手册页 `references/`：`capability-boundary` / `verify-contract` / `regen-exit-codes` /
   `diff-evidence` / `pitfalls`；外部资料链接见 `references/README.md`。
+- **npm 包（MCP 工具通道，`npx cubeone-mcp`）**：`docs/guides/npm-publish-and-codebuddy.md`。
 - 状态真源 `docs/TASKBOARD.md`；决策 D1–D30 见 `docs/DECISIONS.md`；核验器完整契约
   `docs/reports/t1.2-verifier-contract.md`；MCP 注册 `docs/guides/mcp-registration.md`；版本历史见 git log。
 - **单写者边界**：`scripts/`、`tests/` → verifier-dev；`SKILL.md`、`docs/`、`references/` → skill-author；

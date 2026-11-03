@@ -37,6 +37,27 @@ STM32 开发里有一种很难发现的失败：
 
 > 详细探测记录与四层模型（能力层 > 路径层 > 动作层 > 流程层）见 [`references/capability-boundary.md`](references/capability-boundary.md)。
 
+## MCP 工具通道（`npx` / `vpx`）
+
+本仓库同时发布为 npm 包 [`cubeone-mcp`](https://www.npmjs.com/package/cubeone-mcp)：
+一个 Node 版 stdio MCP server，把三个 Python 脚本（G1 核验 / `.ioc` 备份 / 键读写）暴露为 MCP 工具，
+内置路径白名单（`CUBEONE_ALLOWED_ROOTS`）与写策略门禁（`CUBEONE_POLICY`，默认 `read_only`）。
+
+```jsonc
+// 任意 MCP 客户端的 mcpServers 片段（CodeBuddy / Claude Desktop 风格）
+"cubeone-mcp": {
+  "command": "vpx",            // 或 "npx"
+  "args": ["cubeone-mcp"],
+  "env": {
+    "CUBEONE_POLICY": "read_only",
+    "CUBEONE_ALLOWED_ROOTS": "D:\\Projects"
+  }
+}
+```
+
+工具清单、退出码判据、发布与注册细节见 [`docs/guides/npm-publish-and-codebuddy.md`](docs/guides/npm-publish-and-codebuddy.md)。
+能力边界对 MCP 通道同样适用：**非 GPIO 外设的增改依旧没有工具能力**，核验器仍是唯一安全网。
+
 ## 快速开始
 
 依赖：**Python 3.11+**（CI 仅覆盖 3.11 / 3.13，更早版本未验证；脚本全为标准库）、**STM32CubeMX 6.18.1**、**PlatformIO Core**（仅构建/烧录需要）。
