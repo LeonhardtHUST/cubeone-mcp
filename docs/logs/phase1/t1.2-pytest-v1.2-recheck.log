@@ -1,0 +1,12 @@
+# M0 / R-A4 证据指针修正：v1.2 轮 pytest 复核（当前 HEAD，重新跑一遍并归档）
+# 目的：消除 TASKBOARD T1.2 行与契约 §4 里那个没有对应日志的 "69 passed"
+# 命令: rm -rf .pytest-tmp-recheck && python -m pytest tests/ -q --basetemp=D:/Projects/GitHub/cubeone-mcp/.pytest-tmp-recheck
+# 环境: win32 / Python 3.13.14 / pytest 9.2.0（与 t1.2-pytest.log 同一套环境）
+# 时间: 2026-11-03 21:18 +0800
+# 与 t1.2-pytest.log 的区别: 那份是 v1.1 轮的 verbose 输出（collected 61 items / 61 passed），
+#   本轮用 -q + --basetemp（临时根落在仓内、跑完即删），采到的是当前 HEAD 的 74 项
+# 采集明细（同日 --collect-only 核对）: test_verify_generation 46 / test_ioc_backup 8 / test_ioc_field 9 / test_regen_preflight 11 = 74
+#---------------------------------------------------------------------------
+........................................................................ [ 97%]
+..                                                                       [100%]
+74 passed in 66.85s (0:01:06)
