@@ -39,6 +39,9 @@ venv/
 *.ioc.bak
 .ioc.bak/
 *.mxproject.bak
+# W6-4 / B-9：ioc_backup.py 的 SHA-256 完整性摘要旁路文件，同样是本机备份噪音，
+# 不入库（入库会让"备份可还原"的凭据看起来像受版本控制的真源文件）。
+*.ioc.bak.sha256
 
 # ── WorkBuddy / 助手工作区产物 ────────────────────────────────
 .workbuddy/

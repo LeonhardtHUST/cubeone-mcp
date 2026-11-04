@@ -32,6 +32,33 @@
 > **取代关系**：前三份计划的目标批次（Phase 0–3 / M0–M4 / C0–C4）均已交付或已被 L5 取代，
 > 一律只作历史参考，**其批次号不再沿用**；新工作按 `2026-11-04-next-steps-plan.md` 的 W0–W6 执行。
 
+### 2.1 勘误与遗留项登记（2026-11-04 · C7 追加，**不回改任何旧计划 / 旧报告原文**）
+
+> 按本节开头「计划是时点快照、更正只追加勘误」的约定，以下四条**只追加**：上文与
+> [`reports/2026-11-04-w0w6-implementation-design.md`](reports/2026-11-04-w0w6-implementation-design.md)
+> 的既有章节（§5.3 / §5.4 仍是 B-2 与 lost-update 的原始登记处）**一个字都不改**。
+
+1. **勘误（编排 §0.2 的预判遗漏）**：实现编排 §0.2 只复核了「W0-4 形态校验会影响哪些既有正向
+   用例」，**未预判到 W0-2（给了 `--project-root` 必须有 `Core/Src/*.c`）同样会让既有正向合成
+   夹具失效**。C1 已按「**补素材、不放宽判据**」正确解决：`tests/test_verify_generation.py` 的
+   `make_fake_project()` 补 `Core/Src/main.c`（`_read_source_texts()` 会跳过 main.c，判据断言零影响）、
+   `write_cannot_map_log()` 补 C1/C2 两类日志头、`test_mx_script_without_any_script_is_skip` 的
+   临时工程同样补齐。处理已由主理人验收采信。**给后续轮次的约束**：凡合成日志当 `--log` 须满足
+   ≥2 类 CubeMX 特征；凡传 `--project-root` 的测试工程须含 `Core/Src/*.c`。
+2. **B-2 遗留（后续排期，本轮不做）**：无 `outputSchema`、`structuredContent` 无体积上限、
+   `lib/server.mjs` 的 `tail(s, n=12000)` 只保留末 12000 字符、会截掉 `render_console()` 首行
+   `verdict`。C6 只去死路径回显 + 提示分派，**未触碰 `tail()` / `outputSchema`**。原始登记见编排
+   文档 §5.3；不新增任务卡、不改 §6 明确不做清单。
+3. **双会话 lost-update 竞态（已知限制，仅文档登记、不上文件锁）**：同一工程目录上并发执行两个
+   会话时，`ioc-backup.json` / `*.ioc.bak` / `.ioc` 可能互相覆盖；`ioc_backup.py` 的 SHA-256
+   完整性校验能**检测**部分覆盖但不能**阻止**。规避：遵守单写者原则，不同时用两个会话改同一工程；
+   后续若确需并发再评估 `flock` / 锁文件 + 锁超时 + 负样本。原始登记见编排文档 §5.4；
+   **本轮不改实现、不上锁、不新增任务卡**。
+4. **`regen.sh:276` 精确小写 `true` 的已知边界**：`[ "$IOC_MIGRATE" = "true" ]` 只认精确小写，
+   `TRUE` / `True` / 带尾空格的 `true ` 会漏（审定报告 :733 列为「会漏」）。C7 的 W6-3 值变体
+   用例**如实断言当前行为（不拦截 / 不告警）以锁住边界**，**不修判据**——改判据属范围扩张且与
+   D36① 冲突。将来若要放宽，须与 D36①、`pitfalls.md` P1、本仓 `regen-exit-codes.md` §4.1 同批修订。
+
 ## 3. 报告与证据（`reports/`）
 
 | 文档 | 什么时候看 |

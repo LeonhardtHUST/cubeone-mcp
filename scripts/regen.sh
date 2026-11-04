@@ -20,6 +20,14 @@
 # =============================================================================
 set -uo pipefail
 
+# B-8（C7）：头部约定与代码逐条对齐，避免「注释写的」和「脚本做的」分叉。
+#   · 故意**不含 `-e`**：所有子进程返回码都显式判（run_backup || die、GEN_RC、VERIFY_RC），
+#     靠 -e 抢先退出会跳过 rollback_project 与超时定向诊断。
+#   · 超时是「有 timeout(1) 才启用」：找不到时告警后无超时直跑，不是"恒有超时"。
+#   · B-7：DEFAULT_JAVA / DEFAULT_CUBE 是本机 Windows 路径，但已可由 ST_CUBEMX_JRE /
+#     ST_CUBEMX_EXE 或 --java / --cube 覆盖；自动探测属后续排期，本轮不改判据。
+#   · 退出码 {0,1,2}：正常 0 / 域内失败 1 / 没跑或归一 2，见 references/regen-exit-codes.md。
+
 # Git Bash 下 PATH 常缺 coreutils（timeout/find/sed/…），统一补齐。
 # ⚠️ 本机便利项，**他机无害可删**：这一行只把某个人的 PortableGit 路径前置，路径不存在时
 #    export 一个不存在的目录不会报错，脚本照常用系统 PATH 里的同名工具。
@@ -128,22 +136,32 @@ version_lt() {
     && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n 1)" = "$1" ]
 }
 
+# W6-1：每个带值选项在 shift 2 之前先判 $2 是否为空。
+# 旧实现缺值时 `${2:-}` 取到空串、赋值照做、`shift 2` 在只剩 1 个参数时不改变参数个数
+# ⇒ while 循环永远不前进（死循环）。抽成 helper 保证 11 处口径一致，且点名是哪个选项缺参。
+need_value() {
+  local flag="$1"
+  if [ -z "${2:-}" ]; then
+    die 2 "缺少选项取值：${flag}（每个带值选项后必须给一个值；--help 看用法）"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # 参数解析
 # ---------------------------------------------------------------------------
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -e|--expect)        EXPECT="${2:-}"; shift 2 ;;
-    -l|--log)           GEN_LOG="${2:-}"; shift 2 ;;
-    -m|--mx)            MX_SCRIPT="${2:-}"; shift 2 ;;
-    -o|--out)           OUT_DIR="${2:-}"; shift 2 ;;
-    --main-c)           MAIN_C="${2:-}"; shift 2 ;;
-    --mxproject)        MXPROJECT="${2:-}"; shift 2 ;;
-    --java)             JAVA_BIN="${2:-}"; shift 2 ;;
-    --cube)             CUBE_BIN="${2:-}"; shift 2 ;;
-    --timeout)          TIMEOUT_SEC="${2:-}"; shift 2 ;;
-    --allow-signal)     ALLOW_SIGNALS+=("${2:-}"); shift 2 ;;
-    --expect-pins)      EXPECT_PINS+=("${2:-}"); shift 2 ;;
+    -e|--expect)        need_value "$1" "${2:-}"; EXPECT="${2:-}"; shift 2 ;;
+    -l|--log)           need_value "$1" "${2:-}"; GEN_LOG="${2:-}"; shift 2 ;;
+    -m|--mx)            need_value "$1" "${2:-}"; MX_SCRIPT="${2:-}"; shift 2 ;;
+    -o|--out)           need_value "$1" "${2:-}"; OUT_DIR="${2:-}"; shift 2 ;;
+    --main-c)           need_value "$1" "${2:-}"; MAIN_C="${2:-}"; shift 2 ;;
+    --mxproject)        need_value "$1" "${2:-}"; MXPROJECT="${2:-}"; shift 2 ;;
+    --java)             need_value "$1" "${2:-}"; JAVA_BIN="${2:-}"; shift 2 ;;
+    --cube)             need_value "$1" "${2:-}"; CUBE_BIN="${2:-}"; shift 2 ;;
+    --timeout)          need_value "$1" "${2:-}"; TIMEOUT_SEC="${2:-}"; shift 2 ;;
+    --allow-signal)     need_value "$1" "${2:-}"; ALLOW_SIGNALS+=("${2:-}"); shift 2 ;;
+    --expect-pins)      need_value "$1" "${2:-}"; EXPECT_PINS+=("${2:-}"); shift 2 ;;
     --no-default-allow) DEFAULT_ALLOW=0; shift ;;
     --require-clean)    REQUIRE_CLEAN=1; shift ;;
     --fail-fast-on-migrate) FAIL_FAST_ON_MIGRATE=1; shift ;;
@@ -304,8 +322,14 @@ if [ -z "$EXPECT" ]; then
   log_info "未指定 --expect，按 .ioc 推导：${EXPECT}"
 fi
 
-mkdir -p "$OUT_DIR" || die 2 "无法创建输出目录：$OUT_DIR"
-OUT_DIR="$(cd "$OUT_DIR" && pwd)"
+if [ "$DRY_RUN" -eq 1 ]; then
+  # W6-4 / B-9：dry-run 不写盘 —— 连证据输出目录都不建。旧实现无条件 mkdir -p，
+  # 会让"只打印命令、不落盘"的承诺出现破口（并污染 git status / 用户目录）。
+  log_info "(dry-run) 不创建证据输出目录：${OUT_DIR}"
+else
+  mkdir -p "$OUT_DIR" || die 2 "无法创建输出目录：$OUT_DIR"
+  OUT_DIR="$(cd "$OUT_DIR" && pwd)"
+fi
 [ -n "$GEN_LOG" ] || GEN_LOG="${OUT_DIR}/cubemx-generate.log"
 VERIFY_JSON="${OUT_DIR}/verify.json"
 VERIFY_MD="${OUT_DIR}/verify.md"
@@ -448,7 +472,8 @@ report_migrate_stall() {
   log_err "    ② 用 GUI 打开本工程一次，让它把迁移对话框点完（迁移会重写 .ioc，需单独提交）。"
   log_err ""
   log_err "  背景与实测证据（300 s 超时 vs 62 s 成功）：references/pitfalls.md P1。"
-  log_err "  本次已从备份回滚 .ioc / .mxproject，工作区不会留下半成品。"
+  log_err "  注意：本诊断发生在回滚之前；回滚由紧随其后的 rollback_project 执行，"
+  log_err "        以日志里「已从 ... 恢复 .ioc」为准。此行不是回滚已完成的确认。"
   log_err "----------------------------------------------------------------"
 }
 
@@ -534,7 +559,16 @@ if [ "$VERIFY_RC" -ne 0 ]; then
   log_err "[regen] 核验阶段失败（退出码 ${VERIFY_RC}）：生成跑完了，但产物不对"
   log_err "  → 外设可能被静默丢弃、路径不可复现，或输入参数有误；先看 ${VERIFY_JSON}"
   rollback_project
-  exit "$VERIFY_RC"
+  # W6-2：契约只允许 {0,1,2}。核验器正常只给 0/1/2，但假 Python 桩、WindowsApps 商店桩、
+  # 找不到解释器或信号码会透传 9009 / 127 / 137 之类，破坏下游 CI 的退出码判断。
+  # 打印原始码便于排障，对外一律归一为 2（输入/执行错误）。
+  case "$VERIFY_RC" in
+    0|1) exit "$VERIFY_RC" ;;
+    2)   exit 2 ;;   # 契约内的输入错误，原样透传（数值与归一相同，但不谎报为契约外）
+    *)
+      log_err "  → 核验器返回契约外的原始码 ${VERIFY_RC}，按 {0,1,2} 契约归一为 2（输入/执行错误）"
+      exit 2 ;;
+  esac
 fi
 
 if [ "$DRY_RUN" -eq 1 ]; then

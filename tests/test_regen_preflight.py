@@ -195,15 +195,20 @@ def test_clean_log_without_ko_proceeds_to_verify(tmp_path: Path) -> None:
     out_dir = tmp_path / "evidence"
     cube = tmp_path / "STM32CubeMX.exe"
     cube.write_text("not-a-real-cube", encoding="utf-8")
-    fake_java = make_fake_java(tmp_path, "echo 'Code generation finished successfully'\n")
+    # W6-3 降噪：优先用真实成功日志原文（04-first-generate-retry.log，形态 5 类）；
+    # CI 上没有 docs/logs/phase4/ 时退回单行，仅验"生成阶段 → 核验阶段"的编排。
+    if HAS_REAL_LOGS:
+        fake_java = make_fake_java(tmp_path, f"cat '{REAL_LOG_OK.as_posix()}'\n")
+    else:
+        fake_java = make_fake_java(tmp_path, "echo 'Code generation finished successfully'\n")
 
     result = run_regen(
         project, "-o", str(out_dir), "--java", str(fake_java), "--cube", str(cube)
     )
     combined = result.stdout + result.stderr
 
-    # 空日志 → log_cannot_map warn；main.c 里 GPIO 正常 → 核验大概能过，但不管结果，
-    # 关键是"生成阶段"通过、进了"核验阶段"。
+    # 不管核验结论如何（夹具与真实日志不是同一个工程），关键是"生成阶段"通过、
+    # 进了"核验阶段"；用真实日志后也不会再因形态不成立被输入层退 2。
     assert "生成阶段：退出码 0 且无 KO" in combined
     assert "[regen] 生成阶段失败" not in combined
 
@@ -362,3 +367,128 @@ def test_help_does_not_leak_shell_code(tmp_path: Path) -> None:
     assert "用法" in result.stdout
     assert "set -uo pipefail" not in result.stdout
     assert "export PATH=" not in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# W6-1 / W6-3 · 缺参不死循环 + 用真实日志原文覆盖编排分支（2026-11-04，C7）
+# ---------------------------------------------------------------------------
+#: W6-3 用的**真实 CubeMX 日志原文**。`docs/logs/phase4/` 被 `.gitignore` 局部忽略、CI 上没有，
+#: 因此素材缺失时这些用例如实 SKIP（不造假素材，沿用本仓 T6 的取舍）；本机有证据时真跑。
+#: 两者形态类别数均 ≥2（02=3 类 / 04=5 类），即便真进核验阶段也不会被 W0-4 形态判据退 2。
+REAL_LOG_STALL = REPO_ROOT / "docs" / "logs" / "phase4" / "02-first-generate.log"
+REAL_LOG_OK = REPO_ROOT / "docs" / "logs" / "phase4" / "04-first-generate-retry.log"
+HAS_REAL_LOGS = REAL_LOG_STALL.is_file() and REAL_LOG_OK.is_file()
+needs_real_logs = pytest.mark.skipif(
+    not HAS_REAL_LOGS,
+    reason="docs/logs/phase4/ 是本机证据（.gitignore 局部忽略），CI 上无素材 → 如实 SKIP，不造假",
+)
+
+
+def real_log_fake_java(tmp_path: Path, log_path: Path) -> Path:
+    """把**真实日志原文**回显到 stdout，再以 124 模拟 timeout 强杀。
+
+    ⛔ 不对日志做 sed/echo 插删：W6-3 测的是「尾部窗口的时序形态」，合成两行头
+    无法构造 318 行 vs 638 行的尾部差异，只会退化成 grep 命中测试（A-25 批评的半吊子覆盖）。
+    """
+    return make_fake_java(tmp_path, f"cat '{log_path.as_posix()}'\nexit 124\n")
+
+
+def run_real_log_timeout(
+    tmp_path: Path, log_path: Path
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, bytes]:
+    """构造一次「真实日志 + 超时」的编排运行，返回 (结果, out_dir, project, 改前 .ioc)。"""
+    project = make_project(tmp_path)
+    out_dir = tmp_path / "evidence"
+    cube = tmp_path / "STM32CubeMX.exe"
+    cube.write_text("not-a-real-cube", encoding="utf-8")
+    fake_java = real_log_fake_java(tmp_path, log_path)
+    before = (project / "fake-board.ioc").read_bytes()
+    result = run_regen(project, "-o", str(out_dir), "--java", str(fake_java), "--cube", str(cube))
+    return result, out_dir, project, before
+
+
+def test_w6_1_missing_option_value_exits_2_without_hanging() -> None:
+    """W6-1：带值选项缺参 ⇒ 2 秒内退 2 且点名缺哪个选项（旧实现 shift 2 会死循环）。"""
+    assert BASH is not None
+    result = subprocess.run(
+        [BASH, str(REGEN), "-e"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(REPO_ROOT),
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "缺少选项取值" in result.stderr
+    assert "-e" in result.stderr
+
+
+@needs_real_logs
+def test_w6_3_n1_timeout_stall_gets_directed_diagnosis_and_rollback(tmp_path: Path) -> None:
+    """N1：`02-first-generate.log` 尾部停在 Begin LoadConfig() ⇒ 定向诊断 + 真回滚 + rc=1。"""
+    result, out_dir, project, before = run_real_log_timeout(tmp_path, REAL_LOG_STALL)
+    combined = result.stdout + result.stderr
+
+    assert result.returncode == 1, combined
+    assert "定向诊断" in combined, combined
+    assert "Begin LoadConfig()" in combined
+    assert "恢复 .ioc" in combined, "rollback_project 必须真的跑过"
+    assert (project / "fake-board.ioc").read_bytes() == before
+    assert (out_dir / "cubemx-generate.log").is_file()
+
+
+@needs_real_logs
+def test_w6_3_n2_timeout_without_stall_is_not_attributed_to_migrate(tmp_path: Path) -> None:
+    """N2：`04-first-generate-retry.log`（含 End LoadConfig() / 推进标记）⇒ 明确「不能归因」。"""
+    result, _out_dir, _project, _before = run_real_log_timeout(tmp_path, REAL_LOG_OK)
+    combined = result.stdout + result.stderr
+
+    assert result.returncode == 1, combined
+    assert "不能" in combined and "归因" in combined, combined
+    assert "定向诊断" not in combined, "成功形态不得被误判成迁移对话框挂死"
+
+
+def test_w6_3_n3_fail_fast_on_migrate_exits_2_without_generating(tmp_path: Path) -> None:
+    """N3：`AskForMigrate=true` + 开关 ⇒ rc=2、点名开关、未生成日志、.ioc 一字节未变。"""
+    project = make_project(tmp_path, migrate="true")
+    out_dir = tmp_path / "evidence"
+    before = (project / "fake-board.ioc").read_bytes()
+
+    result = run_regen(project, "-o", str(out_dir), "--fail-fast-on-migrate")
+    combined = result.stdout + result.stderr
+
+    assert result.returncode == 2, combined
+    assert "--fail-fast-on-migrate" in combined
+    assert not (out_dir / "cubemx-generate.log").exists()
+    assert (project / "fake-board.ioc").read_bytes() == before
+
+
+@pytest.mark.parametrize("migrate", ["TRUE", "True", "true "])
+def test_w6_3_n4_migrate_value_variants_lock_current_boundary(tmp_path: Path, migrate: str) -> None:
+    """N4：锁住 `regen.sh:276` 精确小写 `true` 的已知边界（审定报告 :733 列为「会漏」）。
+
+    本轮**只补测试、不修判据**（改判据属范围扩张且与 D36① 冲突）：值变体 + 开关
+    应「不拦截、不告警」，脚本继续走到 dry-run 结束并 rc=0。
+    """
+    project = make_project(tmp_path, migrate=migrate)
+    result = run_regen(
+        project, "-o", str(tmp_path / "evidence"), "--dry-run", "--fail-fast-on-migrate"
+    )
+    combined = result.stdout + result.stderr
+
+    assert result.returncode == 0, combined
+    assert "--fail-fast-on-migrate：" not in combined, "不得触发拒跑"
+    assert "AskForMigrate=true" not in combined, "分级告警 / info 都不该打"
+
+
+@needs_real_logs
+def test_w6_3_n5_diagnosis_does_not_claim_rollback_already_done(tmp_path: Path) -> None:
+    """N5：定向诊断不再宣称「本次已从备份回滚」（该陈述发生在 rollback_project 之前）。"""
+    result, _out_dir, _project, _before = run_real_log_timeout(tmp_path, REAL_LOG_STALL)
+    combined = result.stdout + result.stderr
+
+    assert "本次已从备份回滚" not in combined, "时序不实陈述必须消失"
+    assert "本诊断发生在回滚之前" in combined
+    assert "恢复 .ioc" in combined, "真正的回滚仍在诊断之后执行"
