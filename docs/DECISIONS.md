@@ -617,7 +617,7 @@ DoD 声明的 L 等级**下调**必须：lead 批准 + `DECISIONS` 条目 + 看�
 |---|---|---|---|
 | 0 | **确认版本轴三处同值** | `node -p "require('./package.json').version"` + `grep -m1 '^version:' SKILL.md` + README 表两处 | 三条输出一致 |
 | 1 | **本地四项自验** | `python -m pytest tests/ -q --basetemp=<干净目录>`（含覆盖率底线）· `node --test tests/node/*.test.mjs` · `node tools/npm_mcp_handshake.mjs --require-materials` · `npm pack --dry-run \| grep -E "guides/"` | 全绿 + 清单里指南在位 |
-| 2 | **CI 全绿**（含 Windows job） | 等 `CI` workflow 六个 job 绿 | run 链接 |
+| 2 | **CI 全绿**（含 Windows job） | 等 `CI` workflow 全绿——**job 数以 `.github/workflows/ci.yml` 为准，当前 7 个**（`pytest×2`（3.11/3.13）/ `node×3`（18/20/22）/ `windows` / `脚本检查`）；**加删 job 时同批改本行**，否则这里又会变成一个对不上的旧数字 | run 链接 + 逐 job 结论 |
 | 3 | **GATE-3.1 证据包** | 向用户出示：CI run + 本地自验 + 变更摘要（`git log --oneline <上tag>..HEAD`）+ 已知限制 + **BREAKING 与否** | 用户明确放行 |
 | 4 | **打 tag** | `git tag -a vX.Y.Z -m "…"` → `git push origin vX.Y.Z`（若 push 被策略拦下：**停手报告，不自行重试**） | `git tag -l` 含新 tag |
 | 5 | **GitHub Release** | 正文取自 `docs/releases/<日期>-vX.Y.Z.md`（**先入库，再发 Release**） | Release 页面 + 正文入库 commit |
