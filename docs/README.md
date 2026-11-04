@@ -16,17 +16,21 @@
 > 两页的分工：**看板说"做到哪一步了"，决策说"为什么这么定"**。
 > 两者冲突时以决策为准并修看板——看板是执行快照，决策是规则。
 
-## 2. 计划（三个时间点的判断快照，**不回改**）
+## 2. 计划（四份判断快照，**不回改**）
 
 | 文档 | 什么时候看 |
 |---|---|
-| [`2026-11-03-agent-team-plan.md`](2026-11-03-agent-team-plan.md) | 想知道最初的 Phase 0–3 排班、角色表、GATE 设计（原始蓝图） |
-| [`2026-11-03-execution-research.md`](2026-11-03-execution-research.md) | 想知道开工前的调研结论（工具选型、CubeMX 能力探测） |
-| [`2026-11-03-remediation-plan.md`](2026-11-03-remediation-plan.md) | 想知道 M0–M3 整改批次要解决什么（审定发现①–⑤与 R-A/R-B/R-C/R-D/R-E 编号出处） |
-| [`2026-11-04-engineering-completeness-plan.md`](2026-11-04-engineering-completeness-plan.md) | 想知道 C0–C4 完备批次（7 项审核发现、门禁/机械化/硬件预演/可维护性） |
+| [`2026-11-03-agent-team-plan.md`](2026-11-03-agent-team-plan.md) | 想知道最初的 Phase 0–3 排班、角色表、GATE 设计（原始蓝图）｜**已归档** |
+| [`2026-11-03-execution-research.md`](2026-11-03-execution-research.md) | 想知道开工前的调研结论（工具选型、CubeMX 能力探测）｜调研，非计划 |
+| [`2026-11-03-remediation-plan.md`](2026-11-03-remediation-plan.md) | 想知道 M0–M3 整改批次要解决什么（审定发现①–⑤与 R-A/R-B/R-C/R-D/R-E 编号出处）｜**已归档** |
+| [`2026-11-04-engineering-completeness-plan.md`](2026-11-04-engineering-completeness-plan.md) | 想知道 C0–C4 完备批次（7 项审核发现、门禁/机械化/硬件预演/可维护性）｜**已归档**，目标版本写的是 0.7.1，C3 已被接板首日 L5 取代 |
+| [`2026-11-04-next-steps-plan.md`](2026-11-04-next-steps-plan.md) | **当前唯一执行依据**：全量审定 37 条发现的 W0–W6 整改批次、逐条验收判据、六条勘察硬约束、发版策略与待裁决决策点｜**未开工，待批准** |
 
 > 为什么计划不回改：已交付的计划是**某个时间点的判断快照**，改写它会让"当时怎么想的"消失（D32/D34 §34.2(5)）。
 > 需要更正就追加勘误链接，不要动原文。
+>
+> **取代关系**：前三份计划的目标批次（Phase 0–3 / M0–M4 / C0–C4）均已交付或已被 L5 取代，
+> 一律只作历史参考，**其批次号不再沿用**；新工作按 `2026-11-04-next-steps-plan.md` 的 W0–W6 执行。
 
 ## 3. 报告与证据（`reports/`）
 
