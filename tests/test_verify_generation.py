@@ -57,6 +57,10 @@ REAL_CUBEMX_LOGS: tuple[Path, ...] = (
     REPO_ROOT / "docs" / "logs" / "phase4" / "09-final" / "cubemx-generate.log",
     REPO_ROOT / "docs" / "logs" / "phase4" / "12-askformigrate-probe.log",
 )
+#: ⚠️ `docs/logs/phase4/` 被 `.gitignore` 局部忽略（只在本机存在），CI clone 后没有这些文件。
+#: 参数化只收集**实际存在**的样本：CI 上退化为入库的 `log_clean.txt` 一条，本机仍跑全部 7 个。
+#: 缺素材时如实不覆盖（不造假素材、不制造假红），沿用 F-6「宁可 SKIP 不造假素材」取舍。
+AVAILABLE_CUBEMX_LOGS: tuple[Path, ...] = tuple(p for p in REAL_CUBEMX_LOGS if p.is_file())
 
 MAIN_G474 = FIXTURES / "main_g474_template.c"
 MAIN_MULTI = FIXTURES / "main_multi_periph.c"
@@ -1037,9 +1041,12 @@ def test_w0_4_positive_regression_log_clean(tmp_path: Path) -> None:
     assert check_of(report, vg.CHECK_LOG_CANNOT_MAP)["status"] == "pass"
 
 
-@pytest.mark.parametrize("log_path", REAL_CUBEMX_LOGS, ids=lambda p: p.name)
+@pytest.mark.parametrize("log_path", AVAILABLE_CUBEMX_LOGS, ids=lambda p: p.name)
 def test_w0_4_signature_layer_accepts_real_logs(log_path: Path) -> None:
-    """形态层：7 个真实 CubeMX 日志命中 ≥2 类 ⇒ ``validate_evidence_inputs()`` 返回 []。"""
+    """形态层：可用的真实 CubeMX 日志命中 ≥2 类 ⇒ ``validate_evidence_inputs()`` 返回 []。
+
+    CI 上只有入库的 `log_clean.txt` 参与（phase4 样本被 `.gitignore` 忽略）；本机跑全部 7 个。
+    """
     assert log_path.is_file(), f"缺样本：{log_path}"
     text = vg.read_text(log_path)
     assert vg.validate_evidence_inputs(
@@ -1071,12 +1078,13 @@ def test_w0_4_signature_layer_rejects_references_readme() -> None:
 
 
 @pytest.mark.parametrize(
-    "log_path", REAL_CUBEMX_LOGS[1:], ids=lambda p: f"{p.parent.name}-{p.name}"
+    "log_path", AVAILABLE_CUBEMX_LOGS, ids=lambda p: f"{p.parent.name}-{p.name}"
 )
 def test_w0_4_real_logs_are_not_rejected_as_evidence(tmp_path: Path, log_path: Path) -> None:
-    """端到端：phase4 真实日志只断言「不退 2、stderr 无 input-error」。
+    """端到端：可用真实日志只断言「不退 2、stderr 无 input-error」。
 
-    它们缺配套同工程 main.c / .mxproject，不强求 verdict=PASS（避免制造假红）。
+    phase4 样本缺配套同工程 main.c / .mxproject，不强求 verdict=PASS（避免制造假红）。
+    CI 上只有入库 `log_clean.txt` 参与；phase4 覆盖由本机完成，如实不造假素材。
     """
     result, json_out, md_out = run_negative(tmp_path, log=log_path)
     assert result.returncode != vg.EXIT_INPUT_ERROR, result.stderr
