@@ -29,8 +29,12 @@ frontmatter = README 表里那两处，**必须同值同步**（D33 §33.2）。
 可选判据（需网络，仅用于**发布后核证**）
 ----------------------------------------
 ``--network`` 额外查 npm ``dist-tags``（``npm view`` 显式带
-``--registry "https://registry.npmjs.org/"``，带超时）。**dist-tags.latest 与目标版本不一致
-判红**；网络调用失败仍只 WARN（环境问题时判红没有信息量）。
+``--registry "https://registry.npmjs.org/"``，单次超时 60 s + 一次重试）。
+**dist-tags.latest 与目标版本不一致判红**；
+**npm 调用失败 / 超时（重试后仍失败）同样判红**——这条路径是**发布后核证**，
+"查不到"不等于"没问题"，网络失败时 rc=0 就是假绿（F-1 / 0.8.0 Q0 修的就是这个）。
+不带 ``--network`` 的发布前门禁**根本不查 npm**（F-5：目标版本尚未发布时 latest 必然不等），
+所以那条路径既不会因 npm 变红，也不会因 npm 变慢。
 
 发布前门禁（``publish.yml``）跑 **不带 ``--network``** 的版本：目标版本尚未发布时
 ``latest`` 必然不等于 ``package.json.version``，把它当发布前门禁会把正常发版自己卡死（F-5）。
@@ -60,6 +64,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -340,49 +345,78 @@ def ledger_has_version(root: Path, version: str) -> bool | None:
     return False
 
 
-def npm_dist_tags(root: Path, timeout: float = 20.0) -> tuple[dict[str, str] | None, str]:
+def npm_dist_tags(
+    root: Path,
+    timeout: float = 60.0,
+    attempts: int = 2,
+) -> tuple[dict[str, str] | None, str]:
     """查 npm 的 ``dist-tags``（``--network`` 才调用）。
 
     Args:
         root: 仓库根（在仓内跑，便于继承 `.npmrc`）。
-        timeout: 超时秒数；npm 卡住不该把发布流程一起卡住。
+        timeout: **单次**尝试的超时秒数（0.8.0 起 20 → 60：发布后核证是本机跨洋查官方
+            registry，20 s 在网络抖动时几乎必然超时，会把"查不到"误判成"没发布"）。
+        attempts: 尝试次数（默认 2 = 首发 + **一次重试**）。重试是必要的：registry 的
+            CDN 边缘偶发 5xx/超时，一次失败不足以断定"没查到"。
 
     Returns:
-        ``(dist_tags 或 None, 说明)``。网络/解析失败返回 ``None``，由调用方降级为 WARN；
-        读到 dist-tags 后若 ``latest`` 与目标版本不一致，由 ``check()`` 在 ``--network``
-        路径下判红（发布后核证，F-5）。
+        ``(dist_tags 或 None, 说明)``。全部尝试都失败才返回 ``None``；
+        **调用方在 ``--network``（发布后核证）路径下必须把它当 FAIL**——
+        "查不到 ≠ 没问题"：发布后核证的意义就是确认远端真的对齐了，
+        网络失败时给不出这个确认，只能判红让人重跑（F-1 / 0.8.0 Q0）。
+        ``latest`` 与目标版本不一致由 ``check()`` 判红。
 
     ⚠️ ``--registry`` 必须**分开写并加引号**（这里已是 argv 列表，天然分开）：
        本机默认 npmmirror 只同步到 0.7.1，连写 ``--registry=...`` 在部分 npm shim 上
        还会被拆参 ⇒ 查到的 latest 是旧值，会把正常状态误判成失败。
+
+    ⚠️ 可执行名可用 **``CUBEONE_NPM``** 覆盖（默认 ``npm``）。这不只是给测试留缝：
+       一台机器装多个 Node 时，指到"发布用的那个 npm"本来就是有效需求。顺带说明**为什么
+       测试必须用它而不是改 ``PATH``**——Windows 上 ``CreateProcess`` 对**无扩展名**的命令
+       只会补 ``.exe``（不按 ``PATHEXT`` 逐个试），所以 ``PATH`` 前置一个 ``npm.cmd`` 桩
+       **拦不住**真实 ``npm.exe``：桩会被静默跳过、真 npm 被调用，测试于是"绿得毫无意义"。
     """
-    try:
-        completed = subprocess.run(
-            [
-                "npm", "view", "cubeone-mcp", "dist-tags", "--json",
-                "--registry", "https://registry.npmjs.org/",
-            ],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            cwd=str(root),
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError) as error:
-        return None, f"npm 调用失败（{type(error).__name__}）"
-    if completed.returncode != 0:
-        stderr = (completed.stderr or "").strip().splitlines()
-        tail = stderr[-1] if stderr else f"退出码 {completed.returncode}"
-        return None, f"npm view 失败：{tail}"
-    try:
-        payload = json.loads(completed.stdout or "{}")
-    except json.JSONDecodeError:
-        return None, "npm view 输出不是合法 JSON"
-    if not isinstance(payload, dict):
-        return None, "npm view 输出不是对象"
-    return {str(k): str(v) for k, v in payload.items()}, "ok"
+    total = max(1, int(attempts))
+    npm_bin = os.environ.get("CUBEONE_NPM") or "npm"
+    last_message = "未尝试"
+    for attempt in range(1, total + 1):
+        try:
+            completed = subprocess.run(
+                [
+                    npm_bin, "view", "cubeone-mcp", "dist-tags", "--json",
+                    "--registry", "https://registry.npmjs.org/",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                cwd=str(root),
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            # 必须先于 SubprocessError：TimeoutExpired 是它的子类。
+            last_message = f"npm view 超时（单次上限 {timeout:g}s，第 {attempt}/{total} 次）"
+            continue
+        except (OSError, subprocess.SubprocessError) as error:
+            last_message = f"npm 调用失败（{type(error).__name__}，第 {attempt}/{total} 次）"
+            continue
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip().splitlines()
+            tail_line = stderr[-1] if stderr else f"退出码 {completed.returncode}"
+            last_message = f"npm view 失败：{tail_line}（第 {attempt}/{total} 次）"
+            continue
+        try:
+            payload = json.loads(completed.stdout or "{}")
+        except json.JSONDecodeError:
+            last_message = f"npm view 输出不是合法 JSON（第 {attempt}/{total} 次）"
+            continue
+        if not isinstance(payload, dict):
+            last_message = f"npm view 输出不是对象（第 {attempt}/{total} 次）"
+            continue
+        note = "ok" if attempt == 1 else f"ok（第 {attempt} 次尝试才成功）"
+        return {str(k): str(v) for k, v in payload.items()}, note
+    return None, last_message
 
 
 def check(
@@ -579,7 +613,18 @@ def check(
     if network:
         tags, message = npm_dist_tags(root)
         if tags is None:
-            extras.append(Finding("WARN", "npm dist-tags", f"{message}（网络失败只警告，不判红）"))
+            # F-1（0.8.0 Q0）：**--network 是发布后核证**，它存在的意义就是确认远端真的对齐了。
+            # 查不到时给不出这个确认 —— 旧实现在这里降级 WARN、rc 仍 0，于是网络一抖就"绿"，
+            # 等于把"没核证"读成"核证通过"。所以这里判红，措辞点明「查不到 ≠ 没问题」。
+            findings.append(
+                Finding(
+                    "FAIL",
+                    "npm dist-tags",
+                    f"{message}。**未查到 ≠ 没问题**：--network 是发布后核证，"
+                    "拿不到官方 registry 的 dist-tags 就无法确认收口；确认网络/registry 可达后重跑"
+                    "（发布前门禁请用不带 --network 的版本，那条路径不查 npm）",
+                )
+            )
         elif target_version is None:
             extras.append(Finding("WARN", "npm dist-tags", f"无法确定目标版本；远端 latest={tags.get('latest')}"))
         elif tags.get("latest") == target_version:
@@ -640,8 +685,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "退出码：0=通过 1=不一致或无法判定。"
-            "示例：python tools/check_release.py（发布前门禁，不带 --network）；"
-            "python tools/check_release.py --network（发布后核证，dist-tags 不一致判红）"
+            "示例：python tools/check_release.py（发布前门禁，不带 --network，不查 npm）；"
+            "python tools/check_release.py --network（发布后核证：dist-tags 不一致判红，查不到也判红）"
         ),
     )
     parser.add_argument("--repo-root", default=str(REPO_ROOT), help="仓库根（默认脚本所在仓）")
@@ -649,7 +694,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--network",
         action="store_true",
-        help="发布后核证：查官方 registry 的 npm dist-tags（不一致判红）+ 台账/工作区机器可查项",
+        help=(
+            "发布后核证：查官方 registry 的 npm dist-tags（不一致判红；"
+            "调用失败/超时重试后仍失败也判红——未查到 ≠ 没问题）+ 台账/工作区机器可查项"
+        ),
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
 
