@@ -111,7 +111,7 @@ STM32 开发里有一种很难发现的失败：
 
 ```bash
 # 1. 跑单元测试，确认脚本本身没问题
-python -m pytest tests/ -q          # 期望：74 passed
+python -m pytest tests/ -q          # 期望：全绿（基准 2026-11-04：127 passed；数字随提交增长，以当次输出为准）
 
 # 2. 看核验器接受哪些参数
 python scripts/verify_generation.py --help
@@ -173,7 +173,7 @@ python scripts/verify_generation.py ... \
 | **L2** 主机回归 | gcc 编译 + 运行主机侧测试，不需要开发板 |
 | **L3** 构建 | `pio run` 通过，**只证明能编译** |
 | **L4** 生成核验 | CubeMX 重新生成后核对 `main.c` 的 `MX_xxx_Init` 与日志（G1 判定 7 项） |
-| **L5** 实板 | 烧录 + 观察现象（LED / 串口 / 波形）；本仓当前无硬件 |
+| **L5** 实板 | 烧录 + 独立判据 + 观察现象（LED / 寄存器回读 / 目视）；**首板 L5 已达成（2026-11-04）**，见 `docs/reports/phase2-bringup-2026-11-04.md`；串口段仍未实测 |
 
 > 定义沿用模板仓 `AGENTS.md` §3，不另立一套。
 
@@ -266,9 +266,9 @@ scripts/
   regen.sh                备份 → 生成 → 核验 → 失败回滚
   ioc_backup.py           .ioc 备份/还原（sha256 凭据）
   ioc_field.py            .ioc 单键读写（保留 CRLF，原子写）
-tests/                77 个 pytest 用例（+ fixtures/ 与 node/ 下的 Node 层单测）
+tests/                Python 单测（基准 2026-11-04：`pytest tests/ -q` → 127 passed）+ fixtures/ 与 node/ 下的 Node 层单测（41 passed）
 tools/
-  mcp_smoke.py          MCP 通道冒烟（真实调用 4 个工具，含负向对照）
+  mcp_smoke.py          MCP 通道冒烟（真实调用 4 次 / 4 个场景，含负向对照；本包 tools/list 为 3 个工具）
   npm_mcp_handshake.mjs npm 包工具通道冒烟（12 项；缺素材的项如实记 SKIP，不冒充通过）
   check_taskboard.py    看板一致性校验（快照 / 证据路径 / 发布记账）
   check_release.py      版本轴与发布收口校验（tag ↔ package.json ↔ SKILL.md ↔ README）
@@ -283,13 +283,13 @@ docs/                 决策记录、任务看板、发布正文（releases/）�
 
 ## 项目状态
 
-- **Phase 1 已完成**：核验器（7 项）、`regen.sh`、77 个单测、S1/S2/S3 三个场景实测
-- **Phase 2 挂起**：实板烧录验证（L5）需要接板后继续
+- **Phase 1 已完成**：核验器（7 项）、`regen.sh`、Python/Node 单测、S1/S2/S3 三个场景实测（测试数字基准见上文「仓库结构」与「快速开始」）
+- **Phase 2 已达成 L5（2026-11-04）**：烧录（`Verified OK`）、寄存器回读、目视一致，全链证据见 `docs/reports/phase2-bringup-2026-11-04.md`；**串口段与 `pio device monitor` 仍未实测**（本工程未启用 USART）
 - **Phase 3 已完成**：CI 全绿（`pytest` 3.11 / 3.13 双矩阵 + `Node` 18/20/22 三档 + **Windows 真机 job**）
 
 CI 覆盖的是「脚本与核验器的逻辑没退化」，**不覆盖**「某个 `.ioc` 改对了」——CubeMX 是 Windows GUI 应用且需交互接受许可，无法在 GitHub Actions 上运行。端到端证据来自本地实测，见 `docs/reports/`。
 
-**覆盖率口径**：Python 侧 `--cov=scripts` 当前实测 **37%**，CI 底线 **36%**（基线 -1pp，只防回退、不追指标）。
+**覆盖率口径**（基准 2026-11-04，`pytest --cov=scripts tests/ -q`）：Python 侧 `--cov=scripts` 实测 **37%**，CI 底线 **36%**（基线 -1pp，只防回退、不追指标）。
 这个数字**低估**了真实覆盖面——多数用例是用子进程调脚本的，子进程内的执行不计入 coverage，
 所以不要拿它当"覆盖率只有 37%"读。Node 侧覆盖率只在 Node 22 档输出、**暂不设门槛**。
 

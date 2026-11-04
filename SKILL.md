@@ -1,6 +1,6 @@
 ---
 name: cubeone-mcp
-description: "STM32 工程全流程编排：.ioc 改配置 → CubeMX 生成 → 生成核验（G1 强制关卡）→ PlatformIO 构建 →（接板后）烧录与串口验证，带 L0–L5 验证等级声明与符合模板 AGENTS.md 的 commit。**能力边界（先读）：只能可靠代做普通 GPIO 级改动（新增引脚/改模式/改上下拉）；UART/SPI/TIM/ADC 等非 GPIO 外设的增改没有工具能力，必须手改 .ioc 或走 GUI，并强制过 G1。** 双通道执行：已注册 MCP 走工具通道，未注册走 CubeMX CLI + pio CLI 等价通道，判据与证据要求完全相同。当用户说「改一下这个 ioc」「加一个 GPIO」「加一路串口/SPI/定时器」「CubeMX 重新生成」「生成完帮我核一遍」「有没有被静默丢弃的外设」「pio 构建」「Flash/RAM 多少」「烧进去看看」「串口有输出吗」时使用。只读审计不写盘；写操作前必须备份 .ioc，生成后必须跑核验器并如实声明验证等级；不碰 testbeds/ 之外的模板原仓。"
+description: "STM32 生成核验与 .ioc 键级工具包：本包 MCP 只暴露 3 个工具（verify_generation / ioc_backup / ioc_field），用于「生成后核验（G1 硬关卡）」「备份/还原 .ioc」「单键读写 .ioc」，并附完整操作流程文档。**能力边界（先读）：只能可靠代做普通 GPIO 级改动（新增引脚/改模式/改上下拉）；UART/SPI/TIM/ADC 等非 GPIO 外设的增改没有工具能力，必须手改 .ioc 或走 GUI，并强制过 G1。** 触发词收敛为：「生成完帮我核一遍」「有没有被静默丢弃的外设」「改一下这个 ioc / 加一个 GPIO」「备份/还原 .ioc」「读/改 .ioc 某个键」。⚠️ 以下不属本包工具能力，命中时按 SKILL.md 的 CLI 等价通道与流程文档处理，不要期望 MCP 工具直接完成：「pio 构建 / Flash-RAM 尺寸」「烧进去看看 / 烧录」「串口有输出吗 / 串口捕获」「加一路串口/SPI/定时器（非 GPIO 外设增改）」。只读审计不写盘；写操作前必须备份 .ioc，生成后必须跑核验器并如实声明验证等级；不碰 testbeds/ 之外的模板原仓。"
 version: 0.7.2
 agent_created: true
 license: MIT
@@ -17,7 +17,8 @@ compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证�
 > `Core/Src/*.c`，见 `references/verify-contract.md` §4.2，两处用户可见缺陷的修复见 `docs/releases/2026-11-04-v0.7.2.md`）。
 > **0.7.0：路径白名单默认 fail-closed（BREAKING）**，迁移见 §0.2；同批含 `ioc_backup` 备份完整性摘要与原子还原、
 > `realpath` 防 junction 绕出。**0.7.1 = 文档与脚本修正，无行为变更**（注册指南随包下发并对齐 0.7.0 默认拒绝；
-> `ioc_field` 脚本轴 **1.1.0**：get 区分「多行歧义」与「键不存在」）。Phase 2 烧录段无硬件，整体挂起（D7）。
+> `ioc_field` 脚本轴 **1.1.0**：get 区分「多行歧义」与「键不存在」）。**Phase 2 首板 L5 已达成（2026-11-04）**：
+> 烧录 / 寄存器回读 / 目视一致见 `docs/reports/phase2-bringup-2026-11-04.md`；串口段与 `pio device monitor` 仍未实测。
 
 ## 0. 硬前提
 
@@ -40,10 +41,28 @@ compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证�
 
 ### 0.1 通道选择（与路径选择是两件事）
 
-`cubemx_help` / `pio_system_info` 调用成功 → **MCP 通道**；调用不存在 → **CLI 通道**（§0.4）。
+**判据只看本包**：注册后做一次 `tools/list`，返回里含本包 3 个工具
+（`verify_generation` / `ioc_backup` / `ioc_field`，与 `lib/server.mjs` 的 `TOOL_DEFS` 一一对应）
+⇒ **MCP 通道可用**；不含 ⇒ 走 **CLI 等价通道**（§0.4）。**不要用 `cubemx_help` / `pio_system_info`
+或任何外部 server 的工具是否可调来判断本包通道**——那是另一条通道、另一组 server，与本包无关。
 注册：**本包（npm 通道）**见 `docs/guides/npm-publish-and-codebuddy.md`（含 0.7.0 起 fail-closed 的白名单配置与注册后自检）；`vscode-cube-mcp` / `platformio.mcp` 两个**外部 server** 见 `docs/guides/mcp-registration.md`。本仓不替用户改 `mcp.json`（D12）。
 **两条通道都不可用时停手报错**，不许挑着核验绕过 G1。
 是否存在 MCP 只决定"用哪种方式调"；**要改什么**才决定"这件事能不能做"——**先判 0.0，再判 0.1。**
+
+#### 两套入口的参数面（B-6：何时用哪个）
+
+| | CLI 直调（`scripts/verify_generation.py` 等） | MCP 通道（本包 3 工具） |
+|---|---|---|
+| 何时用 | 要落 `verify.json` / `report_md` 证据文件、写 CI 脚本、或在 `regen.sh` 编排里被调 | Agent 在会话里做一次核验 / 备份 / 键读写，或需要路径白名单 + 写策略门禁 |
+| 参数名 | `--log` `--main-c` `--mxproject` `--expect` `--project-root` `--ioc` `--expect-pins` `--allow-signal` `--json-out` `--report-md` | `log` `main_c` `mxproject` `expect` `project_root` `ioc` `expect_pins` `allow_signal` `report_md`（**snake_case**） |
+| 判据真源 | 同一份 Python 脚本（MCP 只是薄封装，`spawnSync` 调它） | 同左 |
+| 证据落点 | `--json-out` 生成 `verify.json` | `structuredContent`（**不生成 `verify.json`**） |
+
+⚠️ MCP 通道**拒绝未知键**（`additionalProperties:false` 已落地）：`projectRoot` / `mainC` 这类 camelCase
+会被判 `isError`，正确写法是 `project_root` / `main_c`；`expect_pins` 与 `ioc` 必须同时给。
+⚠️ **MCP 返回文本有噪声且会被截断**：`content[0].text` 固定带环境脚注与 `--- stdout ---` 段，
+`tail()` 只保留末尾 **12 000 字符**——长日志的头部（含 `render_console` 首行 `verdict`）可能被截掉。
+**结论一律以 `structuredContent` 为准，不要只扫返回文本首行**（B-1；输出体积上限属后续排期，本轮不改）。
 
 ### 0.2 CubeMX / PlatformIO 定位（两通道共用）
 
@@ -93,7 +112,9 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
     --allow-signal VP_RIF_VS_RIF1 --json-out <证据目录>\verify.json
 ```
 
-⚠️ Phase 2 才用、**未实测**：`pio run -d <工程> -t upload`、`pio device monitor`（见 §6）。
+Phase 2 烧录命令 `pio run -d <工程> -t upload` **已实测（2026-11-04，CLI 通道）**：
+`Verified OK` + 寄存器回读 + 目视一致，见 `docs/reports/phase2-bringup-2026-11-04.md`；
+**`pio device monitor` 仍未实测**（本工程未启用 USART，见 §6.2）。烧录前仍须过 GATE-2.1 安全确认。
 
 #### 🔴 `--log` 只接受 CubeMX 原始 stdout 重定向文件，**禁止传任何 MCP 工具返回值**
 
@@ -124,14 +145,31 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
 | 备份 → 生成 → 核验 → 失败回滚 | `scripts/regen.sh <工程> [-e …] [-o …] [--require-clean] [--fail-fast-on-migrate]` —— 见 `references/regen-exit-codes.md`。**包内可用**，但编排 CubeMX 生成需本机存在 CubeMX/JRE（路径可用 `ST_CUBEMX_JRE`/`ST_CUBEMX_EXE` 覆盖） |
 | `.ioc` 字段读写 / 备份还原 | `scripts/ioc_field.py`、`ioc_backup.py --project <工程根> [--restore\|--list]`。备份会同时落 `<name>.ioc.bak.sha256` 旁路摘要；`--restore` 先校验摘要再原子替换（不一致 → 拒还原、退出码 2、`.ioc` 不动；无摘要的旧备份 → 警告后照常还原）。**不要手删/手改 `.bak.sha256`**——删了就等于放弃篡改检测 |
 
-### 1.2 双通道对照
+### 1.2 工具面：本包 3 工具 与 外部 server（两条通道，别混）
 
-| 想做的事 | MCP 通道 | CLI 等价通道 |
+**表 A · 本包 MCP 的 3 个工具**（`lib/server.mjs` 的 `TOOL_DEFS`，`tools/list` 与下表一一对应；
+判据全在 Python 脚本里，JS 层只做参数校验 / 路径白名单 / 退出码映射）：
+
+| 工具 | 做什么 | 主要参数 |
 |---|---|---|
-| 只读回读 `.ioc` | `cubemx_load` | 直接读 `.ioc`（ini）；引脚表 ⚠️ `csv pinout` |
-| **改普通 GPIO** | ✅ `cubemx_configure` 的 `commands` 透传 | `set pin` 命令写进 `.mx` |
+| `verify_generation` | **G1 生成核验硬关卡**（7 项 / schema `/2`），退出码 0/1/2 | `log` `main_c` `mxproject` `expect`；可选 `project_root` `ioc` `expect_pins` `allow_signal` `report_md` |
+| `ioc_backup` | `.ioc` 备份 / 还原 / 清单（SHA-256 凭据） | `project` `action`（`backup` / `restore` / `list`） |
+| `ioc_field` | `.ioc` **单键**读 / 写（保留 CRLF、原子写） | `ioc` `action`（`get` / `set`）`key`；`set` 时 `value`，可加 `dry_run` |
+
+**表 B · 外部 server（另一条通道，不属于本包，本包无法调用也不负责）**：
+`cubemx_load` / `cubemx_configure` / `cubemx_generate`（`vscode-cube-mcp`）、
+`pio_build` / `pio_size_report` / `flash_standalone` / `pio_monitor_capture`（`platformio.mcp`）等。
+它们是否注册，与本包 `tools/list` 是否可用**无关**；注册与排障见 `docs/guides/mcp-registration.md`
+（该文件描述外部 server；本包注册见 `docs/guides/npm-publish-and-codebuddy.md`）。
+
+| 想做的事 | 本包 3 工具 | CLI 等价通道 / 外部 server |
+|---|---|---|
+| 只读回读 `.ioc` | `ioc_field get`（**单键**） | 直接读 `.ioc`（ini）；引脚表 ⚠️ `csv pinout`；`cubemx_load` 属外部 server |
+| 备份 / 还原 `.ioc` | `ioc_backup` | `scripts/ioc_backup.py --project <工程根> [--restore\|--list]` |
+| **G1 生成核验** | `verify_generation` | `scripts/verify_generation.py`（见 §0.4 / §1.3） |
+| **改普通 GPIO** | 本包无 `set pin` 能力 | `set pin` 命令写进 `.mx`；`cubemx_configure` 属外部 server |
 | **改非 GPIO 外设** | ❌ **没有这个能力** | ❌ 同样没有 → 手改 `.ioc` / GUI（§2 路径 B） |
-| 生成 / 构建 / 尺寸 / 烧录 | `cubemx_generate` / `pio_build` / `pio_size_report` / `flash_standalone` | §0.4（尺寸口径见 P3；烧录串口 ⚠️ Phase 2 未实测） |
+| 生成 / 构建 / 尺寸 / 烧录 | 本包不提供 | §0.4 CLI；`cubemx_generate` / `pio_build` / `pio_size_report` / `flash_standalone` 属外部 server。烧录 **已实测（2026-11-04）**，串口 `pio device monitor` **未实测** |
 
 ### 1.3 核验器契约要点（schema `/2`）
 
@@ -218,7 +256,7 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
 
 ### 第 1 步 · 只读审计（不改一个字节）
 
-MCP 用 `cubemx_load`，CLI 直接读 `.ioc`。产出**改动前基线**（启用了哪些外设、引脚模式、时钟树
+MCP 用 `ioc_field get`（单键）/ CLI 直接读 `.ioc`。产出**改动前基线**（启用了哪些外设、引脚模式、时钟树
 关键键值）——回滚时有对照物，并能证明"这外设原本就不存在"。
 
 ### 第 2 步 · 备份 `.ioc`
@@ -227,8 +265,10 @@ MCP 用 `cubemx_load`，CLI 直接读 `.ioc`。产出**改动前基线**（启�
 python scripts/ioc_backup.py --project <工程根> --json-out <证据目录>/ioc-backup.json
 ```
 
-SHA-256 就是"确实还原了原件"的凭据。**路径 B 额外要求**：手改的回滚**只能靠这份备份**，
-别指望 `git checkout`（会连带丢掉用户其他未提交改动）。
+SHA-256 就是"确实还原了原件"的凭据。**唯一回滚口径（全文通用）**：**改配置前先用
+`ioc_backup` 备份 → 失败时从这份备份回滚**（`ioc_backup.py --restore`，或 `regen.sh` 的自动回滚）。
+⛔ 不要依赖版本控制回退来还原 `.ioc`：那会连带丢掉用户同目录里其他未提交改动，
+而备份只还原本次动过的文件。第 5 步、§4 提交模板、`references/` 一律按这一口径。
 
 ### 第 3A 步 · 改配置（普通 GPIO）
 
@@ -284,7 +324,7 @@ MCP `cubemx_generate` / CLI §0.4。**stdout/stderr 必须重定向到文件**�
 调用见 §1.3，判据见 §1.4。要点：
 
 - **`--expect` 写本次期望存在的每个外设**（漏写 = 漏检，多写 = 假失败），以第 3 步的**意图**为准。
-- **`1` 或 `verdict: fail` → 立即回滚**（`ioc_backup.py --restore` 或 `git checkout --`）；**不许**"先构建看看能不能过"——静默丢弃的外设**能构建成功**。
+- **`1` 或 `verdict: fail` → 立即从第 2 步的 `ioc_backup` 备份回滚**（`ioc_backup.py --restore`）；**不许**"先构建看看能不能过"——静默丢弃的外设**能构建成功**。
 - `2` = 我们自己的输入错了（路径/文件），**不是配置有问题**，别误报给用户。
 - 任何 `skip` 都要解释原因；`syscalls_path` 的 `warn` 不阻塞但要写进汇报。
 - **必须提醒"保证边界"**：核验 PASS ≠ 引脚级/参数级生效。
@@ -315,24 +355,25 @@ git ls-files --eol <被报 M 的文件>   # 定性：CRLF 噪音 vs 真改动
 
 按 §4。**不允许**只写"生成代码"。
 
-## 3. 验证等级（L0–L5，定义来自模板 `AGENTS.md` §3）
+## 3. 验证等级（L0–L5；定义沿用模板仓 `AGENTS.md` §3，**模板仓，本仓不含**）
 
 | 等级 | 做什么 | 本仓算什么证据 |
 |---|---|---|
 | **L0** | 只读检查，仅限纯文档 | 无证据 |
 | **L1** | 人工核对文件内容一致性 | 核对记录 |
-| **L2** | 主机 gcc 回归 | `gcc` 命令 + 通过输出 |
+| **L2** | 命令级真跑（本仓等价物：Python / Node 回归） | `python -m pytest tests/ -q` 与 `node --test tests/node/*.test.mjs` 的通过输出 |
 | **L3** | `pio run` | Flash / RAM 字节（注明口径） |
-| **L4** | 重新生成后核对 `main.c` 与日志 | `verify.json`（`verdict` + 各 `status`） |
-| **L5** | 烧录 + 观察现象 | 烧录日志 + 现象（当前无硬件，一律缺） |
+| **L4** | 重新生成后核对 `main.c` 与日志 | `verify.json`（CLI 通道）或 MCP 的 `structuredContent`（`verdict` + 各 `status`） |
+| **L5** | 烧录 + 独立判据 + 观察现象 | **已实测（2026-11-04）**：烧录日志（`Verified OK`）+ 寄存器回读 + 目视一致，见 `docs/reports/phase2-bringup-2026-11-04.md` |
 
-L2 命令（主机回归，不需要开发板）：
+L2 命令（本仓真实可跑，不需要开发板；**模板仓的 `Core/Src/stdio_port.c` /
+`test/stdio_port_test.c` gcc 回归属模板仓，本仓不含，勿照抄**）：
 
 ```bash
-mkdir -p .pio/host-test
-gcc -std=c11 -Wall -Wextra -Werror Core/Src/stdio_port.c test/stdio_port_test.c -o .pio/host-test/stdio-test && ./.pio/host-test/stdio-test
-gcc -std=c11 -Wall -Wextra -Werror -DTEST_BACKEND Core/Src/stdio_port.c test/stdio_port_test.c -o .pio/host-test/stdio-backend-test && ./.pio/host-test/stdio-backend-test
-pio run
+python -m pytest tests/ -q
+node --test tests/node/*.test.mjs
+python tools/check_taskboard.py
+python tools/check_release.py
 ```
 
 **四条不许混**：① `.ioc` 改动没有 L4 = 没做完（L3 不能顶）；② **3B 不可降级为 L3**；
@@ -350,14 +391,14 @@ pio run
   - 三级确认：回显 <OK/KO> / diff <numstat> / G1 verdict=<pass|fail> errors=<n> warnings=<n>
   - 跳过的检查：见 verify.json 的 summary.notes（无则"无"；notes 空但有 skip = 报 issue）
   - 保证边界：外设级通过；引脚级<传/未传 --expect-pins>；参数级未验证        ← 必填
-  - 构建：Flash <bytes> / RAM <bytes>（注明口径）｜ 实板：未验证（无硬件）
+  - 构建：Flash <bytes> / RAM <bytes>（注明口径）｜ 实板：已达 L5 时写「L5 证据见 docs/reports/phase2-bringup-2026-11-04.md」；本批未做实板验证就如实写「本批未做实板验证」，不套用旧状态词
 已知风险：<本次没覆盖到的部分>
 ```
 
 `<type>`：`feat` `fix` `docs` `chore` `refactor` `test` `build` `ci` `perf` `style` `revert`；
 `<scope>`：`ioc` `pio` `board` `vscode` `scripts` `core` `git` `docs`。
 **一个提交只做一件事**（格式化/行尾/版本戳重写单独开 `style:` / `chore(ioc):`）。
-**硬性禁止**（📄 `AGENTS.md` §1.5）：`push --force`、`--no-verify`、`--no-gpg-sign`、**任何 AI 署名尾注**。
+**硬性禁止**（📄 模板仓 `AGENTS.md` §1.5，**模板仓，本仓不含**）：`push --force`、`--no-verify`、`--no-gpg-sign`、**任何 AI 署名尾注**。
 
 ## 5. 陷阱索引（全文见 `references/pitfalls.md`）
 
@@ -372,26 +413,36 @@ pio run
 静默丢弃 ｜ D6 `Drivers/` 只有 `.gitkeep` 正常 ｜ D7 同 P1（**以 P1 为准**）｜ D8 `VP_RIF_VS_RIF1` 忽略 ｜ D9 `syscalls` 不阻塞。
 **H 系列（HAL 运行期）**：H-1 UART 能发不能收（NVIC）｜ H-2 TIM 状态机混用 ｜ H-3 停 DMA 关共享时基 ｜ H-4 `CC1OF` ｜
 H-5 `Error_Handler` 后无诊断 ｜ **H-6 新增外设没落进生成物且日志干净**。⚠️ `HAL-PITFALLS.md` 只在 F103C8T6 与 H723 仓。
+（D / H / P 系列的完整定义见模板仓 `TEMPLATE-PLACEHOLDERS.md` 与 `HAL-PITFALLS.md`，**模板仓，本仓不含**。）
 
-## 6. 串口与烧录（Phase 2，挂起）
+## 6. 串口与烧录（Phase 2，分段更新 2026-11-04）
 
-⚠️ 无硬件，本节不做任何能力宣称。T2.1–T2.6 挂起至 GATE-2.0（D7）。待接板后补：`flash_standalone` /
-`pio run -t upload` 的 reset/run 语义、`pio_monitor_capture` 的波特率与超时、无 VCP 时改外接 USB-TTL 方案、
-探针/串口异常的错误分类、L5 证据留存形式。
+**已达 L5（2026-11-04 实测）**：探针识别（ST-Link V2）、`pio run -t upload` 烧录
+（`Verified OK`）、寄存器回读（GPIOC MODER / ODR）、目视现象（红灯亮、绿蓝灭）。
+全链证据与复现命令见 `docs/reports/phase2-bringup-2026-11-04.md`；F4（首烧目标选错板）
+与 F5（300 s 默认超时偏紧）两个坑也在该报告。烧录仍须先过 **GATE-2.1 安全确认**（§0.3 红线 1）。
 
-### 6.1 Phase 2 实测状态（**占位骨架，无硬件不填能力宣称**）
+**仍未覆盖（如实保留，不冒充已验证）**：串口段（本工程未启用任何 USART，见 §6.2）、
+`pio device monitor` / `pio_monitor_capture` 的波特率与超时、无 VCP 时外接 USB-TTL、
+探针/串口异常的错误分类。**这些不是"工具能力不足"的托词，是本次没做的实测**；
+要做需先在 `.ioc` 配 USART（非 GPIO 外设，超出本工具能力 ⇒ 手改 `.ioc` / GUI + 强制过 G1）。
 
-| 段 | 状态 | 前置 | 填这一格需要什么证据 |
-|---|---|---|---|
-| 探针识别 / doctor | **未实测（无硬件）** | GATE-2.0 | `pio device list` + `doctor` 输出（含探针型号与序列号） |
-| 烧录（reset/run 语义） | **未实测（无硬件）** | GATE-2.1 安全确认 | 烧录日志 + 现象描述（哪个 LED/引脚变了） |
-| 串口捕获（波特率/超时） | **未实测（无硬件）** | 目标工程启用 USART（见 6.2） | boot log 原文 + 波特率 + 超时参数 |
-| 无 VCP 时的外接 USB-TTL | **未实测（无硬件）** | — | 接线说明 + 抓到的字节流 |
-| 探针/串口异常分类 | **未实测（无硬件）** | 上面三项至少各跑通一次 | 每一类的错误文案原文 + 判定依据 |
+### 6.1 Phase 2 实测状态（按 2026-11-04 实测分段）
 
-> **接板日怎么走**：照 `docs/guides/gate-2.0-checklist.md` 从上往下执行——它已经包含 C3.1 预演暴露的三个前置项
-> （`AskForMigrate` 必须先关、Keil 工程要先补 `platformio.ini`、生成物 diff 必须逐条解释）。
-> 填完本表再改状态；**在那之前本节一律按"无能力"对待**（§0.0 的四层优先级里，能力层是第 0 层）。
+| 段 | 状态 | 证据 / 还缺什么 |
+|---|---|---|
+| 探针识别 / doctor | **已实测（2026-11-04）** | `docs/reports/phase2-bringup-2026-11-04.md` §1：`STLINK V2J35S7`、`DPIDR 0x2ba01477`、3.2387 V |
+| 烧录（reset/run 语义） | **已实测（2026-11-04）** | 同报告 §2：`Verified OK` + `Resetting Target`；复现命令见 §6 |
+| 寄存器回读 | **已实测（2026-11-04）** | 同报告 §2：`GPIOC MODER 0x57FFFF00` / `ODR 0x0000C000`；PC2 输出且 ODR bit2=0 |
+| 目视 / LED 现象 | **已实测（2026-11-04）** | 同报告 §4：X-Pulse 板红灯亮、绿蓝灭，与配置一致（F4 为选错板的教训） |
+| 串口捕获（波特率/超时） | **未实测** | 本工程未启用 USART；需 boot log 原文 + 波特率 + 超时参数 |
+| `pio device monitor` / 无 VCP 外接 USB-TTL | **未实测** | 需接线说明 + 抓到的字节流 |
+| 探针/串口异常分类 | **未实测** | 需每一类的错误文案原文 + 判定依据 |
+
+> **接板日怎么走**：照 `docs/guides/gate-2.0-checklist.md` 从上往下执行——它已包含 C3.1 预演暴露的
+> 三个前置项（`AskForMigrate` 必须先关、Keil 工程要先补 `platformio.ini`、生成物 diff 必须逐条解释）。
+> 上表「未实测」三行**保持未实测直到有真实证据**，不要因为 L5 已达成就连带标成已完成；
+> 已达成的四行则可以正常声明 L5（§3 表格、§4 提交模板同口径）。
 
 ### 6.2 一个已知的接板坑（C3.1 预演实测，接板前先解决）
 
@@ -409,8 +460,11 @@ H-5 `Error_Handler` 后无诊断 ｜ **H-6 新增外设没落进生成物且日�
 
 - 手册页 `references/`：`capability-boundary` / `verify-contract` / `regen-exit-codes` /
   `diff-evidence` / `pitfalls`；外部资料链接见 `references/README.md`。
-- **npm 包（MCP 工具通道，`npx cubeone-mcp`）**：`docs/guides/npm-publish-and-codebuddy.md`。
-- 状态真源 `docs/TASKBOARD.md`；决策 D1–D30 见 `docs/DECISIONS.md`；核验器完整契约
-  `docs/reports/t1.2-verifier-contract.md`；MCP 注册 `docs/guides/mcp-registration.md`；版本历史见 git log。
-- **单写者边界**：`scripts/`、`tests/` → verifier-dev；`SKILL.md`、`docs/`、`references/` → skill-author；
-  `testbeds/` → scenario-tester；`.github/` → lead 收口（原 `release-engineer`，已收口）。**本文件只由 skill-author 改**。
+- **L5 真源（首板实测全链证据）**：`docs/reports/phase2-bringup-2026-11-04.md`（烧录 / 寄存器回读 / 目视 / 复现命令）。
+- **npm 包（MCP 工具通道，`npx cubeone-mcp`）**：`docs/guides/npm-publish-and-codebuddy.md`；
+  外部 server 的注册与排障：`docs/guides/mcp-registration.md`（**描述外部 server；模板仓 / 外部资料，本仓不含正文**）。
+- 状态真源 `docs/TASKBOARD.md`；决策 **D1–D36** 见 `docs/DECISIONS.md`；核验器完整契约
+  `docs/reports/t1.2-verifier-contract.md`；版本历史见 git log。
+- **单写者边界（按实际执行修正，B-3）**：`scripts/` + `lib/` 由同一人串行改，
+  `SKILL.md` / `docs/` 由另一人改，`tests/` 跟随对应实现改，看板连锁批次单独一人一次写完；
+  **本文件的改动须由 lead 转派**，不再声明"只由 skill-author 改"。
