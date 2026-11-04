@@ -670,6 +670,44 @@ tag 落地的瞬间，看板就从绿变红，直到批次行回填完成。
 - **方式**：计划文档授权；本条不改变交付物形态、只固化已发生的两次实跑顺序，故未单独开 GATE（依 D34 §34.2(1)）。
 - **记录人**：`software-engineer`（C2 批次执行者）。
 
+#### 35.6 机器查 vs 人工核边界（A-22 / F-5，2026-11-04 追加）
+
+D33 定「四证齐全」、35.2 定动作顺序，但**哪些能交给机器、哪些必须人核**此前没写清，
+导致 `check_release.py` 只比本地版本轴、`--network` 的 dist-tags 不一致又只降级 WARN，
+GATE-3.1 实质上全靠人。本条把边界钉死（**在 D35 内追加，不新增 D37**）。
+
+**机器可查（`check_release.py --network`，发布后核证；不满足即 `rc≠0`）**
+
+| 项 | 判据 | 落点 |
+|---|---|---|
+| 版本轴 | `tag` = `package.json` = `SKILL.md` frontmatter = README 两处，四处同值 | 判据① |
+| tag | 最新 tag 可读且去掉 `v` 后等于目标版本 | `latest_tag()` |
+| 发布正文 | `docs/releases/` 下有含该版本号的 `.md` | 判据② |
+| npm `dist-tags` | **官方 registry**（`--registry "https://registry.npmjs.org/"`）的 `latest` == 目标版本 | `--network` 分支 |
+| 台账回填 | `docs/releases/README.md` 表格里有该版本的台账行 | `ledger_has_version()` |
+| 工作区 | `git status --porcelain` 为空 | `worktree_clean()` |
+
+**机器可查（`check_taskboard.py`）**：任务表 ↔ §4 快照、证据路径存在性、当前版本 tag 存在时
+T3.5 不得「待开始」。
+
+**人工核（脚本读不到，写进 GATE-3.1 证据包由用户/维护者核对）**
+
+1. **CI success**：run 链接 + 逐 job 结论（脚本本地无 CI 上下文，不能靠 `GITHUB_ACTIONS` 猜）。
+2. **GitHub Release 正文内容**：页面正文与 `docs/releases/<date>-vX.Y.Z.md` 是否逐字一致。
+3. **npm 页面可见性**：包页 `latest` 标签、tarball 内容（`npm pack --dry-run` 清单）。
+4. **用户明确放行**：GATE-3.1 不能因为「CI 绿了」自动打 tag（D-5 / §5.1(5)）。
+5. **BREAKING behavior 与迁移提示**是否写进发布正文（0.7.3 补丁版要求）。
+
+**为什么发布前门禁跑不带 `--network`（F-5）**：目标版本尚未发布时，`latest` 必然不等于
+`package.json.version`；把 dist-tags 一致当发布前门禁，正常发版会被自己卡死。
+因此 `publish.yml` 门禁只跑 `check_taskboard.py` + `check_release.py`（**不带 `--network`**）+
+`tag == package.json.version`；`--network` 的 dist-tags 判红**只用于发布后核证**。
+同理，不带 `--network` 时新增的台账/工作区项一律进 `extras`（WARN），
+保证"长期未发版 + 工作区有改动"的日常状态仍 `rc=0`，不制造恒定红灯。
+
+**两条合法路径不因本条收紧**（F-5）：`workflow_dispatch` 仍是正常发布入口；
+D33 补发历史 Release 依赖的 `::warning` 幂等跳过分支保留。
+
 ---
 
 ### D36 · R1 批次三项裁决：`AskForMigrate` 告警策略 / 不做时钟参数判据 / 核验器 2.0 维持不排期

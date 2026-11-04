@@ -20,11 +20,16 @@ frontmatter = README 表里那两处，**必须同值同步**（D33 §33.2）。
 3. **未发版改动提醒**：``master`` 领先该 tag 的提交数 > 0 时**只打印提醒，不算失败**。
    那是"改了但还没发版"的正常状态，把它判红等于逼人每次 push 都发版。
 
-可选判据（需网络）
-------------------
-``--network`` 额外查 npm ``dist-tags``（``npm view``，带超时）。**失败/不匹配都只 warning**：
-发布顺序本来就是 tag → Release → npm，脚本在打完 tag 立刻跑时 npm 还没更新属正常；
-网络不通更是环境问题。判成红会让这条判据在 CI 里失去信息量。
+可选判据（需网络，仅用于**发布后核证**）
+----------------------------------------
+``--network`` 额外查 npm ``dist-tags``（``npm view`` 显式带
+``--registry "https://registry.npmjs.org/"``，带超时）。**dist-tags.latest 与目标版本不一致
+判红**；网络调用失败仍只 WARN（环境问题时判红没有信息量）。
+
+发布前门禁（``publish.yml``）跑 **不带 ``--network``** 的版本：目标版本尚未发布时
+``latest`` 必然不等于 ``package.json.version``，把它当发布前门禁会把正常发版自己卡死（F-5）。
+``--network`` 路径下的台账回填 / 工作区干净等可查项也只在这一路径进 ``findings``；
+不带 ``--network`` 时全部只进 ``extras``（WARN），保证"长期未发版 + 工作区有改动"仍 rc=0。
 
 用法
 ----
@@ -230,6 +235,42 @@ def find_release_note(root: Path, version: str) -> Path | None:
     return None
 
 
+def worktree_clean(root: Path) -> bool | None:
+    """工作区是否干净（``git status --porcelain`` 为空）。
+
+    Args:
+        root: 仓库根。
+
+    Returns:
+        ``True`` 干净 / ``False`` 有未提交改动 / ``None`` git 不可用（不猜）。
+    """
+    code, out = run_git(root, ["status", "--porcelain"])
+    if code != 0:
+        return None
+    return out.strip() == ""
+
+
+def ledger_has_version(root: Path, version: str) -> bool | None:
+    """发布台账表格里是否已有该版本的行（A-22「台账回填」机器可查项）。
+
+    Args:
+        root: 仓库根。
+        version: 目标版本（不含 ``v``）。
+
+    Returns:
+        ``True`` / ``False`` / ``None``（台账文件读不到，不猜）。
+    """
+    try:
+        text = read_text(root / "docs" / "releases" / "README.md")
+    except OSError:
+        return None
+    pattern = re.compile(rf"v{re.escape(version)}(?!\d)")
+    for line in text.splitlines():
+        if line.strip().startswith("|") and pattern.search(line):
+            return True
+    return False
+
+
 def npm_dist_tags(root: Path, timeout: float = 20.0) -> tuple[dict[str, str] | None, str]:
     """查 npm 的 ``dist-tags``（``--network`` 才调用）。
 
@@ -238,11 +279,20 @@ def npm_dist_tags(root: Path, timeout: float = 20.0) -> tuple[dict[str, str] | N
         timeout: 超时秒数；npm 卡住不该把发布流程一起卡住。
 
     Returns:
-        ``(dist_tags 或 None, 说明)``。任何失败都只返回说明，由调用方降级为 WARN。
+        ``(dist_tags 或 None, 说明)``。网络/解析失败返回 ``None``，由调用方降级为 WARN；
+        读到 dist-tags 后若 ``latest`` 与目标版本不一致，由 ``check()`` 在 ``--network``
+        路径下判红（发布后核证，F-5）。
+
+    ⚠️ ``--registry`` 必须**分开写并加引号**（这里已是 argv 列表，天然分开）：
+       本机默认 npmmirror 只同步到 0.7.1，连写 ``--registry=...`` 在部分 npm shim 上
+       还会被拆参 ⇒ 查到的 latest 是旧值，会把正常状态误判成失败。
     """
     try:
         completed = subprocess.run(
-            ["npm", "view", "cubeone-mcp", "dist-tags", "--json"],
+            [
+                "npm", "view", "cubeone-mcp", "dist-tags", "--json",
+                "--registry", "https://registry.npmjs.org/",
+            ],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -393,7 +443,40 @@ def check(
         else:
             extras.append(Finding("PASS", "判据③ 未发版改动", f"HEAD 与 {tag} 同点"))
 
-    # ── 可选判据：npm dist-tags ──
+    # ── A-22：发布收口的机器可查项（**分级**，F-5）──
+    # 不带 --network：一律只进 extras（WARN / PASS），保证「长期未发版 + 工作区有改动」
+    # 仍 rc=0；带 --network（发布后核证）：可查项进 findings，不满足即 FAIL。
+    # 「CI success」脚本读不到 ⇒ 永远只在 extras 提醒，写进 D35 §35.6 人工核清单。
+    if target_version is not None:
+        machine_items: list[tuple[str, bool | None, str]] = [
+            (
+                "台账回填（docs/releases/README.md）",
+                ledger_has_version(root, target_version),
+                f"docs/releases/README.md 表格里没有含 v{target_version} 的台账行",
+            ),
+            (
+                "工作区干净（git status --porcelain）",
+                worktree_clean(root),
+                "工作区有未提交改动；发布后核证要求干净工作区",
+            ),
+        ]
+        for label, state, missing_detail in machine_items:
+            sink = findings if network else extras
+            if state is None:
+                extras.append(Finding("WARN", label, "无法判定（读不到文件 / git 不可用），不猜"))
+            elif state:
+                sink.append(Finding("PASS", label, "ok"))
+            else:
+                sink.append(Finding("FAIL" if network else "WARN", label, missing_detail))
+        extras.append(
+            Finding(
+                "WARN",
+                "CI success（人工核）",
+                "本脚本读不到 CI 结论；按 D35 §35.6 人工核清单核对 run 链接与逐 job 结论",
+            )
+        )
+
+    # ── 可选判据：npm dist-tags（仅 --network，用于发布后核证）──
     if network:
         tags, message = npm_dist_tags(root)
         if tags is None:
@@ -401,14 +484,16 @@ def check(
         elif target_version is None:
             extras.append(Finding("WARN", "npm dist-tags", f"无法确定目标版本；远端 latest={tags.get('latest')}"))
         elif tags.get("latest") == target_version:
-            extras.append(Finding("PASS", "npm dist-tags", f"latest={target_version}"))
+            findings.append(
+                Finding("PASS", "npm dist-tags", f"latest={target_version}（官方 registry）")
+            )
         else:
-            extras.append(
+            findings.append(
                 Finding(
-                    "WARN",
+                    "FAIL",
                     "npm dist-tags",
                     f"远端 latest={tags.get('latest')} ≠ 目标 {target_version}"
-                    "（发布顺序是 tag → Release → npm，打完 tag 立刻跑时属正常；只警告）",
+                    "（官方 registry https://registry.npmjs.org/；发布后核证必须一致，F-5）",
                 )
             )
 
@@ -425,11 +510,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         prog="check_release.py",
         description="校验版本轴（tag / package.json / SKILL.md / README）与发布正文是否收口",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="退出码：0=通过 1=不一致或无法判定。示例：python tools/check_release.py --network",
+        epilog=(
+            "退出码：0=通过 1=不一致或无法判定。"
+            "示例：python tools/check_release.py（发布前门禁，不带 --network）；"
+            "python tools/check_release.py --network（发布后核证，dist-tags 不一致判红）"
+        ),
     )
     parser.add_argument("--repo-root", default=str(REPO_ROOT), help="仓库根（默认脚本所在仓）")
     parser.add_argument("--tag", default=None, help="显式指定要比对的 tag（自测/预演用，跳过 git）")
-    parser.add_argument("--network", action="store_true", help="额外查 npm dist-tags（失败只警告）")
+    parser.add_argument(
+        "--network",
+        action="store_true",
+        help="发布后核证：查官方 registry 的 npm dist-tags（不一致判红）+ 台账/工作区机器可查项",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     root = Path(args.repo_root).resolve()

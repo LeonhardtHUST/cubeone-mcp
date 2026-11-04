@@ -2,8 +2,12 @@
 
 > **一页看清"每个版本改了什么、证据齐不齐"。**
 > 收口判据来自 [`../DECISIONS.md`](../DECISIONS.md) **D33**：`tag` + `GitHub Release 正文` + `npm 发布`
-> + `看板回填`，**四证缺一视为发布未收口**。流程与命令见 **D35**。
-> 机器校验：`python tools/check_release.py --network`（版本轴同值 + 正文存在 + 远端 dist-tags）。
+> + `看板回填`，**四证缺一视为发布未收口**。流程与命令见 **D35 §35.6**（机器查 vs 人工核边界）。
+> **发布前门禁**（`publish.yml`）跑 `python tools/check_release.py`（**不带 `--network`**）：
+> 只校验本地版本轴 / tag / 正文 / 工作区；目标版本尚未发布时 `latest` 必然不等于
+> `package.json.version`，把 dist-tags 当发布前门禁会把正常发版自己卡死（F-5）。
+> **发布后核证**才跑 `--network`（显式带官方 registry `https://registry.npmjs.org/`）：
+> 远端 `dist-tags.latest` 与目标版本不一致即判红。
 
 ---
 
@@ -42,7 +46,8 @@
 
 1. 新建正文 `docs/releases/<日期>-vX.Y.Z.md`（结构照上一版：BREAKING 与否 → 改了什么 → 验证等级表 → 已知限制）；
 2. 本表加一行：日期、一句话内容、三证（tag sha / Release / npm 版本与 files）、正文链接；
-3. `python tools/check_release.py --network` → **rc=0**（版本轴同值 + 正文存在 + npm `latest` 对齐）；
+3. **发布后核证**：`python tools/check_release.py --network` → **rc=0**（版本轴同值 + 正文存在 +
+   官方 registry 的 npm `latest` 对齐 + 台账回填 + 工作区干净）；发布前门禁跑不带 `--network` 的版本；
 4. `python tools/check_taskboard.py` → **rc=0**（批次行回填后看板才能变绿）。
 
 > ⚠️ 顺序不能反：**先建正文、再发 Release、最后补 npm**；`release` 事件的 workflow 取自 **tag 点**，

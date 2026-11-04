@@ -254,6 +254,43 @@ jobs:
       - name: 看板一致性校验（TASKBOARD ↔ 快照 ↔ 证据路径）
         run: python tools/check_taskboard.py
 
+      # ── 操作面状态词 + D 编号基准（W5-4 / A-6）────────────────────────────
+      # 状态词判红：L5 已达成（phase2 报告），"无硬件 / 整体挂起 / 一律缺" 漂回操作面会让
+      # agent 拒绝执行已验证能力（A-5）。D 编号基准只做一致性提醒：docs/README.md 的
+      # D1–D<n> 由 W3-3 同步为 DECISIONS.md 最大号，未同步时给 ::warning（不判红）。
+      - name: 操作面状态词与 D 编号扫描
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad=0
+          for f in SKILL.md README.md; do
+            for word in "无硬件" "整体挂起" "未实测（无硬件）" "一律缺"; do
+              if grep -nF "$word" "$f"; then
+                echo "::error file=${f}::命中已失效状态词「${word}」（L5 已达成，见 phase2 报告）"
+                bad=1
+              fi
+            done
+          done
+          python - <<'PY'
+          import re, pathlib
+          root = pathlib.Path(".")
+          decisions = (root / "docs/DECISIONS.md").read_text(encoding="utf-8")
+          nums = [int(n) for n in re.findall(r"^### D(\d+)\b", decisions, re.M)]
+          expected = max(nums) if nums else 0
+          if expected == 0:
+              print("::error::docs/DECISIONS.md 里找不到 ### D<n> 标题")
+              raise SystemExit(1)
+          index = (root / "docs/README.md").read_text(encoding="utf-8")
+          stated = sorted({int(n) for n in re.findall(r"D1[–-]D(\d+)", index)})
+          if stated and stated != [expected]:
+              print(f"::warning title=D 编号基准::docs/README.md 声明 {stated}，DECISIONS.md 最大号 D{expected}；W3-3 同步后本行消失")
+          elif not stated:
+              print(f"::warning title=D 编号基准::docs/README.md 未声明 D1–D<n> 区间（基准 D{expected}）")
+          else:
+              print(f"D 编号基准一致：D1–D{expected}")
+          PY
+          exit "${bad}"
+
       # 版本轴 / 发布收口校验（C2.3）——**故意不挂 CI**，只在此处留一句说明，免得下一个人以为漏了。
       #   `tools/check_release.py` 的判据①要求"最新 tag == package.json == SKILL.md == README 两处"，
       #   而本仓的正常状态是**长期存在未发版改动**（改了代码但还没打 tag）——那种状态下判据①

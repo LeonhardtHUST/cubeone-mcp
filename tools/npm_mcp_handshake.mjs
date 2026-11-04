@@ -38,7 +38,7 @@
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
+import { writeFileSync, appendFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -71,6 +71,43 @@ const logLines = [];
 function log(line = "") {
   logLines.push(line);
   console.log(line);
+}
+
+/**
+ * `--ci` 下把汇总写进 GitHub Job Summary（A-24 / F-6）。
+ *
+ * 只改**呈现**，不改判定：SKIP 仍然不翻 FAIL、不造假素材、退出码仍只看 fail。
+ * 目的是让 `pass=11 skip=1` 不会被读成"12 项全测过"——Summary 里逐条列出 skippedIds。
+ * 用 appendFileSync 而不是 writeFileSync：同一个 job 里别的步骤可能已经写过 Summary。
+ * CI 没给 GITHUB_STEP_SUMMARY（本地模拟 --ci）时安静跳过，不影响退出码。
+ */
+function writeStepSummary() {
+  if (!ciMode) return;
+  const target = process.env.GITHUB_STEP_SUMMARY;
+  if (!target) return;
+  const conclusion = fail === 0 ? "PASS" : "FAIL";
+  const lines = [
+    "### MCP 工具通道冒烟（handshake）",
+    "",
+    `- 结论：**${conclusion}** ｜ pass=${pass} fail=${fail} skip=${skip}`,
+    skip > 0
+      ? `- ⚠️ 有 ${skip} 项 SKIPPED（未验证，**不代表通过**；缺素材不造假，见 F-6）`
+      : "- 无 SKIPPED 项",
+    "",
+    "#### SKIPPED 明细",
+    "",
+  ];
+  if (skippedIds.length) {
+    for (const id of skippedIds) lines.push(`- ${id}`);
+  } else {
+    lines.push("- （无）");
+  }
+  lines.push("", "> SKIP 是有意取舍：`--require-materials` 严格模式下 SKIP 即失败。");
+  try {
+    appendFileSync(target, lines.join("\n") + "\n", "utf8");
+  } catch (error) {
+    console.error(`[handshake] 写 GITHUB_STEP_SUMMARY 失败（不影响退出码）：${error?.message || error}`);
+  }
 }
 
 /**
@@ -371,10 +408,11 @@ async function main() {
     // 单独一行点名，避免"skip 数"被读成"通过的另一种写法"
     log(`SKIPPED (未验证，不代表通过)：${skippedIds.join(", ")} —— 缺素材，本机跑 --require-materials 可补齐`);
   }
-  log(
-    `VERDICT: ${fail === 0 ? "HANDSHAKE SMOKE PASS" : "HANDSHAKE SMOKE FAIL"} ` +
-      `(pass=${pass} fail=${fail} skip=${skip})`,
-  );
+  const verdictText = fail === 0 ? "HANDSHAKE SMOKE PASS" : "HANDSHAKE SMOKE FAIL";
+  // A-24：headline 显式带 (skip=N)，别让 PASS 被读成"全测过"；不翻 FAIL、不改 rc。
+  const skipNote = skip > 0 ? ` (skip=${skip}，SKIPPED 未验证、不代表通过)` : "";
+  log(`VERDICT: ${verdictText}${skipNote} (pass=${pass} fail=${fail} skip=${skip})`);
+  writeStepSummary();
   return fail === 0 ? 0 : 1;
 }
 

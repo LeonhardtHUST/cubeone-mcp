@@ -29,6 +29,11 @@ name: Publish npm
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "本次要发布的 tag（必须等于 package.json.version，如 v0.7.3）"
+        required: true
+        type: string
   release:
     types: [published]
 
@@ -65,6 +70,31 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install "pytest==9.2.0"
           python -m pytest tests/ -q
+
+      # ── 发布门禁（W5-2 / A-23）────────────────────────────────────────────
+      # 位置：pytest 之后（测试已过）、升级 npm / 打包 / 发布之前（别放到发布动作后）。
+      # check_release.py **不带 --network**：目标版本尚未发布时 latest 必然不等于
+      # package.json.version，把它当发布前门禁会把正常发版自己卡死（F-5）。
+      # tag 来源：dispatch 的必填 inputs.tag，或 release 事件的 tag_name；两者都无 ⇒ 红。
+      - name: 发布门禁（看板 / 版本轴 / tag 一致性）
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python tools/check_taskboard.py
+          python tools/check_release.py
+
+          version="$(node -p "require('./package.json').version")"
+          tag="${DISPATCH_TAG:-${RELEASE_TAG:-}}"
+          if [ -z "$tag" ]; then
+            echo "::error::缺少 tag：workflow_dispatch 必须填 tag，release 事件需带 tag_name"
+            exit 1
+          fi
+          if [ "$tag" != "v${version}" ] && [ "$tag" != "${version}" ]; then
+            echo "::error::tag=${tag} 与 package.json.version=${version} 不一致"
+            exit 1
+          fi
+          echo "门禁通过：tag=${tag} 与 version=${version} 一致" >> "$GITHUB_STEP_SUMMARY"
 
       # OIDC 信任发布要求 npm >= 11.5.1；runner 预装的是 10.x，必须升。
       - name: 升级 npm（OIDC 信任发布要求 >= 11.5.1）
