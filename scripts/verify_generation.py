@@ -80,7 +80,7 @@ import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Sequence
 
 __version__ = "1.2.0"
 
@@ -403,6 +403,113 @@ def collect_init_definitions(code: str) -> dict[str, list[int]]:
     return definitions
 
 
+def _read_source_texts(project_root: str | None, main_c_text: str) -> list[tuple[str, str]]:
+    """收集参与「定义类判据」的源码文件：``main.c`` + （给了工程根时）``Core/Src/*.c``。
+
+    为什么需要（2026-11-04，C3.1 预演实测）：CubeMX 的 ``ProjectManager.CoupleFile=true``
+    （"Generate peripheral initialization as a pair of '.c/.h' files"）会把每个外设的
+    ``MX_<P>_Init`` 生成到**独立文件**（``Core/Src/gpio.c`` / ``tim.c`` …），``main.c`` 里
+    只剩调用。而本核验器原先只看 ``--main-c`` 一个文件，于是把"定义在别的文件里"误判成
+    "外设被静默丢弃"——**假失败**，比漏报更伤人：配置完全正确却被判红，使用者要么白改
+    一遍 `.ioc`，要么从此不信核验器。
+
+    Args:
+        project_root: ``--project-root``；``None`` 时只返回 ``main.c``（保持旧行为）。
+        main_c_text: ``--main-c`` 全文（**恒为第一个**，也是唯一必需的文件）。
+
+    Returns:
+        ``[(显示名, 源码全文), …]``。显示名是相对工程根的路径（如 ``Core/Src/gpio.c``），
+        用于在报告里指名"定义到底在哪个文件"，main.c 的显示名固定为 ``Core/Src/main.c``
+        （即便它不在标准位置——那时它仍排第一，只是其它文件可能扫不到）。
+    """
+    segments: list[tuple[str, str]] = [("Core/Src/main.c", main_c_text)]
+    if not project_root:
+        return segments
+    source_dir = os.path.join(project_root, "Core", "Src")
+    if not os.path.isdir(source_dir):
+        return segments
+    try:
+        names = sorted(
+            name for name in os.listdir(source_dir) if name.endswith(".c")
+        )
+    except OSError:
+        return segments
+    for name in names:
+        if name == "main.c":
+            continue  # 已在第一位（可能来自 --main-c 的覆盖路径）
+        full = os.path.join(source_dir, name)
+        try:
+            text = read_text(full)
+        except OSError:
+            continue
+        segments.append((f"Core/Src/{name}", text))
+    return segments
+
+
+def build_source_text(
+    project_root: str | None, main_c_text: str
+) -> tuple[str, Callable[[int], tuple[str, int]], list[str]]:
+    """把多份源码拼成**一份**文本，并给出"字符下标 → (文件名, 行号)"的定位器。
+
+    拼接只是为了让现有的正则扫描（定义 / 时钟使能）一次覆盖全部文件；报行号时**必须**
+    经定位器换算回**原文件**的行号，否则用户会拿到一个"在拼接文本里才对"的假行号。
+
+    Args:
+        project_root: ``--project-root``，语义见 :func:`_read_source_texts`。
+        main_c_text: ``--main-c`` 全文。
+
+    Returns:
+        ``(combined, origin_of, labels)``：``combined`` 是已剥离注释的各段以 ``\\n`` 拼接；
+        ``origin_of(offset)`` 返回 ``(文件名, 该文件内的行号)``；``labels`` 是参与扫描的
+        文件显示名列表（``len(labels) > 1`` 即多文件模式）。
+    """
+    segments = _read_source_texts(project_root, main_c_text)
+    joined: list[str] = []
+    spans: list[tuple[int, int, str, str]] = []  # (start, end, 文件名, 该段原文)
+    cursor = 0
+    for label, text in segments:
+        cleaned = strip_c_comments(text)
+        if joined:
+            cursor += 1  # 段间那个 "\n"
+        joined.append(cleaned)
+        spans.append((cursor, cursor + len(cleaned), label, cleaned))
+        cursor += len(cleaned)
+    combined = "\n".join(joined)
+
+    def origin_of(offset: int) -> tuple[str, int]:
+        """把拼接文本里的字符下标换算成 ``(文件名, 行号)``。"""
+        for start, end, label, cleaned in spans:
+            if start <= offset <= end:
+                return label, line_of(cleaned, offset - start)
+        return spans[0][2], line_of(spans[0][3], max(offset, 0))
+
+    return combined, origin_of, [label for label, _text in segments]
+
+
+def ioc_uses_per_peripheral_files(ioc_text: str | None) -> bool | None:
+    """从 ``.ioc`` 读 ``ProjectManager.CoupleFile``（是否"每外设一对 ``.c/.h``"）。
+
+    Args:
+        ioc_text: ``.ioc`` 全文；``None`` 表示没给。
+
+    Returns:
+        ``True`` / ``False``；读不到该键时返回 ``None``（**不猜**——猜错会让降级判据失灵）。
+    """
+    if not ioc_text:
+        return None
+    for line in ioc_text.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("projectmanager.couplefile"):
+            _, _, value = stripped.partition("=")
+            token = value.strip().lower()
+            if token in ("true", "1"):
+                return True
+            if token in ("false", "0"):
+                return False
+            return None
+    return None
+
+
 def find_main_body(code: str) -> tuple[int, int] | None:
     """定位 ``main()`` 函数体在大括号之间的区间。
 
@@ -554,17 +661,24 @@ def check_log_cannot_map(log_text: str, allow_signals: Sequence[str]) -> CheckRe
 
 
 def check_main_init_present(
-    code: str, definitions: dict[str, list[int]], expect: Sequence[str]
+    code: str,
+    definitions: dict[str, list[int]],
+    expect: Sequence[str],
+    origin_of: Callable[[int], tuple[str, int]] | None = None,
 ) -> tuple[CheckResult, dict[str, dict[str, str | int]]]:
     """检查期望外设是否都有对应的 ``MX_..._Init`` **定义**。
 
     Args:
-        code: 已过 :func:`strip_c_comments` 的 ``main.c`` 源码（用于取行号）。
-        definitions: :func:`collect_init_definitions` 的返回值。
+        code: 已拼好并剥离注释的源码文本（多文件时是拼接结果，见 :func:`build_source_text`）。
+        definitions: :func:`collect_init_definitions` 的返回值（下标对 ``code``）。
         expect: 期望外设清单。
+        origin_of: 可选定位器，把下标换算成 ``(文件名, 行号)``；给 ``None`` 时按单文件
+            处理（行号即 ``code`` 里的行号）。多文件扫描时**必须**传，否则报出的会是
+            拼接文本里的假行号。
 
     Returns:
-        ``(检查结果, 解析明细)``。明细键为外设名，值含 ``symbol`` / ``match`` / ``line``。
+        ``(检查结果, 解析明细)``。明细键为外设名，值含 ``symbol`` / ``match`` /
+        ``line`` / ``file``（``file`` 为空串表示单文件模式）。
     """
     if not expect:
         return (
@@ -583,14 +697,26 @@ def check_main_init_present(
         if symbol is None:
             missing.append(f"{periph}({kind})")
             continue
+        offset = definitions[symbol][0]
+        if origin_of is not None:
+            file_label, line_no = origin_of(offset)
+        else:
+            file_label, line_no = "", line_of(code, offset)
         resolved[periph] = {
             "symbol": symbol,
             "match": kind,
-            "line": line_of(code, definitions[symbol][0]),
+            "line": line_no,
+            "file": file_label,
         }
 
+    def _where(info: dict[str, str | int]) -> str:
+        """定义位置的展示文本：多文件时带文件名，单文件时只有行号（保持旧措辞）。"""
+        if info["file"]:
+            return f"定义 {info['file']}:L{info['line']}"
+        return f"定义 L{info['line']}"
+
     satisfied = "；".join(
-        f"{periph} → {info['symbol']}（{info['match']}，定义 L{info['line']}）"
+        f"{periph} → {info['symbol']}（{info['match']}，{_where(info)}）"
         for periph, info in resolved.items()
     )
     if missing:
@@ -657,7 +783,9 @@ def check_main_init_called(
         symbol = str(info["symbol"])
         match = re.search(r"\b" + re.escape(symbol) + r"\s*\(", body_text)
         if match is None:
-            not_called.append(f"{periph} → {symbol}（定义 L{info['line']}，main() 内无调用）")
+            # 定义可能不在 main.c（per-peripheral 文件布局）：详情里带上定义所在文件
+            defined_at = f"{info['file']}:L{info['line']}" if info.get("file") else f"L{info['line']}"
+            not_called.append(f"{periph} → {symbol}（定义 {defined_at}，main() 内无调用）")
             continue
         call_line = line_of(code, body_start + match.start())
         called.append(f"{periph} → {symbol}（调用 L{call_line}）")
@@ -759,7 +887,10 @@ def port_of_pin(pin: str) -> str | None:
 
 
 def check_pins_present(
-    code: str, ioc_text: str | None, expect_pins: Sequence[tuple[str, str]]
+    code: str,
+    ioc_text: str | None,
+    expect_pins: Sequence[tuple[str, str]],
+    scope_label: str = "main.c",
 ) -> CheckResult:
     """引脚级检查：``.ioc`` 里的 ``<PIN>.Signal`` 是否真的写对了，且进了生成物。
 
@@ -771,13 +902,17 @@ def check_pins_present(
     判定（任一不满足即 ``fail``）：
 
     1. ``.ioc`` 里存在 ``<PIN>.Signal`` 且取值（大小写不敏感）与期望一致；
-    2. 该引脚所属端口的时钟使能出现在 ``main.c``（``__HAL_RCC_GPIOx_CLK_ENABLE()``）——
-       这一条才让"引脚真的进了生成物"可验证，而不只是"``.ioc`` 里写了个键"。
+    2. 该引脚所属端口的时钟使能出现在**扫描到的源码**里（``__HAL_RCC_GPIOx_CLK_ENABLE()``）
+       —— 这一条才让"引脚真的进了生成物"可验证，而不只是"``.ioc`` 里写了个键"。
+       "扫描到的源码"在给了 ``--project-root`` 时是 ``Core/Src/*.c``（含 ``main.c``），
+       因为 per-peripheral 文件布局（``CoupleFile=true``）下时钟使能在 ``gpio.c`` 里，
+       只看 ``main.c`` 会误判（2026-11-04 实测）。
 
     Args:
-        code: 已剥离注释的 ``main.c`` 源码。
+        code: 已剥离注释的源码文本（单文件时就是 ``main.c``，多文件时是拼接结果）。
         ioc_text: ``.ioc`` 全文；``None`` 表示未提供（本项 ``skip``）。
         expect_pins: ``[(PIN, SIGNAL), ...]``。
+        scope_label: 报错文案里"去哪儿找"的标签；默认 ``main.c``（单文件模式保持原措辞）。
 
     Returns:
         检查结果。
@@ -813,7 +948,7 @@ def check_pins_present(
         enable = f"__HAL_RCC_{port}_CLK_ENABLE"
         if re.search(r"\b" + re.escape(enable) + r"\s*\(", code) is None:
             problems.append(
-                f"{pin}: .ioc 写了 {pin}.Signal={actual}，但 main.c 里没有 {enable}()"
+                f"{pin}: .ioc 写了 {pin}.Signal={actual}，但 {scope_label} 里没有 {enable}()"
                 "（引脚没进生成物）"
             )
             continue
@@ -1148,6 +1283,30 @@ def parse_allow_signals(raw: Sequence[str] | None) -> list[str]:
     return result
 
 
+def _downgrade_fail_to_warn(result: CheckResult, reason: str) -> CheckResult:
+    """把 ``fail`` 降成 ``warn``，并在 detail 末尾附下降级理由。
+
+    只用于**已经确认"不是配置错、是我们看不见"**的那一种情形（per-peripheral 文件布局
+    且没给 ``--project-root``）。为什么不允许"永远 warn"：那等于把这两项检查废掉——
+    假失败要修的是"扫描范围"，不是"判据强度"。
+
+    Args:
+        result: 原检查结果。
+        reason: 降级理由（会写进 detail，同时也进 ``notes``）。
+
+    Returns:
+        降级后的结果；非 ``fail`` 的原样返回。
+    """
+    if result.status != STATUS_FAIL:
+        return result
+    return CheckResult(
+        result.check_id,
+        STATUS_WARN,
+        f"{result.detail}。⚠️ {reason}（故降级为 warn，不判 fail）",
+        result.blocking,
+    )
+
+
 def verify_documents(
     *,
     log_text: str,
@@ -1180,13 +1339,40 @@ def verify_documents(
     Returns:
         符合 :data:`SCHEMA` 的报告字典。
     """
-    code = strip_c_comments(main_c_text)
-    definitions = collect_init_definitions(code)
+    source_code, origin_of, source_labels = build_source_text(project_root, main_c_text)
+    multi_file = len(source_labels) > 1
+    definitions = collect_init_definitions(source_code)
+    main_c_code = strip_c_comments(main_c_text)
 
     log_result = check_log_cannot_map(log_text, allow_signals)
-    present_result, resolved = check_main_init_present(code, definitions, expect)
-    called_result = check_main_init_called(code, resolved, expect)
-    pins_result = check_pins_present(code, ioc_text, expect_pins)
+    present_result, resolved = check_main_init_present(
+        source_code,
+        definitions,
+        expect,
+        origin_of if multi_file else None,
+    )
+    # 「是否在 main() 内被调用」在语义上只可能是 main.c 的事：函数可以定义在 gpio.c，
+    # 但调用点必须在 main() 里。所以这里仍传 main.c 的文本。
+    called_result = check_main_init_called(main_c_code, resolved, expect)
+    pins_result = check_pins_present(
+        source_code,
+        ioc_text,
+        expect_pins,
+        scope_label="Core/Src 下的源码" if multi_file else "main.c",
+    )
+
+    # per-peripheral 布局（CoupleFile=true）且**没给** --project-root 时，我们只能看到
+    # main.c：定义与时钟使能可能在 `Core/Src/<periph>.c` 里，此时判 fail 就是冤枉。
+    # 这一种情形降 warn 并在 notes 里点名；其余情形（含给了 --project-root）维持严格。
+    couple_note: str | None = None
+    if project_root is None and ioc_uses_per_peripheral_files(ioc_text) is True:
+        couple_note = (
+            "本项目为 per-peripheral 文件布局（.ioc 里 ProjectManager.CoupleFile=true），"
+            "但未传 --project-root，本项只扫了 main.c：初始化函数 / 时钟使能可能定义在 "
+            "Core/Src/<periph>.c 里，结论**可能误判**。补 --project-root 即可消除"
+        )
+        present_result = _downgrade_fail_to_warn(present_result, couple_note)
+        pins_result = _downgrade_fail_to_warn(pins_result, couple_note)
     mxproject_result = check_mxproject_abs_path(mxproject_text)
     mx_script_result = check_mx_script_abs_path(project_root)
     syscalls_result = check_syscalls_path(log_text)
@@ -1211,6 +1397,10 @@ def verify_documents(
     for item in checks:
         if item.status == STATUS_SKIP:
             notes.append(f"{item.check_id}: {item.detail}")
+    if couple_note is not None:
+        # 契约要求「skip 必须解释」；降级也必须解释——否则 warn 会变成新的静默。
+        notes.append(f"{CHECK_MAIN_INIT_PRESENT}: {couple_note}")
+        notes.append(f"{CHECK_PINS_PRESENT}: {couple_note}")
 
     report_inputs: dict[str, object] = {
         "log": "",
@@ -1400,6 +1590,26 @@ def _write_text(path: str, content: str) -> None:
         handle.write(content)
 
 
+def _harden_console_streams() -> None:
+    """把 stdout/stderr 的编码错误处理器改成 ``backslashreplace``。
+
+    为什么需要（2026-11-04，Windows CI 首跑抓到）：Windows 英文环境的控制台编码是 **cp1252**，
+    而本脚本的汇报文本里用到了 ``→`` / ``·`` / ``—`` / 中文，打印时抛 ``UnicodeEncodeError``，
+    脚本**直接以 1 退出**——CLI 通道（不经 MCP、直接 ``python scripts/verify_generation.py``）
+    因此必崩；MCP 通道只是因为封装层注入了 ``PYTHONIOENCODING=utf-8`` 才幸免。
+
+    **只换错误处理器、不换编码**：UTF-8 终端下行为不变；cp936/cp1252 下不可编码字符退化成
+    ``\\u2192`` 这类转义序列，输出仍可读、退出码仍正确。改文案治不了根（下次加新符号又犯）。
+
+    三个脚本各自持有一份（这三个文件必须能单独拷走就用，不引入共享模块）。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI 入口。
 
@@ -1409,6 +1619,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         退出码：0 / 1 / 2。
     """
+    _harden_console_streams()
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
 

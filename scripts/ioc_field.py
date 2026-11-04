@@ -213,12 +213,33 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _harden_console_streams() -> None:
+    """把 stdout/stderr 的编码错误处理器改成 ``backslashreplace``。
+
+    为什么需要（2026-11-04，Windows CI 首跑抓到）：Windows 英文环境的控制台编码是 **cp1252**，
+    打印 ``→`` 或中文时会抛 ``UnicodeEncodeError``，脚本**直接以 1 退出**——CLI 通道
+    （不经 MCP、直接 ``python scripts/ioc_field.py``）因此必崩；MCP 通道只是因为封装层
+    注入了 ``PYTHONIOENCODING=utf-8`` 才幸免。
+
+    **只换错误处理器、不换编码**：UTF-8 终端下行为不变；cp936/cp1252 下不可编码字符退化成
+    ``\\u2192`` 这类转义序列，输出仍可读、退出码仍正确。改文案治不了根（下次加新符号又犯）。
+
+    三个脚本各自持有一份（这三个文件必须能单独拷走就用，不引入共享模块）。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI 入口。
 
     Returns:
         退出码：0 / 1 / 2。
     """
+    _harden_console_streams()
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
 

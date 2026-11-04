@@ -374,12 +374,38 @@ def _write_json(path: str, payload: dict[str, object]) -> None:
         handle.write("\n")
 
 
+def _harden_console_streams() -> None:
+    """把 stdout/stderr 的编码错误处理器改成 ``backslashreplace``。
+
+    为什么需要（2026-11-04，Windows CI 首跑抓到）：Windows 英文环境的控制台编码是 **cp1252**，
+    打印 ``→`` / ``←`` / 中文时会抛 ``UnicodeEncodeError``，脚本**直接以 1 退出**——
+    用户看到的是"工具坏了"，而不是"这个字符打不出来"。CLI 通道（不经 MCP、直接
+    ``python scripts/ioc_backup.py``）因此在这类机器上是必崩的；MCP 通道只是因为封装层
+    注入了 ``PYTHONIOENCODING=utf-8`` 才幸免，所以本机（UTF-8 代码页）从没暴露。
+
+    **只换错误处理器、不换编码**：UTF-8 终端下行为完全不变；cp936/cp1252 下不可编码字符
+    退化成 ``\\u2192`` 这类转义序列，输出仍可读、退出码仍正确。删中文或把 ``→`` 换成 ``->``
+    都只治那一处，下次加个新符号又会犯——所以在流这一层兜住。
+
+    三个脚本各自持有一份（``ioc_backup`` / ``ioc_field`` / ``verify_generation``）：这三个
+    文件必须能**单独拷走就用**，不引入共享模块。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError):
+            # 非 TextIOWrapper（被重定向到自定义对象 / pytest capsys）或极旧版本：跳过即可，
+            # 跳过的后果只是回到原行为，不会更糟。
+            pass
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI 入口。
 
     Returns:
         退出码：0 / 1 / 2。
     """
+    _harden_console_streams()
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
 
