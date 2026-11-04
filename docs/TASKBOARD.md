@@ -4,7 +4,7 @@
 > 上游：`docs/2026-11-03-agent-team-plan.md`（下称"计划"）、`docs/2026-11-03-execution-research.md`（下称"调研报告"）。
 > 交接协议见计划 §5.2：新 Agent 入场按 `本文件` → `docs/DECISIONS.md` → 计划对应 Phase 节 的顺序读，即可无缝接手。
 
-最后更新：2026-11-04 · 更新者：software-engineer（**R1 批次（已完成）**：三项裁决落地。① `scripts/regen.sh` 生成前读 `ProjectManager.AskForMigrate` 并**按可判定性分两级**（D36①）——`true` **且** 版本戳落后于锁定基线 → **4 行 `[regen][warn]`**（因果 + **可直接复制执行**的置 `false` 命令与真实路径 + GUI 迁移替代路径 + 指向 P1）；`true` **但** 版本戳一致 → **一行 `[regen]` info**（不喊，也不沉默：基线是**常量**，不代表你机器上的版本）；`false` / 读不到 → **什么都不打**。**为什么分两级**：一律 warn 会因"每次 `project generate` 都写回 true"而每次刷 4 行黄字，真风险被淹（**警告常态化 = 没有警告**）；只在落后时输出又会因基线是常量而在「工程戳 6.18.1 / 本机装 6.19.0」这类错配上**静默掉会挂死的那一例**——两个极端都已写进 D36① 的否决记录。新增 **opt-in** `--fail-fast-on-migrate`（**只看该键、不叠加版本戳判断**；置位则打完提示后退 `2`），默认关闭；生成**超时**（`RC=124`）后按日志**末行附近**（尾部 10 个非空行，且窗口内无 `Change cursor`/`Initializing MCU`/`End LoadConfig`）是否停在 `Begin LoadConfig()` 做**定向诊断**——命中才判为迁移对话框挂死（"这不是你的工程坏了" + 两条处置 + 指向 P1），**未命中只报超时并明确写"不能归因"**（避免"看起来有解释其实没解释"）。② `references/regen-exit-codes.md` 补 §4.1（告警/开关语义表 + 为什么不直接退 2）、§4.2（超时诊断两种形态对照表）、§4.3，退出码 `2` 的来源列新增该开关。③ `references/pitfalls.md` P1 末尾"待批准项"改**已定结论**，判据段同步。④ `docs/DECISIONS.md` 追加 **D36**（① 告警策略 / ② 不做时钟参数判据 / ③ 核验器 2.0 维持不排期，每条含决定·理由·代价·什么情况下重新考虑）。⑤ `SKILL.md` 的 regen 用法、退出码表、P1 索引与 §6.1 同步。**未动** `lib/`、`tests/`、`tools/`、`.github/`、`scripts/*.py`（本轮不碰 Python 脚本行为）。批次表 10 条、合计 35 ｜ **上一版**：R0.7.2 补丁发版（**已完成**，三证齐全：tag `v0.7.2` → Release → npm `0.7.2`；版本三处 bump + README 版本表两处 + `docs/releases/2026-11-04-v0.7.2.md` 成文，两处**用户可见缺陷**按「症状 / 谁会遇到 / 怎么验证已修」三段写全，判据语义变更（`Core/Src/*.c` 多文件扫描 + 无 project-root 时降 warn）单列一节；**本批不含任何逻辑改动**）
+最后更新：2026-11-04 · 更新者：software-engineer（**R1 批次（已完成）**：三项裁决落地。① `scripts/regen.sh` 生成前读 `ProjectManager.AskForMigrate` 并**按可判定性分两级**（D36①）——`true` **且** 版本戳落后于锁定基线 → **4 行 `[regen][warn]`**（因果 + **可直接复制执行**的置 `false` 命令与真实路径 + GUI 迁移替代路径 + 指向 P1）；`true` **但** 版本戳一致 → **一行 `[regen]` info**（不喊，也不沉默：基线是**常量**，不代表你机器上的版本）；`false` / 读不到 → **什么都不打**。**为什么分两级**：一律 warn 会因"每次 `project generate` 都写回 true"而每次刷 4 行黄字，真风险被淹（**警告常态化 = 没有警告**）；只在落后时输出又会因基线是常量而在「工程戳 6.18.1 / 本机装 6.19.0」这类错配上**静默掉会挂死的那一例**——两个极端都已写进 D36① 的否决记录。新增 **opt-in** `--fail-fast-on-migrate`（**只看该键、不叠加版本戳判断**；置位则打完提示后退 `2`），默认关闭；生成**超时**（`RC=124`）后按日志**末行附近**（尾部 10 个非空行，且窗口内无 `Change cursor`/`Initializing MCU`/`End LoadConfig`）是否停在 `Begin LoadConfig()` 做**定向诊断**——命中才判为迁移对话框挂死（"这不是你的工程坏了" + 两条处置 + 指向 P1），**未命中只报超时并明确写"不能归因"**（避免"看起来有解释其实没解释"）。② `references/regen-exit-codes.md` 补 §4.1（告警/开关语义表 + 为什么不直接退 2）、§4.2（超时诊断两种形态对照表）、§4.3，退出码 `2` 的来源列新增该开关。③ `references/pitfalls.md` P1 末尾"待批准项"改**已定结论**，判据段同步。④ `docs/DECISIONS.md` 追加 **D36**（① 告警策略 / ② 不做时钟参数判据 / ③ 核验器 2.0 维持不排期，每条含决定·理由·代价·什么情况下重新考虑）。⑤ `SKILL.md` 的 regen 用法、退出码表、P1 索引与 §6.1 同步。**未动** `lib/`、`tests/`、`tools/`、`.github/`、`scripts/*.py`（本轮不碰 Python 脚本行为）。批次表 11 条、合计 36（W3 状态真源归位：按 R2 的 L5 事实重算，散文合计 35→36）｜ **上一版**：R0.7.2 补丁发版（**已完成**，三证齐全：tag `v0.7.2` → Release → npm `0.7.2`；版本三处 bump + README 版本表两处 + `docs/releases/2026-11-04-v0.7.2.md` 成文，两处**用户可见缺陷**按「症状 / 谁会遇到 / 怎么验证已修」三段写全，判据语义变更（`Core/Src/*.c` 多文件扫描 + 无 project-root 时降 warn）单列一节；**本批不含任何逻辑改动**）
 
 ---
 
@@ -17,7 +17,7 @@
 | `已完成` | DoD 全部满足**且证据已落盘**（证据列有可点开的路径） | 任务 Owner |
 | `进行中` | 已开工，尚无完整证据 | 任务 Owner |
 | `待开始` | 未被认领或依赖未满足 | 任务 Owner / lead |
-| `挂起` | 有明确的**外部阻塞**（如无硬件、等用户决策），不是"没做" | lead（挂起通常来自关卡） |
+| `挂起` | 有明确的**外部阻塞**（如等接板日、等用户决策），不是"没做" | lead（挂起通常来自关卡） |
 | `阻塞` | 依赖任务失败或卡壳 >30 分钟，已在升级路径上 | 任务 Owner |
 | `已关闭` | 经裁决判定**不做**：有裁决理由与裁决人。不是未完成，**不计入 `待开始`** | lead（必须写明理由与裁决人） |
 
@@ -43,11 +43,17 @@
 
 ### 0.3 本次会话范围声明
 
-**当前会话无硬件**（GATE-D 已确认，Phase 2 整体后移）：
+**2026-11-04 接板首日已达 L5 主体**（唯一证据真源 `docs/reports/phase2-bringup-2026-11-04.md`；看板记账见 R2 行）：
 
-- Phase 2 的**烧录 / 串口 / HIL 段**（T2.1、T2.3–T2.6）全部 `挂起`，等 GATE-2.0 接板日。
-- T2.2（FW_H7 安装）按计划属 Phase 2，一并 `挂起`；接板日与 T2.5 同批处理。
-- 不阻塞 Phase 1 与 Phase 3 推进（计划 §5.3 "接板日无板" 风险条）。
+- **已实测**：探针识别（ST-Link V2）、烧录（`Verified OK`）、寄存器回读、目视现象（红灯亮、绿蓝灭）
+  ⇒ Phase 2 的 T2.1 / T2.3 置 `已完成`，GATE-2.0 / 2.1 置「已通过」。
+- **仍未实测、如实保留 `挂起`**：T2.2（FW_H7 / H723 构建）、T2.4（串口段与 `pio device monitor`，
+  本工程**未启用任何 USART**）、T2.5（S4 全链的串口段未闭合）、T2.6（负路径硬件版）。
+  GATE-2.2 因此只记「部分收口」。
+- **GATE-2.1 安全确认规则保留**：每次烧录前仍须显式确认目标板不在驱动执行器/继电器；
+  不再以旧状态词为前提，也不因 L5 已达成就跳过。
+- 上述分段口径由 W2 批次写进 `SKILL.md` §6 与根 `README.md`，操作面与真源一致；
+  **不得为了让脚本变绿把未实测项标成完成**。
 
 ### 0.4 角色登记
 
@@ -74,7 +80,7 @@
 | `verifier-dev` | **已出场** | T1.2（`scripts/verify_generation.py` v1.2，7 check id / schema `/2`）、T1.3（`scripts/regen.sh`）、`tests/` 全量单测（74 例）与 `docs/reports/t1.2-verifier-contract.md`；死代码清理 `e20adba` |
 | `skill-author` | **已出场** | T0.5（建本看板）、T1.1（仓骨架 + `.gitignore` + remote）、T1.4 / T1.9（`SKILL.md` v0.6.0，350 行）、`references/` 五个手册页、D30 / D22 相关判据的表述 |
 | `scenario-tester` | **已出场** | T1.5（`testbeds/` 四副本）、T1.6（S1 全链）、T1.7（S2 只读审计）、T1.8（S3 负路径 + `set pin` 能力边界四语法探测，D25 的依据） |
-| `hil-agent` | **未出场** | 专属任务 T2.3 / T2.4 / T2.6 全部依赖 GATE-2.0 接板；本会话无硬件（D7 已裁定 Phase 2 整体后移）。**不是漏排班**——接板日第一顺位启用 |
+| `hil-agent` | **未出场** | 专属任务 T2.3 / T2.4 / T2.6 依赖 GATE-2.0 接板；接板首日的烧录 / 回读 / 目视由 `software-engineer` 在 R2 行完成（L5，见 `docs/reports/phase2-bringup-2026-11-04.md`），本角色仍未出场。**不是漏排班**——串口段（T2.4）与负路径（T2.6）接板后第一顺位启用 |
 | `ci-agent` | **未出场** | 计划 §4.1 把 T3.1 分配给本角色，执行期**改派**给计划外的 `release-engineer`（见 0.4.1）；按单写者原则 `.github/` 不可两人同写，故未并行启用，避免同一 workflow 双写冲突 |
 | `evaluator` | **未出场** | T3.4 三项评估经裁决为"推迟（① ②）/ 不做（③）"——**没有结论可给，就没有评估工作**，故未指派。这也是 `docs/evaluations/` 长期为空目录的原因（现由 `docs/evaluations/2026-11-03-t3.4-closure.md` 落盘关闭结论，目录已非空） |
 
@@ -95,7 +101,7 @@
 | T0.4 | 逐 server **工具调用级**冒烟：`cubemx_help`、`cubemx_load`（对 G474 只读）、`pio_system_info`、`pio_list_devices` | software-engineer（实现）+ software-qa-engineer（复核） | T0.2、T0.3 | 已完成 | L1 | `tools/mcp_smoke.py`（**1481 行**，**sha256 `43e0641c…`**，git blob `1c669d43…`）+ `docs/logs/phase0/mcp-smoke.log`（**4/4 通过，`SMOKE PASS`**，`cubemx_help` 127ms / `cubemx_load` 25.4s / `pio_system_info` 2.8s / `pio_list_devices` 1.8s）+ `mcp-smoke-negative.log`（`--negative-control`，**exit=1、`SMOKE FAIL`、`必需调用通过 2/4（缺 cubemx_help、cubemx_load）`**）。**只读性有证据**：`.ioc` sha256 前后均为 `f57b1d33…`。**已知缺口**：`isError=True` 分支未执行验证（负向对照只到"前置命令不存在"就 SKIP），见 release notes 已知限制。**v0.1.1 已升级**：判据从 `ok = not isError` 改为 `ok = (not isError) and not text_failed`——因为实测 `.ioc` 为垃圾内容时 CubeMX 弹模态框挂住、被超时强杀后 server 返回 `"[FAIL exit=None]…"` 但 **`isError=False`**，旧判据会把这次彻底失败判成 PASS。三条路径实测：越界 `isError=True`→FAIL、缺失 `isError=True`→FAIL、**执行失败 `isError=False`+`[FAIL`→改前 PASS / 改后 FAIL**。新证据 `docs/logs/phase0/mcp-smoke-error.log`。**历史口径（v0.1.1 时）**：929 行 / `4fb474e9…`——脚本随判据升级而增长，引用一律以现行值为准 |
 | T0.5 | 建 `docs/TASKBOARD.md` 任务看板 | skill-author | T0.1 | 已完成 | L0 | 本文件（25 条任务 + GATE 表 + 证据约定，已投入实际使用） |
 
-### Phase 1：MVP 无硬件闭环（2–3 天）
+### Phase 1：MVP 免开发板闭环（2–3 天）
 
 | 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
 |---|---|---|---|---|---|---|
@@ -109,16 +115,16 @@
 | T1.8 | **场景 S3（负路径）**：故意写错信号名（去 `S_` 前缀）/ 漏 `IPParameters` 白名单 → 确认核验器能抓住静默丢弃 | scenario-tester | T1.3、T1.6 | 已完成 | L2 | `docs/reports/t1.8-s3-report.md` + `docs/logs/phase1/s3b*-regen/`。**(b)** 有虚拟引脚缺 `IPParameters` → 日志出现真实 `Cannot map`；**(b-2)** 仅声明 `Mcu.IP*` 无引脚映射 → **日志干净、`MX_TIM4_Init` 0 次**，只有 `main_init_present` 能发现。**(a) 经 lead 裁决不做**（样本数 1→2 不改变结论）。**副产品**：真实 `Cannot map` 级别为 `[INFO]`，落在 `NOISE_RE` 过滤集合内 → 证实 `--log` 必须用原始 stdout |
 | T1.9 | SKILL.md 定稿：吸收 S1–S3 实测教训。**另含「v1.2 能力占位」**：`pins_present` 在 v1.2（能力代号，与脚本版本号 `1.2.0` 同名纯属巧合，二者须在文中区分）落地，定稿时要写清"传 `--expect-pins` 才有引脚级保证"这一档 | skill-author | T1.6–T1.8 | 已完成 | L1 | `944c3e8` 对齐核验器 1.2.0（7 项 / 引脚级）+ `ae9b997` 保证边界三段式与版本自证。SKILL.md 349 行 + 5 个 `references/` 手册页 |
 
-### Phase 2：烧录与串口（**本会话整体挂起**，接板后 1–2 天）
+### Phase 2：烧录与串口（2026-11-04 接板首日已达 L5 主体；串口段仍挂起）
 
 | 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
 |---|---|---|---|---|---|---|
-| T2.1 | 启用 `stm32-stlink`（改前备份）；doctor 实测探针；确认 X Pulse 探针类型（D6） | env-agent | GATE-2.0 | 挂起 | L1 | 待补：doctor probes 序列号 → `docs/logs/phase2/` |
-| T2.2 | 安装 FW_H7（优先 `swmgr install` 无头）；H723 testbed 跑通 `pio run` | env-agent | T1.5 | 挂起 | L3 | 待补：H723 Flash/RAM 报告 |
-| T2.3 | 烧录基线：G474 testbed 产物 → `flash_standalone`（reset=hard, run=true）→ 观察 LED/复位 | hil-agent | T2.1 | 挂起 | L5 | 待补：烧录日志 + 现象描述 → `docs/logs/phase2/`、`docs/reports/` |
-| T2.4 | 串口链路：确认 UART→USB 通道与 COM 口；`pio_monitor_capture` 抓 boot log；SKILL.md 增补"串口验证" | hil-agent + skill-author | T2.3 | 挂起 | L5 | 待补：boot log 或"该板无 VCP + 外接 USB-TTL 方案"记录 |
-| T2.5 | **HIL 场景 S4**：`NUEDC_2027/G474/G474_01_gpio`～`G474_03_uart` 选一个跑全链（改配置→生成→核验→构建→烧录→串口） | scenario-tester + hil-agent | T1.3、T2.3、T2.4 | 挂起 | L5 | 待补：全链证据链 + L5 声明进 commit |
-| T2.6 | 负路径硬件版：烧录时拔探针 / 占用串口 → 确认 `pio_port_diagnose`/doctor 错误分类可读 | hil-agent | T2.4 | 挂起 | L2 | 待补：分类结果 → `docs/logs/phase2/` |
+| T2.1 | 启用 `stm32-stlink`（改前备份）；doctor 实测探针；确认 X Pulse 探针类型（D6） | env-agent | GATE-2.0 | **已完成**（已实测 2026-11-04） | L5 | `docs/reports/phase2-bringup-2026-11-04.md` §1：`STLINK V2J35S7 (API v2)` / `0483:3748` / 目标电压 3.2387 V / `DPIDR 0x2ba01477` / `IDCODE 0x20036469`（DEV_ID 0x469）；GATE-2.0 接板条件已满足 |
+| T2.2 | 安装 FW_H7（优先 `swmgr install` 无头）；H723 testbed 跑通 `pio run` | env-agent | T1.5 | 挂起 | L3 | **未实测，如实保留**：FW_H7 安装与 H723 构建均无证据；接板日与 T2.5 同批处理 |
+| T2.3 | 烧录基线：G474 testbed 产物 → `flash_standalone`（reset=hard, run=true）→ 观察 LED/复位 | hil-agent | T2.1 | **已完成**（已实测 2026-11-04） | **L5** | `docs/reports/phase2-bringup-2026-11-04.md` §2/§4：烧录 `Verified OK` + `Resetting Target`、寄存器回读（`MODER 0xF7FFFFDF` / `ODR 0x00000000` bit2=0 / PC 在 Flash）、目视**红灯亮、绿蓝灭**，两条独立判据互证；复现命令见报告 §6 |
+| T2.4 | 串口链路：确认 UART→USB 通道与 COM 口；`pio_monitor_capture` 抓 boot log；SKILL.md 增补"串口验证" | hil-agent + skill-author | T2.3 | 挂起 | L5 | **未实测，如实保留**：`docs/reports/phase2-bringup-2026-11-04.md` §5 明写本工程**未启用任何 USART**（`Mcu.IP*` 只有 NVIC/RCC/SYS/TIM17）；`pio device monitor` / `pio_monitor_capture` 的波特率与超时、无 VCP 外接 USB-TTL 均无证据。要做须手改 `.ioc` 配 USART（非 GPIO，超出工具能力）+ 强制过 G1 |
+| T2.5 | **HIL 场景 S4**：`NUEDC_2027/G474/G474_01_gpio`～`G474_03_uart` 选一个跑全链（改配置→生成→核验→构建→烧录→串口） | scenario-tester + hil-agent | T1.3、T2.3、T2.4 | 挂起 | L5 | **前五段已由 R2 行实测**（`docs/reports/phase2-bringup-2026-11-04.md`：改配置 → 生成 → G1 PASS → 构建 → 烧录 → 寄存器回读 → 目视）；**串口段（T2.4）仍未实测**，全链未闭合 ⇒ 依赖未满足，如实保留挂起 |
+| T2.6 | 负路径硬件版：烧录时拔探针 / 占用串口 → 确认 `pio_port_diagnose`/doctor 错误分类可读 | hil-agent | T2.4 | 挂起 | L2 | **未实测，如实保留**：负路径硬件版与错误分类无证据；报告 §2 只记了一次「探针物理掉线 → `Error: open failed`」现场，不构成分类验证 |
 
 ### Phase 3：CI 与收尾（1–2 天，可与 Phase 2 降级段并行）
 
@@ -126,7 +132,7 @@
 |---|---|---|---|---|---|---|
 | T3.1 | CI 流水线：**实测修正为** `pytest` matrix（Python 3.11 / 3.13）+ 脚本静态检查（`bash -n` / `py_compile` / YAML）+ 同名测试函数硬门禁（后者覆盖前者 = 死代码，见 `e20adba`）+ 不依赖 CubeMX 的入口冒烟。**原计划的 `pio run` matrix 未实现**：本仓无 `platformio.ini`，模板工程在 `testbeds/`（gitignored），且 CubeMX 无法在 ubuntu runner 运行 ⇒ 端到端不进 CI（原因已写进 workflow 注释） | release-engineer → lead（接手收口） | T1.6 | 已完成 | L1（本地等价校验） | `.github/workflows/ci.yml`（2 job / 8 步）+ commit `996d19a` / 去重 `b14fba5`。本地等价校验：pytest 74 passed、`bash -n` OK、`py_compile` OK、YAML 可解析、重名检查 `declared=72 collected=74 dup=0`、`regen.sh` 缺参 `rc=2`。**Actions 已实测通过**：run `41585670440`（`7db26e7`）→ overall **success**，`pytest 3.11` / `pytest 3.13` 各 **74 passed**、`脚本检查` 12 步全过。**首次运行三次全红**，根因是测试依赖 Windows 上真实存在的 `C:/ST/STM32CubeMX/**` 路径（`regen.sh:313/314` 的 `[ -f ]` 检查），已用存根注入消除（`8d3b5d5` + `7db26e7`）——**纯本地开发永远发现不了这类缺陷** |
 | T3.2 | README 定稿：定位、能力边界（只可靠代做普通 GPIO）、7 项检查表、保证边界三段式、L0–L5、退出码、两条红线、文档索引 | release-engineer → lead（接手收口） | T1.9、T2.5 | 已完成 | L0 | `README.md` 203 行 + commit `b14fba5` / `3ee4387`。本地校验：无失效链接、L0–L5 与模板 `AGENTS.md:105-110` 逐字一致、Python 宣称范围收紧为 3.11+（= CI 覆盖范围）。**原计划的架构图未做**（三 server 职责已在 `references/` 与 `docs/guides/` 覆盖，README 用文档索引替代、避免重复展开） |
-| T3.3 | SKILL.md 终版：合并 Phase 2 串口/烧录增补；附 L 等级自查清单 | skill-author | T2.4 | 待开始 | L1 | 待补：定稿 commit（**阻塞于 Phase 2 挂起**——§6 串口/烧录段无硬件、不做能力宣称，故终版实质等同现版 v0.6.0） |
+| T3.3 | SKILL.md 终版：合并 Phase 2 串口/烧录增补；附 L 等级自查清单 | skill-author | T2.4 | 待开始 | L1 | 待补：定稿 commit。**阻塞点已收窄**：烧录 / 寄存器回读 / 目视段已由 W2 批次同步进 `SKILL.md` §6（见 `docs/reports/phase2-bringup-2026-11-04.md`）；仍阻塞于 **T2.4 串口段未实测**（本工程未启用 USART、`pio device monitor` 未跑），不是旧状态词——串口段补齐后才能写终版 |
 | T3.4 | 选做评估（只读，产出报告不改代码）：① CubeMX 2.1.1 兼容性（同一 `.ioc` 双版本生成 diff）② CMake 流可行性 ③ strtt RTT 是否引入 | —（本轮不做） | 各自独立 | 已关闭 | — | **关闭理由**：① 本机只装了 6.18.1，要做得再装第二个 CubeMX 版本（数百 MB + 许可交互），而 v0.1.0 的结论不依赖它；②③ 无用户需求，做了也没有使用者。**不产出报告，是因为没有结论可给**——不写"待评估"，避免下一个人以为有人在跟。**关闭结论已落盘**：`docs/evaluations/2026-11-03-t3.4-closure.md`（三项各一句：①推迟 / ②推迟 / ③不做） |
 | T3.5 | 发布：打 tag `v0.1.0` + release notes（含验证等级汇总表：哪些 L3、哪些 L5） | platform-lead | T3.1–T3.3 | 已完成 | L1 | **三证核对（`git tag -l` + `gh release list`）**：① tag `v0.1.0` → GitHub Release `cubeone-mcp v0.1.0`（正文含 L0–L5「已验证到什么程度」表；**计划称正文 122 行，实测 71 行**——`gh release view v0.1.0 --json body` 计数，以实测为准）；② tag `v0.1.1` → GitHub Release `cubeone-mcp v0.1.1`；③ tag `v0.6.1` → **Release 已于 2026-11-03 22:07 补发**（`cubeone-mcp v0.6.1 — 首个 MCP 工具通道版本（Release 正文事后补发）`，正文入库 `docs/releases/2026-11-03-v0.6.1-backfill.md`）⇒ 三证齐全；补发触发了一次 `Publish npm` 假红（run `41650583470`，根因：`release` 事件的 workflow 取自 tag 点 `8f99fb0`，早于守卫提交），已按 D33 §33.4.1 记账。④ tag `v0.6.2` → Release + npm 见下方 M1 行。remote 已于 T1.1 建好。**注**：T3.5 之后计划外又发布了 npm `0.6.0` / `0.6.1` 两条（MCP 工具通道），其授权与版本轴规则见 `docs/DECISIONS.md` **D33** |
 
@@ -169,9 +175,9 @@
 | **GATE-0** | T0.2 改动 `mcp.json` **前** | GATE-D | ✅ **已通过**（D12 用户裁定） | 关卡**走过了**（问询 → 用户裁定），裁定结果是"不改"：用户否决写入 `mcp.json` 并界定项目范围，T0.2 因此降级为文档交付（`docs/guides/mcp-registration.md`），见 D12。T0.4 全绿，Phase 0 收口 |
 | **GATE-1.1** | T1.2 完成后 | GATE-0 | ✅ **视为通过**（条件满足、证据链齐；未走演示流程，事后补记） | 核验器 API 稳定性由下游实跑反证——T1.3 的 `regen.sh` 与 T1.6 的 S1 都直接依赖它且通过；单测 74 passed。**未单独向用户演示**，此项为事后追认 |
 | **GATE-1.2** | Phase 1 收口 | GATE-1.1 | ✅ **视为通过**（条件满足、证据链齐；未走演示流程，事后补记） | S1–S3 三场景证据链齐（`docs/reports/t1.6-s1-report.md` / `t1.7-*` / `t1.8-*` + 日志 + 核验 JSON），D27 已由 lead 独立复核。**未向用户演示 S1 全链**，事后补记 |
-| **GATE-2.0** | Phase 2 开工 | GATE-1.2 | 挂起 | 用户接板请求（ST-Link + 目标板、告知 SWD/供电/共地）；**当前无硬件，已按降级方案把烧录段整体后移** |
-| **GATE-2.1** | 首次烧录前 | GATE-2.0 | 挂起 | 安全确认：目标板不在驱动执行器/继电器 |
-| **GATE-2.2** | Phase 2 收口 | GATE-2.1 | 挂起 | S4 全链演示 + L5 证据归档 |
+| **GATE-2.0** | Phase 2 开工 | GATE-1.2 | ✅ **已通过**（2026-11-04 接板首日） | X-Pulse 板 + ST-Link V2 到位、探针识别与供电 / SWD 自检完成，见 `docs/reports/phase2-bringup-2026-11-04.md` §1；**不再以旧状态词为前提** |
+| **GATE-2.1** | 首次烧录前 | GATE-2.0 | ✅ **已通过**（接板首日安全确认） | 烧录前显式确认目标板不在驱动执行器/继电器；R2 行 L5 全链证据含该确认。**安全确认规则保留**，后续每次烧录仍须重做 |
+| **GATE-2.2** | Phase 2 收口 | GATE-2.1 | ⚠️ **部分收口（串口段仍挂起）** | L5 主体证据已归档（R2 行 + `docs/reports/phase2-bringup-2026-11-04.md`：烧录 / 回读 / 目视）；**S4 全链的串口段（T2.4）与 `pio device monitor` 未实测**，不得写成全链演示完成 |
 | **GATE-3.1** | 发布前 | GATE-1.2（含 T3.1–T3.3） | ✅ **已通过**（0.6.2 首次正规执行；历史三次为事后补审） | **2026-11-03 22:00 向用户出示证据并取得放行**：CI 全绿（run `41649454775`）+ 本地四连验（pytest 74 / node 32 / handshake 11 / CI 等价 7 项）+ 变更摘要（8 个 commit）+ 已知限制清单，用户裁定「授权全链发版」。随后 tag → Release → npm → 本看板回填四证齐全。**历史缺口**：`v0.1.0`/`v0.1.1`/`v0.6.1` 三次 tag 均未过本关卡即打出，npm `0.6.0`/`0.6.1` 亦未经关卡——已按 D33 §33.2 记为"事后补审"，不追认其合规性。**第二次正规执行（0.7.0，2026-11-03 23:17 本地）**：因 M2 属 BREAKING，单独向用户出示「六 job 全绿 + 本地三验 37/77/12 + 迁移说明 + tag 内容边界（M3 不发版，不污染 0.7.0）」并取得放行；随后 tag `v0.7.0` → Release → npm `0.7.0` → 看板回填。**首次出现「先签发放行、后被平台策略拦下 push」的插曲**：用户二次授权后完成推送，tag 与 Release 未受影响 |
 
 ---
@@ -201,14 +207,17 @@
 |---|---|---|---|---|---|---|---|
 | Phase 0 | 5 | **5**（T0.1–T0.5） | 0 | 0 | 0 | 0 | 0 |
 | Phase 1 | 9 | **9**（T1.1–T1.9） | 0 | 0 | 0 | 0 | 0 |
-| Phase 2 | 6 | 0 | 0 | **6**（T2.1–T2.6） | 0 | 0 | 0 |
+| Phase 2 | 6 | **2**（T2.1、T2.3） | 0 | **4**（T2.2、T2.4–T2.6） | 0 | 0 | 0 |
 | Phase 3 | 5 | **3**（T3.1、T3.2、T3.5） | 0 | 0 | **1**（T3.3） | **1**（T3.4） | 0 |
-| ‹Phase 0–3 小计› | **25** | **17** | **0** | **6** | **1** | **1** | **0** |
+| ‹Phase 0–3 小计› | **25** | **19** | **0** | **4** | **1** | **1** | **0** |
 | M1 修复批次 | 11 | **11**（M1、M2、M3、C0、C1、C2、C3、C4、R0.7.2、R1、R2） | 0 | 0 | 0 | 0 | 0 |
-| **合计** | **36** | **28** | **0** | **6** | **1** | **1** | **0** |
+| **合计** | **36** | **30** | **0** | **4** | **1** | **1** | **0** |
 
-> 校验口径：Phase 0–3 内 `已完成 17 + 挂起 6 + 待开始 1 + 已关闭 1 = 25`；再加批次表的
-> `已完成 10（M1/M2/M3/C0–C4/R0.7.2/R1）= 10` ⇒ **35**。合计行、小计行均由脚本自算比对。
+> 校验口径（**与表格逐格一致，W3 批次人工复核**）：Phase 0–3 内
+> `已完成 19 + 挂起 4 + 待开始 1 + 已关闭 1 = 25`；再加批次表的
+> `已完成 11（M1/M2/M3/C0–C4/R0.7.2/R1/R2）= 11` ⇒ **36**。
+> 合计行、小计行均由脚本自算比对；散文的 **36** 与表格「合计 36 / 已完成 30」同值
+> （已完成 30 = 小计 19 + 批次 11；挂起 4 = 小计 4 + 批次 0）。
 > **两段分开统计**是为了不让整改批次污染原计划的 25 条口径（`T0.5` 的"25 条任务"、§0 各处引用都按 Phase 0–3 计数）。
 > M1 已于 0.6.2 收口、M2 已于 0.7.0 收口、C0 已于 0.7.1 收口（均三证齐全）；M3 不发版，内容随 **0.7.1**（C0）带出。
 > C1–C4 已于 **2026-11-04 00:51** 收口（CI run `41749893723` 七 job 全绿，含新增 `windows` job——
@@ -266,3 +275,4 @@ GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/cubeone-mc
 | 2026-11-04 | **F4 后续：testbed 板卡标注（纯文档，L0）**：`/testbeds/` 被 `.gitignore:9` 整体忽略 ⇒ 写进 testbed 目录的标注 **clone 后不存在**，故新建 `docs/guides/testbeds-board-map.md` 作为唯一随仓分发的真源：登记两个绑定实板工程（`testbeds/nuedc/G474_01_gpio` → **NUEDC 原板** PC13/14/15；`testbeds/xpulse-min` → **X-Pulse** PC0/1/2、共阳低电平点亮、PC13 无 LED）与全部模板/一次性副本（不得当首烧目标），并指出 G474 模板 README 自称「面向 Penguins-G474」却默认 PC13 闪灯、与 `xpulse.h` 冲突 ⇒ **板级事实以板级头文件/原理图为准，不以 `.ioc` 的 `GPIO_Label` 或模板 README 猜**。同步四处：`gate-2.0-checklist.md` §0/§1/§5（**勘误 §5 旧版「唯一首烧目标 = NUEDC 工程」**，改为按板选目标，并把「工程与板是否同一块」前置为观察表第一嫌疑）、`docs/README.md` §5 索引、`SKILL.md` §0.3 红线 2、`phase2-bringup-2026-11-04.md` §5 第 4 条置「已完成」。**不改任务表与 §4 快照**（本批是文档标注，不是新任务），`check_taskboard.py` / `check_release.py` 均 `rc=0` | lead |
 | 2026-11-04 | **全量审定（agent 工程师视角，只读）**：产出 `docs/reports/audit-2026-11-04-agent-engineer.md`（四个只读分面：MCP 架构 / agent 效率 / 功能性 / 测试·CI·发布·文档一致性，加主审逐文件交叉核对）。发现按 P0/P1/P2 分级、逐条带 `文件:行号` 证据与「已做得好、不要改」清单。**两条 P0 由主审做纯内存 L2 复现**：① `expect_pins` 有而 `ioc` 无 ⇒ 引脚级 `skip` 但 `verdict=pass`；② `--project-root` 指到存在但空的目录 ⇒ 静默退回单文件扫描仍 `pass`。**驳回一条分面 P0 误报**（「`regen.sh` 没有 `--main-c`/`--mxproject`/`--log`」——usage 与参数解析均支持，SKILL 那条是裸调核验器），并把「硬编码 Windows 路径」降级为已登记约束。**定稿去重后 P0 10 / P1 17 / P2 10 = 37 条**（初稿 4/12/8；四分面回传后补入 A-17「任意文本 / 含 `KO` 日志仍 `PASS`」、A-21「`ioc_field` 换行注入任意 `.ioc` 键」、A-22~A-24 发版门禁三类，A-5 由 P1 升 P0，A-20 并入 A-21，架构分面第 4 项降 P2）。**审定全程未改实现**，七批处置建议按优先级列出，建议与下一批文档修订合并发一次补丁版；`docs/README.md` 索引补入 L5 报告与本审定报告。校验：`check_taskboard.py` / `check_release.py` rc=0、F4 批次文档 0 断链、报告 20 张表 0 列数不一致 | lead |
 | 2026-11-04 | **下一步工作计划成文（纯文档，L0，未开工）**：新建 `docs/2026-11-04-next-steps-plan.md`，把全量审定 37 条发现收敛为 **W0–W6 七个可执行批次**，每批带「现状（`文件:行号`）→ 动作 → 可机器验收判据」与「不做清单」。**先做逐文件勘察再定计划**，得出六条会改变做法的硬约束：① 「7 项判据 + schema `/2`」是刚性契约（`ci.yml` 冒烟 `grep -q "/2"`、`references/verify-contract.md:238–239` 写明升 schema 的判据）⇒ 修 A-17 **不新增 check id**，改走 `main()` 输入校验退 2 + 复用 `log_cannot_map` 判 `fail`；② `tests/test_verify_generation.py:766 / :586` 两条既有用例把「`skip` / 空日志 `rc=0`」钉死 ⇒ W0 必须**改断言**而非只加用例；③ `run_verify()` 断言 JSON 落盘（`:70–95`）⇒ 负样本必须用 `run_cli()` 直跑；④ A-5/A-28 会连锁改看板任务表 6 行 + GATE 3 行 + §4 表格/散文「合计 35→36」+ T3.3 阻塞说明，故提升为**独立批次 W3**；⑤ `publish.yml` 的 `workflow_dispatch` 是文档化正常入口、幂等 `::warning` 是 D33 补账路径，且新版本发布前 `latest` 必然 ≠ `package.json.version` ⇒ 发布门禁**不带 `--network`**；⑥ `npm_mcp_handshake.mjs` 已有 SKIP 三数并列 + `--require-materials` 严格模式（`:32/:128/:372/:376`）⇒ A-24 只改 headline 措辞、**不把 SKIP 翻成 FAIL**。另核对 `tests/fixtures/log_clean.txt`（17 行，含 `[INFO] STM32CubeMX` / `LoadConfig:` / `Generating code under`）确认宽松日志形态判据不误伤正样本。**本批按 `docs/README.md` §2「计划不回改」约定，只新增计划与索引行、不回改三份旧计划；不改任务表、不改 §4 快照、未执行任何 W 批次**。待用户裁决 D-1（0.7.3 vs 0.8.0）等五个决策点后开工。校验：`check_taskboard.py` / `check_release.py` rc=0、`pytest -q` 94 passed、文档 0 断链 | lead |
+| 2026-11-04 | **W3 状态真源归位（独立 commit，L0）**：按 R2 的 L5 事实重算看板——① §0.3 去掉已失效的「当前会话无板 / Phase 2 整体后移」表述，改为「接板首日已达 L5 主体，串口段仍挂起」；② Phase 2 任务表：T2.1（探针识别）/ T2.3（烧录 + 回读 + 目视）改 `已完成（已实测 2026-11-04）` 并指向 `docs/reports/phase2-bringup-2026-11-04.md`，**T2.2（FW_H7）/ T2.4（串口与 `pio device monitor`）/ T2.5（全链含串口）/ T2.6（负路径硬件版）如实保留 `挂起`**；③ GATE-2.0 / 2.1 改「已通过」、GATE-2.2 记「部分收口（串口段仍挂起）」，GATE-2.1 安全确认规则保留；④ T3.3 阻塞说明由旧状态词收窄为「仅阻塞于 T2.4 串口段」；⑤ §4 快照 Phase 2 由 `0 完成 / 6 挂起` 改 `2 完成 / 4 挂起`，小计 `17→19 已完成 / 6→4 挂起`、合计 `28→30 已完成 / 6→4 挂起`，**散文合计 35→36 同步**（表格与散文逐格一致，已人工复核：36 = 25 + 11，30 = 19 + 11）；⑥ `tools/check_taskboard.py` 的 `TAG_RE` 放宽到 `^v\d+\.\d+\.\d+`，判据③改为「当前版本 tag（`v<package.json.version>`）存在时 T3.5 不得待开始」；⑦ `docs/README.md` 索引补 4 个真漏项、`D1–D35→D1–D36`、当前版本改指 `v0.7.2`（0.7.1 降为历史）、计划行标「当前执行中」、测试数字统一标注基准日期与命令。**未把任何未实测项标成完成**；`check_taskboard.py` rc=0，四条固定验收全绿 | software-engineer |

@@ -24,9 +24,11 @@
    - 含通配符（`*` `?` `[`）的条目不算路径（是模式），单独计数；
    - 外部链接、tag 名、commit sha（无 `/` 或不以上述前缀开头）天然被排除。
 3. **发布一致性**
-   - `git tag` 里存在 `v0.6.*` 或 `v0.7.*` 时，`T3.5` 不得为 `待开始`
+   - **当前版本 tag**（`v<package.json.version>`）存在时，`T3.5` 不得为 `待开始`
      （防「tag 打了但看板没记账」，D33 的机读化）；
-   - `git` 不可用 / 仓库里没有 tag 时**不报错**，打印一行 `note` 说明该判据被跳过。
+   - `TAG_RE` 放宽到任意三段式版本 tag（不再钉死 `v0.6/v0.7`），否则 `v0.8.0`
+     这类未来的版本 tag 会被静默跳过，判据形同虚设；
+   - `git` 不可用 / 无 tag / 当前版本 tag 尚未打出时**不报错**，打印一行 `note` 说明被跳过。
 
 用法
 ----
@@ -106,7 +108,7 @@ GLOB_CHARS = ("*", "?", "[", "]")
 BACKTICK_RE = re.compile(r"`([^`]+)`")
 NUMBER_RE = re.compile(r"(\d+)")
 SEPARATOR_RE = re.compile(r"^:?-{2,}:?$")
-TAG_RE = re.compile(r"^v0\.[67]\.\d+")
+TAG_RE = re.compile(r"^v\d+\.\d+\.\d+")
 
 
 @dataclass
@@ -475,6 +477,20 @@ def check_evidence(tokens: Iterable[tuple[str, str]]) -> tuple[list[Failure], di
     return failures, stats
 
 
+def current_package_version() -> str | None:
+    """读 ``package.json`` 的 ``version``（判据③的「当前版本」基准）。
+
+    Returns:
+        版本号字符串；读不到或没有 ``version`` 字段时返回 ``None``（由调用方跳过判据）。
+    """
+    try:
+        text = (REPO_ROOT / "package.json").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = re.search(r'"version"\s*:\s*"([^"]+)"', text)
+    return match.group(1).strip() if match else None
+
+
 def git_tags() -> tuple[list[str], str | None]:
     """取仓库 tag 列表。
 
@@ -518,10 +534,14 @@ def statuses_by_id(board_text: str) -> dict[str, str]:
 
 
 def publish_failures(mapping: dict[str, str], note_holder: dict[str, str]) -> list[Failure]:
-    """判据 3：把「发布 tag 存在」与「T3.5 状态」两条事实合成判定。
+    """判据 3：**当前版本 tag** 存在时，T3.5 不得「待开始」（D33 的机读化）。
+
+    旧实现只做全局代理——"任意 v0.6/v0.7 tag 存在"就检查 T3.5，既会被历史 tag
+    永久触发，也会在 v0.8.0 之后因 ``TAG_RE`` 钉死而静默失效。现按
+    ``v<package.json.version>`` 精确定位当前版本 tag；没打出时判据无适用对象。
 
     Args:
-        mapping: `任务ID → 状态`。
+        mapping: ``任务ID → 状态``。
         note_holder: 输出参数，写入该判据的说明（含被跳过的原因）。
 
     Returns:
@@ -533,18 +553,28 @@ def publish_failures(mapping: dict[str, str], note_holder: dict[str, str]) -> li
         return []
     published = sorted(tag for tag in tags if TAG_RE.match(tag))
     if not published:
-        note_holder["note"] = f"未发现 v0.6.* / v0.7.* tag（共 {len(tags)} 个 tag），该判据无适用对象"
+        note_holder["note"] = f"未发现合法版本 tag（共 {len(tags)} 个 tag），该判据无适用对象"
+        return []
+    version = current_package_version()
+    if version is None:
+        note_holder["note"] = "读不到 package.json 的 version，该判据无适用对象"
+        return []
+    expected_tag = f"v{version}"
+    if expected_tag not in published:
+        note_holder["note"] = (
+            f"当前版本 tag {expected_tag} 尚未打出（现有：{', '.join(published)}），该判据无适用对象"
+        )
         return []
     status = mapping.get("T3.5")
     if status is None:
         return [Failure(where="Phase 3 / T3.5", detail="任务表里找不到 T3.5，无法做发布一致性校验")]
-    note_holder["note"] = f"发布 tag：{', '.join(published)}；T3.5 = {status}"
+    note_holder["note"] = f"当前版本 tag：{expected_tag}；T3.5 = {status}"
     if status == "待开始":
         return [
             Failure(
                 where="Phase 3 / T3.5",
                 detail=(
-                    f"已存在发布 tag（{', '.join(published)}），但 T3.5 仍是「待开始」"
+                    f"当前版本 tag {expected_tag} 已存在，但 T3.5 仍是「待开始」"
                     "—— tag 打了却没记账，属发布未收口（D33 §33.2）"
                 ),
             )
@@ -629,7 +659,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     failures += evidence_failures
 
     # ── 判据 3：发布一致性 ─────────────────────────────────────────
-    print("\n== 3) 发布一致性（tag vs T3.5）==")
+    print("\n== 3) 发布一致性（当前版本 tag vs T3.5）==")
     mapping = statuses_by_id(board_text)
     note_holder: dict[str, str] = {}
     failures += publish_failures(mapping, note_holder)

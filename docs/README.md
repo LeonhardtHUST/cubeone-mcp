@@ -11,7 +11,7 @@
 | 文档 | 什么时候看 |
 |---|---|
 | [`TASKBOARD.md`](TASKBOARD.md) | **唯一状态真源**：任务表 + GATE 关卡 + §4 快照 + 角色登记 + §5 变更记录。改它之后必须跑 `python tools/check_taskboard.py`（rc=0） |
-| [`DECISIONS.md`](DECISIONS.md) | **唯一决策真源**：D1–D35。想知道"为什么这样设计、哪些旧结论被推翻"看这里；发版流程见 **D35**，版本轴治理见 **D33**，治理元规则见 **D34** |
+| [`DECISIONS.md`](DECISIONS.md) | **唯一决策真源**：D1–D36。想知道"为什么这样设计、哪些旧结论被推翻"看这里；发版流程见 **D35**（含 §35.6 机器查 vs 人工核），版本轴治理见 **D33**，治理元规则见 **D34** |
 
 > 两页的分工：**看板说"做到哪一步了"，决策说"为什么这么定"**。
 > 两者冲突时以决策为准并修看板——看板是执行快照，决策是规则。
@@ -24,7 +24,7 @@
 | [`2026-11-03-execution-research.md`](2026-11-03-execution-research.md) | 想知道开工前的调研结论（工具选型、CubeMX 能力探测）｜调研，非计划 |
 | [`2026-11-03-remediation-plan.md`](2026-11-03-remediation-plan.md) | 想知道 M0–M3 整改批次要解决什么（审定发现①–⑤与 R-A/R-B/R-C/R-D/R-E 编号出处）｜**已归档** |
 | [`2026-11-04-engineering-completeness-plan.md`](2026-11-04-engineering-completeness-plan.md) | 想知道 C0–C4 完备批次（7 项审核发现、门禁/机械化/硬件预演/可维护性）｜**已归档**，目标版本写的是 0.7.1，C3 已被接板首日 L5 取代 |
-| [`2026-11-04-next-steps-plan.md`](2026-11-04-next-steps-plan.md) | **当前唯一执行依据**：全量审定 37 条发现的 W0–W6 整改批次、逐条验收判据、六条勘察硬约束、发版策略与待裁决决策点｜**未开工，待批准** |
+| [`2026-11-04-next-steps-plan.md`](2026-11-04-next-steps-plan.md) | **当前唯一执行依据 · 当前执行中**：全量审定 37 条发现的 W0–W6 整改批次、逐条验收判据、六条勘察硬约束、发版策略；D-1~D-5 用户裁决已落 §5，按 W0→W6 逐批独立 commit、停在 **GATE-3.1 之前**（不打 tag / 不建 Release / 不发 npm） |
 
 > 为什么计划不回改：已交付的计划是**某个时间点的判断快照**，改写它会让"当时怎么想的"消失（D32/D34 §34.2(5)）。
 > 需要更正就追加勘误链接，不要动原文。
@@ -49,16 +49,27 @@
 | [`reports/s4-dryrun-g474_01_gpio.md`](reports/s4-dryrun-g474_01_gpio.md) | 想知道**无板能做的前四段**（改配置→生成→核验→构建）在真实 NUEDC 工程上的结果（Phase 2 接板前的预演） |
 | [`reports/phase2-bringup-2026-11-04.md`](reports/phase2-bringup-2026-11-04.md) | **接板首日 L5 证据**：X-Pulse 板级引脚、F4/F5/F6 三个现场坑、烧录 + 寄存器回读 + 目视双判据 |
 | [`reports/audit-2026-11-04-agent-engineer.md`](reports/audit-2026-11-04-agent-engineer.md) | **全量审定报告（agent 工程师视角）**：MCP 架构 / agent 效率 / 功能性 / 测试·CI·发布 / 文档一致性，P0–P2 分级发现与逐条证据 |
+| [`reports/t0-redaction-audit.md`](reports/t0-redaction-audit.md) | **脱敏审计结论**：`mcp.json` 改前备份的明文凭据与脱敏红线核对（安全相关） |
+| [`reports/2026-11-04-w0w6-incremental-prd.md`](reports/2026-11-04-w0w6-incremental-prd.md) | **W0–W6 增量 PRD / 范围确认**：37 条发现的用户故事与逐字沿用计划 §3 的可机器验收判据 |
+| [`reports/2026-11-04-w0w6-implementation-design.md`](reports/2026-11-04-w0w6-implementation-design.md) | **W0–W6 实现编排**：精确到文件 / 函数 / 行号 / commit / 验收命令，含 Q-1~Q-5 裁决落地与 C0–C7 文件集 |
 
 > 原始日志在 [`logs/`](logs/)（**被 `.gitignore` 局部忽略，只在做实验的机器上存在**）：
 > `phase0/`–`phase4/` 下是 CI 上拿不到的命令输出。报告里引用日志路径时，**不要指望别人 clone 后能看到**。
+>
+> **测试数字口径（A-26 / B-3）**：文档与看板里出现的 `74 / 77 / 94 / 127 passed`、
+> Node 例数 `31 / 32 / 37 / 41`、覆盖率 `37%` 都是**各批次时点的快照**，不是恒定基线。
+> 引用时以当次实跑输出为准：`python -m pytest tests/ -q`（基准 **2026-11-04：127 passed**）与
+> `node --test tests/node/*.test.mjs`（基准 **2026-11-04：41 passed**）；
+> 覆盖率基准 `pytest --cov=scripts tests/ -q` **37%**（CI 底线 36%，2026-11-04）。
+> **不跨批次复用旧数字充本次证据**（`SKILL.md` §3 第 4 条）。
 
 ## 4. 发布台账（`releases/`）
 
 | 文档 | 什么时候看 |
 |---|---|
 | [`releases/README.md`](releases/README.md) | **版本 × 内容 × 三证对照表**（tag / Release 正文 / npm），查"某个版本改了什么、证据齐不齐" |
-| [`releases/2026-11-04-v0.7.1.md`](releases/2026-11-04-v0.7.1.md) | 当前版本（文档与脚本修正，无行为变更） |
+| [`releases/2026-11-04-v0.7.2.md`](releases/2026-11-04-v0.7.2.md) | **当前版本（v0.7.2）**：两处用户可见缺陷修复 + 判据语义变更（`Core/Src/*.c` 多文件扫描），三证齐全；版本轴四处同值 `0.7.2` |
+| [`releases/2026-11-04-v0.7.1.md`](releases/2026-11-04-v0.7.1.md) | 历史版本（0.7.1，文档与脚本修正，无行为变更） |
 | [`releases/2026-11-03-v0.7.0.md`](releases/2026-11-03-v0.7.0.md) | **BREAKING**：路径白名单默认翻转（未设 `CUBEONE_ALLOWED_ROOTS` = 拒绝所有路径参数） |
 | [`releases/2026-11-03-v0.6.2.md`](releases/2026-11-03-v0.6.2.md) | M1 接缝修复批次（退出码白名单 / 入参校验 / 编码 / Node 单测基建） |
 | [`releases/2026-11-03-v0.6.1-backfill.md`](releases/2026-11-03-v0.6.1-backfill.md) | 首个 npm / MCP 工具通道版本；**正文为事后补发**（见 D33 §33.4） |
@@ -86,5 +97,5 @@
 1. 要**用**这个工具 → 根目录 [`README.md`](../README.md) 的「能力边界」+ [`SKILL.md`](../SKILL.md)
 2. 要**改**这个工具 → [`CONTRIBUTING.md`](../CONTRIBUTING.md)（三层测试 + 提交规范 + 单写者原则）
 3. 要**判断进度** → [`TASKBOARD.md`](TASKBOARD.md) §4 快照
-4. 要**判断历史决策** → [`DECISIONS.md`](DECISIONS.md) 目录（D1–D35）
+4. 要**判断历史决策** → [`DECISIONS.md`](DECISIONS.md) 目录（D1–D36）
 5. 要**判断某个结论可不可信** → 看该结论标注的 L 等级（README「验证等级」），以及 `reports/` 里对应报告的"已知限制"
