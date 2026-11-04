@@ -256,8 +256,14 @@ jobs:
 
       # ── 操作面状态词 + D 编号基准（W5-4 / A-6）────────────────────────────
       # 状态词判红：L5 已达成（phase2 报告），"无硬件 / 整体挂起 / 一律缺" 漂回操作面会让
-      # agent 拒绝执行已验证能力（A-5）。D 编号基准只做一致性提醒：docs/README.md 的
-      # D1–D<n> 由 W3-3 同步为 DECISIONS.md 最大号，未同步时给 ::warning（不判红）。
+      # agent 拒绝执行已验证能力（A-5）。
+      # 状态词与 D 编号基准**同判红**（A-6 防再漂移）：C5/W3-3 已把 docs/README.md 同步为
+      # D1–D36，顺序依赖解除，本护栏常驻生效。只给 ::warning 拦不住——把一处 D1–D36 改回
+      # D1–D35 时 step 仍会绿，等于「看起来有检查、其实没拦住」。
+      # 判红机制：状态词靠 `bad` 汇总后 exit；D 编号靠 Python 的 SystemExit(1)；
+      # `set -euo pipefail` 下 Python 非零即让 step 红，状态词 annotation 在 Python 之前已打印。
+      # 将来若新增 D37 而不同步 docs/README.md，lint 判红是**有意护栏**（与 D35 §35.6
+      # 「在 D35 内追加、不新增 D37」的唯一决策真源一致），不是误伤。
       - name: 操作面状态词与 D 编号扫描
         shell: bash
         run: |
@@ -283,9 +289,11 @@ jobs:
           index = (root / "docs/README.md").read_text(encoding="utf-8")
           stated = sorted({int(n) for n in re.findall(r"D1[–-]D(\d+)", index)})
           if stated and stated != [expected]:
-              print(f"::warning title=D 编号基准::docs/README.md 声明 {stated}，DECISIONS.md 最大号 D{expected}；W3-3 同步后本行消失")
+              print(f"::error file=docs/README.md::D 编号基准不一致：docs/README.md 声明 {stated}，DECISIONS.md 最大号 D{expected}；请全文统一为 D1–D{expected}（唯一决策真源）")
+              raise SystemExit(1)
           elif not stated:
-              print(f"::warning title=D 编号基准::docs/README.md 未声明 D1–D<n> 区间（基准 D{expected}）")
+              print(f"::error file=docs/README.md::未声明 D1–D<n> 区间（基准 D{expected}），请与 DECISIONS.md 最大号 D{expected} 对齐")
+              raise SystemExit(1)
           else:
               print(f"D 编号基准一致：D1–D{expected}")
           PY
