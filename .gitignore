@@ -73,3 +73,7 @@ htmlcov/
 # `pytest --basetemp=.pytest-tmp-X` 会在仓根留下临时工程（README FAQ 推荐用干净 basetemp 跑）。
 # 这类目录是测试脚手架，不该进库：忽略掉，避免 `git add -A` 顺手带走一堆假工程。
 .pytest-tmp-*/
+
+# Phase 2/S4 预演的原始日志（C3，2026-11-04）：与 phase0–3 同约定，只留本地；
+# 入库的是 docs/reports/ 下的分析报告。
+docs/logs/phase4/
