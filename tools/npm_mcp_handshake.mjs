@@ -250,10 +250,18 @@ async function main() {
 
     const tools = await c.listTools();
     const names = tools.tools.map((t) => t.name).sort();
+    // 0.8.0 / Q5：顺带守住 `outputSchema` 真的出现在 **tools/list**（不只是模块里有）——
+    // 只在 TOOL_DEFS 里加字段、忘了让它随 `tools/list` 出去，是最容易漏的一环。
+    // 不新增 T 编号：它是 T2「工具清单」的一部分，计数保持 12 项。
+    const withOutputSchema = tools.tools.filter(
+      (t) => t.outputSchema && typeof t.outputSchema === "object" && t.outputSchema.type === "object",
+    );
     check(
       "T2 tools/list",
-      names.length === 3 && names.join() === "ioc_backup,ioc_field,verify_generation",
-      names.join(", "),
+      names.length === 3 &&
+        names.join() === "ioc_backup,ioc_field,verify_generation" &&
+        withOutputSchema.length === 3,
+      `${names.join(", ")}（outputSchema ${withOutputSchema.length}/3）`,
     );
 
     const resources = await c.listResources();

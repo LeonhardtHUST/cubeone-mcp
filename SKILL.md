@@ -74,9 +74,22 @@ compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证�
 
 ⚠️ MCP 通道**拒绝未知键**（`additionalProperties:false` 已落地）：`projectRoot` / `mainC` 这类 camelCase
 会被判 `isError`，正确写法是 `project_root` / `main_c`；`expect_pins` 与 `ioc` 必须同时给。
-⚠️ **MCP 返回文本有噪声且会被截断**：`content[0].text` 固定带环境脚注与 `--- stdout ---` 段，
-`tail()` 只保留末尾 **12 000 字符**——长日志的头部（含 `render_console` 首行 `verdict`）可能被截掉。
-**结论一律以 `structuredContent` 为准，不要只扫返回文本首行**（B-1；输出体积上限属后续排期，本轮不改）。
+⚠️ **MCP 返回文本有噪声**：`content[0].text` 固定带环境脚注与 `--- stdout ---` 段。
+**0.8.0 起 `tail()` 改为头尾保留**（头 2 000 + 尾 10 000，中间插 `…(截断 N 字符)…`），所以
+`render_console()` 首行的 `verdict` **不再被截掉**；但文本仍是摘要 ⇒ **结论一律以 `structuredContent` 为准**（B-1）。
+
+⚠️ **`structuredContent` 有 64 KiB 上限**（0.8.0 起，`MAX_STRUCTURED_BYTES = 65536`，按 `JSON.stringify`
+后的 UTF-8 字节数）。超限时**头尾保留 + 字段级裁剪**（长字符串留头 3 072 + 尾 1 024、长数组留前 50 项），
+并注入 `structuredContent._meta = {truncated, original_bytes, limit_bytes, policy, truncated_fields}`；
+**未超限时完全不注入 `_meta`**（与 0.7.x 形态逐字节一致）。
+消费方**不得假设 `structuredContent` 永不截断**：看到 `_meta.truncated === true` 时，头部字段
+（`verdict` / `action` / `summary` 的计数）仍完整，但 `checks[].detail` / `inputs` 可能已被裁剪——
+要完整 `detail` 请走 CLI 通道的 `--json-out`。
+
+⚠️ 三个工具都声明了 **`outputSchema`**（0.8.0 起的**新增可选字段**，旧客户端忽略不报错）。它描述的是
+「`structuredContent` 存在时的形状」，**不是判据真源**——7 项判定的唯一真源仍是 `verify_documents()`；
+`checks[].id` 的 `enum` 只是把 F-1 契约显式化。执行失败 / 输入错误时只有文本 + `isError`，
+**可能没有** `structuredContent`。
 
 ### 0.2 CubeMX / PlatformIO 定位（两通道共用）
 

@@ -3,7 +3,7 @@
 // 0.7.0 基线（M2 安全加固，行为变更版）：**未设白名单默认拒绝**（fail-closed，R-C1），
 // 只有显式设 CUBEONE_ALLOW_NO_ROOTS=1 才回到 0.6.x 的宽松语义；白名单比较改用物理路径（R-C2）。
 //
-// 覆盖 6 组门禁逻辑 + 1 组环境派生（合计 37 例）：
+// 覆盖 9 组门禁逻辑 + 1 组环境派生 + 1 组输出契约（合计 52 例）：
 //   组1 isExecFailure  退出码矩阵 11 例（R-B1，含 [not-found] 例外白名单正反两面）
 //   组2 checkPath      路径白名单 9 例（前缀撞车 / `..` 越界 / win32 大小写 /
 //                      roots 未设 fail-closed 三例（R-C1）/ 物理路径两例（R-C2））
@@ -13,6 +13,9 @@
 //   组5b e2e fail-closed 1 例（R-C1 的可观察面：无 roots 无逃生门 → 调用被拒）
 //   组6 启动期 opt-in  2 例（CUBEONE_REQUIRE_ROOTS=1 的 fail-closed 与不误伤）
 //   组7 requireRoots 取值 1 例（'1'/'true'/'yes' 与 '0'/空/乱值的解析边界）
+//   组8 tail 头尾保留  3 例（0.8.0 / Q4：长输出下首行 verdict 仍可见）
+//   组9 structuredContent 上限 3 例（0.8.0 / Q4：64 KiB、_meta 告警、未超限不注入）
+//   组10 outputSchema  4 例（0.8.0 / Q5：三工具齐全 / 7 个 check id / inputSchema 零改动）
 //   附  policy/allowedRoots 2 例（环境派生，顺带守住 env 读取时机）
 //
 // 运行：node --test tests/node/
@@ -38,6 +41,10 @@ import {
   policy,
   allowedRoots,
   requireRootsEnabled,
+  tail,
+  structuredBytes,
+  capStructuredContent,
+  MAX_STRUCTURED_BYTES,
   TOOL_DEFS,
 } from "../../lib/server.mjs";
 
@@ -907,5 +914,192 @@ describe("附 policy / allowedRoots 环境派生", () => {
       assert.deepEqual(allowedRoots(), [norm(r1), norm(r2)]);
     });
     withEnv({ CUBEONE_ALLOWED_ROOTS: undefined }, () => assert.deepEqual(allowedRoots(), []));
+  });
+});
+
+// ── 组8 · tail 头尾保留（0.8.0 / Q4）────────────────────────────────
+// 旧实现只保留末 12000 字符，把 `render_console()` 首行的 verdict 截掉了 ——
+// 而"结论在首行"恰恰是这个工具的输出约定。
+describe("组8 tail 头尾保留（0.8.0 / Q4）", () => {
+  test("组8-1 短输出与空输入原样返回", () => {
+    assert.equal(tail(""), "");
+    assert.equal(tail("abc"), "abc");
+    const exactly = "x".repeat(12000);
+    assert.equal(tail(exactly), exactly, "恰好等于预算时不该加截断标记");
+  });
+
+  test("组8-2 长输出保留首行 verdict + 中间截断标记 + 尾部保留 + 总长受控", () => {
+    const firstLine = "[platform32] 生成核验 verdict=FAIL errors=2";
+    const stdout = `${firstLine}\n${"日志行 filler 内容\n".repeat(3000)}`;
+    assert.ok(stdout.length > 20000, "构造的输入必须超过 12000 字符预算");
+
+    const out = tail(stdout);
+
+    assert.ok(out.startsWith(firstLine), `首行 verdict 必须可见，实际开头：${out.slice(0, 60)}`);
+    assert.ok(out.includes("…(截断 "), "中间要有截断标记");
+    assert.ok(out.endsWith(stdout.slice(-80)), "尾部仍要保留（堆栈/最后一行错误在尾部）");
+    assert.ok(out.length <= 12000 + 64, `总长应接近预算，实际 ${out.length}`);
+    assert.ok(out.length > 10000, "不该把内容砍到远小于预算");
+  });
+
+  test("组8-3 头部预算可调（headChars 参数生效）", () => {
+    const head = "H".repeat(100);
+    const stdout = `${head}${"x".repeat(20000)}`;
+
+    const out = tail(stdout, 1000, 100);
+
+    assert.ok(out.startsWith(head));
+    assert.ok(out.length <= 1000 + 64, `总长应接近 1000，实际 ${out.length}`);
+  });
+});
+
+// ── 组9 · structuredContent 64 KiB 上限（0.8.0 / Q4）─────────────────
+describe("组9 structuredContent 64 KiB 上限（0.8.0 / Q4）", () => {
+  test("组9-1 未超限原样返回且**不注入** _meta（保持 0.7.x 形态）", () => {
+    const payload = {
+      schema: "platform32.verify_generation/2",
+      verdict: "pass",
+      checks: [{ id: "log_cannot_map", status: "pass", detail: "ok" }],
+      summary: { errors: 0, warnings: 0, notes: [] },
+      inputs: { log: "x" },
+    };
+
+    const { value, meta } = capStructuredContent(payload);
+
+    assert.equal(meta, null);
+    assert.equal(Object.prototype.hasOwnProperty.call(value, "_meta"), false);
+    assert.deepEqual(value, payload, "未截断时必须逐字段保持不变");
+  });
+
+  test("组9-2 超限：_meta 告警 + 头部元信息完整 + 字节数回落到上限内", () => {
+    const detail = "E".repeat(20000);
+    const payload = {
+      schema: "platform32.verify_generation/2",
+      verdict: "fail",
+      checks: Array.from({ length: 7 }, (_, i) => ({ id: `c${i}`, status: "fail", detail })),
+      summary: { errors: 7, warnings: 0, checked_peripherals: ["GPIO"], notes: ["n"] },
+      inputs: { log: "L".repeat(30000) },
+    };
+    assert.ok(structuredBytes(payload) > MAX_STRUCTURED_BYTES, "构造的 payload 必须超限");
+
+    const { value, meta } = capStructuredContent(payload);
+
+    assert.ok(meta, "超限必须返回 _meta");
+    assert.equal(value._meta.truncated, true);
+    assert.ok(value._meta.original_bytes > MAX_STRUCTURED_BYTES);
+    assert.equal(value._meta.limit_bytes, 65536);
+    assert.equal(value._meta.policy, "head-tail-keep");
+    assert.ok(Array.isArray(value._meta.truncated_fields) && value._meta.truncated_fields.length > 0);
+    // 头部语义字段不裁
+    assert.equal(value.verdict, "fail");
+    assert.equal(value.schema, payload.schema);
+    assert.equal(value.summary.errors, 7);
+    assert.deepEqual(value.summary.checked_peripherals, ["GPIO"]);
+    // 7 项 < 50，数组不裁；detail 被裁剪且带标记
+    assert.equal(value.checks.length, 7);
+    assert.ok(value.checks[0].detail.length < detail.length);
+    assert.ok(value.checks[0].detail.includes("截断"));
+    assert.ok(
+      value._meta.truncated_fields.includes("checks[0].detail"),
+      `truncated_fields 应点名具体字段，实际：${value._meta.truncated_fields.slice(0, 3)}`,
+    );
+    // 结果必须真的落回上限内
+    assert.ok(
+      structuredBytes(value) <= MAX_STRUCTURED_BYTES,
+      `裁剪后仍超限：${structuredBytes(value)}`,
+    );
+  });
+
+  test("组9-3 长数组裁到前 50 项并记入 truncated_fields", () => {
+    const payload = {
+      schema: "platform32.ioc_backup/1",
+      action: "list",
+      project: "p",
+      timestamp: "2026-11-04T00:00:00Z",
+      tool: { name: "ioc_backup", version: "1.1.0" },
+      files: Array.from({ length: 80 }, (_, i) => ({
+        ioc: `${i}-`.padEnd(2000, "a"),
+        backup: "b",
+        bytes: i,
+        sha256: "x".repeat(64),
+      })),
+    };
+    assert.ok(structuredBytes(payload) > MAX_STRUCTURED_BYTES);
+
+    const { value } = capStructuredContent(payload);
+
+    assert.equal(value.files.length, 50, "数组上限是 50 项");
+    assert.ok(
+      value._meta.truncated_fields.some((f) => f.startsWith("files（数组 80→50）")),
+      `应记录数组裁剪，实际：${value._meta.truncated_fields.filter((f) => f.startsWith("files")).slice(0, 2)}`,
+    );
+    assert.equal(value.action, "list", "action 属头部字段，不裁");
+  });
+});
+
+// ── 组10 · outputSchema 契约（0.8.0 / Q5）────────────────────────────
+describe("组10 outputSchema 契约（0.8.0 / Q5）", () => {
+  //: F-1 契约的 7 个 check id：**形状声明**用，运行时判定仍在 verify_documents()。
+  const CHECK_IDS = [
+    "log_cannot_map",
+    "main_init_present",
+    "main_init_called",
+    "pins_present",
+    "mxproject_abs_path",
+    "mx_script_abs_path",
+    "syscalls_path",
+  ];
+
+  test("组10-1 三个工具都声明了 object 型 outputSchema", () => {
+    assert.equal(TOOL_DEFS.length, 3, "工具数量变了就同批改本用例");
+    for (const def of TOOL_DEFS) {
+      assert.ok(def.outputSchema, `${def.name} 缺 outputSchema`);
+      assert.equal(def.outputSchema.type, "object", `${def.name} 的 outputSchema.type`);
+      assert.ok(def.outputSchema.properties, `${def.name} 的 outputSchema 缺 properties`);
+    }
+  });
+
+  test("组10-2 verify_generation 的 checks[].id enum 恰为 7 个 check id", () => {
+    const def = TOOL_DEFS.find((t) => t.name === "verify_generation");
+    const ids = def.outputSchema.properties.checks.items.properties.id.enum;
+
+    assert.equal(ids.length, 7);
+    assert.deepEqual([...ids].sort(), [...CHECK_IDS].sort());
+    // verdict / status 的取值域也要与运行期一致
+    assert.deepEqual(def.outputSchema.properties.verdict.enum, ["pass", "fail"]);
+    assert.deepEqual(def.outputSchema.properties.checks.items.properties.status.enum, [
+      "pass",
+      "warn",
+      "fail",
+      "skip",
+    ]);
+  });
+
+  test("组10-3 inputSchema 的 required / enum / additionalProperties 零改动", () => {
+    const vg = TOOL_DEFS.find((t) => t.name === "verify_generation");
+    assert.deepEqual(vg.inputSchema.required, ["log", "main_c", "mxproject", "expect"]);
+    assert.equal(vg.inputSchema.additionalProperties, false);
+
+    const backup = TOOL_DEFS.find((t) => t.name === "ioc_backup");
+    assert.deepEqual(backup.inputSchema.required, ["project", "action"]);
+    assert.deepEqual(backup.inputSchema.properties.action.enum, ["backup", "restore", "list"]);
+
+    const field = TOOL_DEFS.find((t) => t.name === "ioc_field");
+    assert.deepEqual(field.inputSchema.required, ["ioc", "action", "key"]);
+    assert.deepEqual(field.inputSchema.properties.action.enum, ["get", "set"]);
+    assert.equal(field.inputSchema.additionalProperties, false);
+  });
+
+  test("组10-4 tools/list 对外暴露的 def 含 outputSchema 且可 JSON 序列化（旧客户端忽略不报错）", () => {
+    // 与 `ListToolsRequestSchema` 的过滤逻辑一致：只脱掉内部元数据字段。
+    const publicDefs = TOOL_DEFS.map(({ pathArgs, writeActions, ...rest }) => rest);
+
+    for (const def of publicDefs) {
+      assert.ok(def.outputSchema, `${def.name} 对外定义缺 outputSchema`);
+      assert.equal(def.pathArgs, undefined, "内部元数据不该出现在 tools/list 里");
+      assert.equal(def.writeActions, undefined, "内部元数据不该出现在 tools/list 里");
+      // 能被 JSON 序列化 = 客户端能收到；多出来的可选字段按规范可忽略
+      assert.doesNotThrow(() => JSON.stringify(def));
+    }
   });
 });
