@@ -178,7 +178,10 @@ def test_ko_in_log_fails_generation_with_exit_1(tmp_path: Path) -> None:
 
     assert result.returncode == 1, combined
     assert "[regen] 生成阶段失败" in combined
-    assert "KO" in combined
+    # B-10 ④（0.7.4）：原来只断言 `"KO" in combined`——而**成功**分支的横幅里就写着
+    # 「生成阶段：退出码 0 且**无 KO**」，那个 token 几乎恒真，等于没断言。改为钉住
+    # 失败行本身（含计数值），语义不变、判别力变强：漏检 KO 时这一行不会出现。
+    assert "[regen] 生成阶段失败：日志里有 1 行 KO（脚本层被 CubeMX 拒绝）" in combined
     # 生成失败也要留日志证据，并且不能进到核验阶段
     assert (out_dir / "cubemx-generate.log").is_file()
     assert not (out_dir / "verify.json").exists()
@@ -325,7 +328,9 @@ def test_removed_flag_is_rejected(tmp_path: Path) -> None:
     project = make_project(tmp_path)
     result = run_regen(project, "--allow-dirty-ioc")
     assert result.returncode == 2
-    assert "未知选项" in result.stderr
+    # B-10 ④（0.7.4）：连带钉住**被拒的那个选项名**。只断言"未知选项"的话，
+    # 任何别的参数拼错也能让用例变绿——而这条要守的恰恰是「这个 flag 已删除、没有 no-op 别名」。
+    assert "未知选项：--allow-dirty-ioc" in result.stderr, result.stderr
 
 
 # ---------------------------------------------------------------------------

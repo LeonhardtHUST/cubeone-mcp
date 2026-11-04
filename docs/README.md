@@ -102,14 +102,16 @@
 | [`reports/t0-redaction-audit.md`](reports/t0-redaction-audit.md) | **脱敏审计结论**：`mcp.json` 改前备份的明文凭据与脱敏红线核对（安全相关） |
 | [`reports/2026-11-04-w0w6-incremental-prd.md`](reports/2026-11-04-w0w6-incremental-prd.md) | **W0–W6 增量 PRD / 范围确认**：37 条发现的用户故事与逐字沿用计划 §3 的可机器验收判据 |
 | [`reports/2026-11-04-w0w6-implementation-design.md`](reports/2026-11-04-w0w6-implementation-design.md) | **W0–W6 实现编排**：精确到文件 / 函数 / 行号 / commit / 验收命令，含 Q-1~Q-5 裁决落地与 C0–C7 文件集 |
+| [`reports/2026-11-04-v074-v080-incremental-prd.md`](reports/2026-11-04-v074-v080-incremental-prd.md) | **0.7.4–0.8.0 增量 PRD / 范围确认**：A–F 六组用户故事与可机器验收判据、两版发布性质、Q1–Q5 |
+| [`reports/2026-11-04-v074-v080-implementation-design.md`](reports/2026-11-04-v074-v080-implementation-design.md) | **0.7.4–0.8.0 实现编排**：P1–P5 / Q1–Q3 逐 commit 文件集与验收矩阵、`outputSchema` 草案、64 KiB 裁剪算法、文件锁 API |
 
 > 原始日志在 [`logs/`](logs/)（**被 `.gitignore` 局部忽略，只在做实验的机器上存在**）：
 > `phase0/`–`phase4/` 下是 CI 上拿不到的命令输出。报告里引用日志路径时，**不要指望别人 clone 后能看到**。
 >
-> **测试数字口径（A-26 / B-3）**：文档与看板里出现的 `74 / 77 / 94 / 127 passed`、
-> Node 例数 `31 / 32 / 37 / 41`、覆盖率 `37%` 都是**各批次时点的快照**，不是恒定基线。
-> 引用时以当次实跑输出为准：`python -m pytest tests/ -q`（基准 **2026-11-04：127 passed**）与
-> `node --test tests/node/*.test.mjs`（基准 **2026-11-04：41 passed**）；
+> **测试数字口径（A-26 / B-3）**：文档与看板里出现的 `74 / 77 / 94 / 127 / 136 / 145 / 154 passed`、
+> Node 例数 `31 / 32 / 37 / 41 / 42`、覆盖率 `37%` 都是**各批次时点的快照**，不是恒定基线。
+> 引用时以当次实跑输出为准：`python -m pytest tests/ -q`（基准 **2026-11-04（0.7.4 P4 后）：154 passed**）与
+> `node --test tests/node/*.test.mjs`（基准 **2026-11-04（0.7.4 P4 后）：42 passed**）；
 > 覆盖率基准 `pytest --cov=scripts tests/ -q` **37%**（CI 底线 36%，2026-11-04）。
 > **不跨批次复用旧数字充本次证据**（`SKILL.md` §3 第 4 条）。
 
@@ -117,8 +119,9 @@
 
 | 文档 | 什么时候看 |
 |---|---|
-| [`releases/README.md`](releases/README.md) | **版本 × 内容 × 三证对照表**（tag / Release 正文 / npm），查"某个版本改了什么、证据齐不齐" |
-| [`releases/2026-11-04-v0.7.2.md`](releases/2026-11-04-v0.7.2.md) | **当前版本（v0.7.2）**：两处用户可见缺陷修复 + 判据语义变更（`Core/Src/*.c` 多文件扫描），三证齐全；版本轴四处同值 `0.7.2` |
+| [`releases/README.md`](releases/README.md) | **版本 × 内容 × 四证对照表**（tag / Release 正文 / npm / 看板回填），查"某个版本改了什么、证据齐不齐" |
+| [`releases/2026-11-04-v0.7.3.md`](releases/2026-11-04-v0.7.3.md) | **当前版本（v0.7.3）**：审定整改 W0–W6 的补丁版——堵 G1 四类假绿（证据不成立统一 rc=2 且不落报告）、`.ioc` 双层拒绝换行注入、`regen.sh` 退出码归一；**一处 BREAKING behavior**，判据/契约零改动（仍 7 项 / schema `/2`） |
+| [`releases/2026-11-04-v0.7.2.md`](releases/2026-11-04-v0.7.2.md) | 历史版本（0.7.2）：两处用户可见缺陷修复 + 判据语义变更（`Core/Src/*.c` 多文件扫描）；四证齐全，版本轴同值（口径见 `DECISIONS.md` **D35 §35.7**，现为五处） |
 | [`releases/2026-11-04-v0.7.1.md`](releases/2026-11-04-v0.7.1.md) | 历史版本（0.7.1，文档与脚本修正，无行为变更） |
 | [`releases/2026-11-03-v0.7.0.md`](releases/2026-11-03-v0.7.0.md) | **BREAKING**：路径白名单默认翻转（未设 `CUBEONE_ALLOWED_ROOTS` = 拒绝所有路径参数） |
 | [`releases/2026-11-03-v0.6.2.md`](releases/2026-11-03-v0.6.2.md) | M1 接缝修复批次（退出码白名单 / 入参校验 / 编码 / Node 单测基建） |

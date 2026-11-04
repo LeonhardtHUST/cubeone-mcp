@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""版本轴与发布收口校验（C2.3）：把「四个地方写的版本号是否同值」交给机器比。
+"""版本轴与发布收口校验（C2.3）：把「五个地方写的版本号是否同值」交给机器比。
 
 为什么需要
 ----------
@@ -9,10 +9,16 @@ frontmatter = README 表里那两处，**必须同值同步**（D33 §33.2）。
 而"人肉对四行"在 0.6.2 / 0.7.0 两次发版里都出现过同一类失误的前兆：改了三处、忘了第四处，
 直到有人翻 README 才发现。凡是"必须同时成立的多处一致"，都该有台机器来比。
 
+自 **0.7.4** 起再加两处：`package-lock.json` 的根 `version` 与 `packages[""].version`
+（**五处机器可验**，D35 §35.7）。理由是"改了 `package.json` 却没跑
+`npm install --package-lock-only`"这种漂移在旧的四判据下**完全看不见**，而 `npm ci` 与
+发布产物都以 lock 为准。
+
 判据（任一不满足即 ``exit 1``）
 -------------------------------
 1. **版本轴一致**：最新 tag（去掉 ``v``）== ``package.json`` 的 ``version`` ==
-   ``SKILL.md`` frontmatter 的 ``version`` == README「三个版本号」表里的两处值。
+   ``SKILL.md`` frontmatter 的 ``version`` == README「三个版本号」表里的两处值 ==
+   ``package-lock.json`` 根 ``version`` / ``packages[""].version``（五处）。
    ``SKILL.md`` 正文状态行（``> 状态：vX.Y.Z``）**不一致只警告**：它是叙述，不是契约，
    卡死它会让"顺手补一句状态"变成必须同步 bump 的负担。
 2. **发布正文存在**：``docs/releases/`` 下有名字含该版本号的 ``.md``（发布正文入库是
@@ -239,6 +245,53 @@ def parse_readme_versions(root: Path) -> dict[str, str | None]:
     return found
 
 
+def parse_lock_versions(root: Path) -> dict[str, str | None]:
+    """取 ``package-lock.json`` **根两处**版本号（0.7.4 / Q2：版本轴「四处」→「五处」）。
+
+    为什么把 lock 也纳入判据①
+    --------------------------
+    `npm install` 会把 lock 根的 ``version`` 与 ``packages[""].version`` 同步成
+    ``package.json.version``；反过来，**手改 `package.json.version` 却没跑
+    `npm install --package-lock-only`** 就会漂移——lock 停在旧版本，而
+    `npm ci` / 发布产物都以 lock 为准。这种漂移在「四处同值」的旧判据下**完全看不见**，
+    等 `npm ci` 报错或 registry 上出现旧版本才暴露。扩判据正好抓它。
+
+    Args:
+        root: 仓库根。
+
+    Returns:
+        ``{"root": 根 version 或 None, "package": packages[""].version 或 None}``。
+
+    Raises:
+        OSError: ``package-lock.json`` 读不到。
+        ValueError: 不是合法 JSON / 顶层不是对象 / 缺 ``packages[""]``。
+            这三种都**不猜**：由调用方转成 FAIL 并指名是哪一处，而不是当成"没问题"。
+    """
+    path = root / "package-lock.json"
+    text = read_text(path)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"package-lock.json 不是合法 JSON（{error.msg}，行 {error.lineno}）") from error
+    if not isinstance(payload, dict):
+        raise ValueError("package-lock.json 顶层不是对象")
+    packages = payload.get("packages")
+    if not isinstance(packages, dict) or "" not in packages:
+        raise ValueError('package-lock.json 缺少 packages[""] 段（lockfileVersion 2/3 必有）')
+    root_entry = packages[""]
+    if not isinstance(root_entry, dict):
+        raise ValueError('package-lock.json 的 packages[""] 不是对象')
+    return {
+        "root": _maybe_str(payload.get("version")),
+        "package": _maybe_str(root_entry.get("version")),
+    }
+
+
+def _maybe_str(value: object) -> str | None:
+    """把 JSON 里取到的值收成 ``str | None``（数字/缺失一律 ``None``，不猜）。"""
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
 def find_release_note(root: Path, version: str) -> Path | None:
     """在 ``docs/releases/`` 下找该版本号的发布正文。"""
     releases = root / "docs" / "releases"
@@ -352,7 +405,14 @@ def check(
     extras: list[Finding] = []
 
     # ── 取各处版本号 ──
-    values: dict[str, str | None] = {"package": None, "skill": None, "readme_tag": None, "readme_skill": None}
+    values: dict[str, str | None] = {
+        "package": None,
+        "skill": None,
+        "readme_tag": None,
+        "readme_skill": None,
+        "lock_root": None,
+        "lock_pkg": None,
+    }
 
     try:
         values["package"] = parse_package_version(root)
@@ -381,7 +441,26 @@ def check(
     except OSError as error:
         findings.append(Finding("FAIL", "README 版本表", str(error)))
 
-    # ── 判据 1：最新 tag == 三处 ──
+    # ── 第五处：package-lock 根两处（0.7.4 / D35 §35.7，Q2）──
+    # 「四处同值」看不见"改了 package.json 却没跑 npm install --package-lock-only"这类漂移，
+    # 而 npm ci / 发布产物都以 lock 为准。所以把 lock 根两处也纳入判据①。
+    try:
+        lock = parse_lock_versions(root)
+        values["lock_root"] = lock["root"]
+        values["lock_pkg"] = lock["package"]
+        for label, key in (
+            ('package-lock.json 根 version', "lock_root"),
+            ('package-lock.json packages[""].version', "lock_pkg"),
+        ):
+            value = values[key]
+            if value is None:
+                findings.append(Finding("FAIL", label, "lock 里没有这一处 version 字段（或不是字符串）"))
+            else:
+                findings.append(Finding("PASS", label, value))
+    except (OSError, ValueError) as error:
+        findings.append(Finding("FAIL", "package-lock.json 版本轴", str(error)))
+
+    # ── 判据 1：最新 tag == 五处 ──
     tag = tag_override
     if tag is None:
         tag = latest_tag(root)
@@ -401,6 +480,8 @@ def check(
                 ("SKILL.md frontmatter", values["skill"]),
                 ("README 仓库发布标签", values["readme_tag"]),
                 ("README SKILL.md version", values["readme_skill"]),
+                ("package-lock.json 根", values["lock_root"]),
+                ('package-lock.json packages[""]', values["lock_pkg"]),
             )
             if value is not None and value != tag_version
         ]
@@ -414,7 +495,7 @@ def check(
                 )
             )
         else:
-            findings.append(Finding("PASS", "判据① 版本轴同值", f"tag={tag_version} 与四处一致"))
+            findings.append(Finding("PASS", "判据① 版本轴同值", f"tag={tag_version} 与五处一致"))
 
         # 正文状态行：只警告（见模块 docstring 的理由）
         if status_version is not None and status_version != tag_version:
@@ -427,7 +508,7 @@ def check(
             )
 
     # ── 判据 2：发布正文存在 ──
-    # 用 tag 的版本号去找（判据① 已保证它与三处同值时才有意义；不同值时两个判据一起红，
+    # 用 tag 的版本号去找（判据① 已保证它与五处同值时才有意义；不同值时两个判据一起红，
     # 这是有意的：错的地方都列出来，别让人修一处跑一次）。
     target_version = None
     if tag is not None:
@@ -555,7 +636,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     _harden_console_streams()
     parser = argparse.ArgumentParser(
         prog="check_release.py",
-        description="校验版本轴（tag / package.json / SKILL.md / README）与发布正文是否收口",
+        description="校验版本轴（tag / package.json / package-lock 根两处 / SKILL.md / README）与发布正文是否收口",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "退出码：0=通过 1=不一致或无法判定。"
@@ -596,7 +677,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"✗ {len(failures)} 条判据不满足：")
         for item in failures:
             print(f"  - {item.where}：{item.detail}")
-        print("\n[check_release] FAIL —— 版本轴或发布正文没收口；四处必须同值，正文必须入库。")
+        print("\n[check_release] FAIL —— 版本轴或发布正文没收口；五处必须同值，正文必须入库。")
         return 1
     print("✓ 版本轴同值、发布正文在位、无阻塞项。")
     return 0

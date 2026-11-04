@@ -708,6 +708,57 @@ T3.5 不得「待开始」。
 **两条合法路径不因本条收紧**（F-5）：`workflow_dispatch` 仍是正常发布入口；
 D33 补发历史 Release 依赖的 `::warning` 幂等跳过分支保留。
 
+#### 35.7 版本轴五处与 `package-lock` 机器校验（2026-11-04 追加，0.7.4 D 组）
+
+**结论**：发布轴自本批起是**五处**（此前口径为「三处 / 四处」）：
+
+| # | 位置 | 谁在消费它 |
+|---|---|---|
+| 1 | `package.json` → `version` | npm 包版本、`npm publish` 的版本来源 |
+| 2 | `package-lock.json` → 根 `version` | `npm ci` 的锁根 |
+| 3 | `package-lock.json` → `packages[""].version` | lockfileVersion 2/3 的包根记录 |
+| 4 | `SKILL.md` → frontmatter `version` | Agent 操作面的文档迭代号 |
+| 5 | `README.md` → 「三个版本号」表两处 | 人读的对外快照（两处同值视为一处轴） |
+| — | `git tag` `vX.Y.Z` | 发布锚点（与上面五处比对，但**不算**"五处"之一） |
+| — | `verify_generation.py --version`（`1.2.0`） | 判据契约轴，**故意独立**（D33 §33.2），**不并入** |
+
+**为什么把 2/3 纳入**：`npm install` 会自动把 lock 根同步成 `package.json.version`，
+所以漂移只有一个来源——**手改了 `package.json.version` 却没跑 `npm install --package-lock-only`**。
+这种漂移在旧的「四处」口径下**完全看不见**（四处都还是新版本，只有 lock 停在旧值），
+而 `npm ci` 与发布产物**都以 lock 为准**；等它暴露时通常已经是 CI 红或 registry 上出现旧版本。
+「五处」如果只是句口号、没有机器比对，就等于把这条规则又交回人手。
+
+**实现落点**：`tools/check_release.py` 的 `parse_lock_versions()` + 判据①。
+`parse_lock_versions()` 对**坏 JSON / 顶层不是对象 / 缺 `packages[""]`** 抛 `ValueError`，
+由 `check()` 转成 `[FAIL] package-lock.json 版本轴` —— **不猜、不静默降级**；
+`version` 字段缺失时返回 `None`，由判据① 判红（同样不猜）。
+
+**判据① 的预期 FAIL 形态（与 §35.2 step0 一致，只是明细多两行）**：
+
+```
+[FAIL] 判据① 版本轴同值 — 最新 tag=0.7.3，但 package-lock.json 根=0.7.4；package-lock.json packages[""]=0.7.4
+```
+
+- **打 tag 之前**：五处已是新版本、最新 tag 还是旧版本 ⇒ FAIL。**这是预期的**，
+  它证明的正是"版本号改了、tag 还没打"这个真实状态（与 §35.2 的说明同义）。
+- **打 tag 之后**：`tag` 与五处同值 ⇒ PASS。
+- 显式 `--tag v0.7.2`（历史版本）会因 lock=当前版本判红 —— **这也是正确的**：
+  当前工作区确实不是 0.7.2。
+- `check_release.py` **不挂 CI**（F-5），所以扩判据不影响 CI 绿。
+
+**自测（可复核，不留"纸面通过"）**：`tests/test_check_release.py` —— ① 五处同值 ⇒ PASS（rc=0）；
+② 副本把 lock **根** `version` 改 `9.9.9` ⇒ 判据① FAIL 且明细**点名** `package-lock.json 根=9.9.9`；
+③ 只改 `packages[""].version` ⇒ 同样判红且点名该处；④ 缺 `packages[""]` ⇒ rc=1、可读中文错误、
+无 traceback。**负例断言的是"点名到哪一处"，不是"rc≠0"**——只断言 rc 的用例，任何无关错误都能让它变绿。
+
+**与 §35.2 / §35.6 的关系（遵循「更正只追加勘误」）**：§35.2 **step0 原文**与 §35.6 表格里写的
+「三处 / 四处同值」**不改**（它们记录的是当时的判据）；**自本条起读作「五处」**，以本条为准。
+`README.md` 的「三个版本号，别混」表同步补了 lock 两处的说明。
+
+**谁确认 / 何时**：用户 **Leon** 在 0.7.4 增量 PRD 的 Q2 中裁决「版本轴统一为五处、判据① 扩到
+`package-lock.json` 根两处」；**2026-11-04** 由 `software-engineer`（P4 批次）落盘，属 D34 §34.2(1)
+的"实现位移按追加勘误处理"，不新开 GATE。
+
 ---
 
 ### D36 · R1 批次三项裁决：`AskForMigrate` 告警策略 / 不做时钟参数判据 / 核验器 2.0 维持不排期

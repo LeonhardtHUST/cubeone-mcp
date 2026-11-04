@@ -20,7 +20,7 @@
 
 ---
 
-## 1. 版本 × 内容 × 三证
+## 1. 版本 × 内容 × 四证
 
 | 版本 | 日期 | 一句话内容 | tag | Release 正文 | npm | 正文文件 |
 |---|---|---|---|---|---|---|
@@ -65,7 +65,7 @@
 按 [`../DECISIONS.md`](../DECISIONS.md) **D35** 的 9 步流水线，在第 7 步"看板回填"时**顺手**把本页加一行：
 
 1. 新建正文 `docs/releases/<日期>-vX.Y.Z.md`（结构照上一版：BREAKING 与否 → 改了什么 → 验证等级表 → 已知限制）；
-2. 本表加一行：日期、一句话内容、三证（tag sha / Release / npm 版本与 files）、正文链接；
+2. 本表加一行：日期、一句话内容、**四证**（tag sha / Release 正文 / npm 版本与 files / 看板回填）、正文链接；
 3. **发布后核证**：`python tools/check_release.py --network` → **rc=0**（版本轴同值 + 正文存在 +
    官方 registry 的 npm `latest` 对齐 + 台账回填 + 工作区干净）；发布前门禁跑不带 `--network` 的版本；
 4. `python tools/check_taskboard.py` → **rc=0**（批次行回填后看板才能变绿）。
