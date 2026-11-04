@@ -1,7 +1,7 @@
 ---
 name: cubeone-mcp
 description: "STM32 生成核验与 .ioc 键级工具包：本包 MCP 只暴露 3 个工具（verify_generation / ioc_backup / ioc_field），用于「生成后核验（G1 硬关卡）」「备份/还原 .ioc」「单键读写 .ioc」，并附完整操作流程文档。**能力边界（先读）：只能可靠代做普通 GPIO 级改动（新增引脚/改模式/改上下拉）；UART/SPI/TIM/ADC 等非 GPIO 外设的增改没有工具能力，必须手改 .ioc 或走 GUI，并强制过 G1。** 触发词收敛为：「生成完帮我核一遍」「有没有被静默丢弃的外设」「改一下这个 ioc / 加一个 GPIO」「备份/还原 .ioc」「读/改 .ioc 某个键」。⚠️ 以下不属本包工具能力，命中时按 SKILL.md 的 CLI 等价通道与流程文档处理，不要期望 MCP 工具直接完成：「pio 构建 / Flash-RAM 尺寸」「烧进去看看 / 烧录」「串口有输出吗 / 串口捕获」「加一路串口/SPI/定时器（非 GPIO 外设增改）」。只读审计不写盘；写操作前必须备份 .ioc，生成后必须跑核验器并如实声明验证等级；不碰 testbeds/ 之外的模板原仓。"
-version: 0.7.2
+version: 0.7.3
 agent_created: true
 license: MIT
 compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证）；CubeMX 6.18.1（路径见 §0.2）；PlatformIO Core 6.x；MCP 可选，未注册用 §0.4
@@ -12,9 +12,12 @@ compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证�
 > **本文件是操作面，不是手册。** 逐条细则在 `references/`：`capability-boundary.md`（能力边界）·
 > `verify-contract.md`（核验器契约）· `regen-exit-codes.md`（`regen.sh`）· `diff-evidence.md`（取证判据）·
 > `pitfalls.md`（陷阱全文）。证据可信度：**✅** 本机实测 ｜ **📄** 引自模板仓/官方文档 ｜ **⚠️** 未实测。
-> 状态：v0.7.2（对齐核验器 **1.2.0**：7 项 / schema `/2`）——**0.7.2 = 0.7.1 的缺陷修复与工程化批次**：
-> **无新增能力**，但核验器有一处**判据语义变更**（`ProjectManager.CoupleFile=true` 的工程改扫 `--project-root` 下
-> `Core/Src/*.c`，见 `references/verify-contract.md` §4.2，两处用户可见缺陷的修复见 `docs/releases/2026-11-04-v0.7.2.md`）。
+> 状态：v0.7.3 —— **审定整改 W0–W6 的补丁版**（G1 假绿 / 换行注入 / 发布门禁），核验器仍 **1.2.0**（7 项 / schema `/2`）：
+> **无新增能力，但有一处 BREAKING behavior**——证据不成立时 `verify_generation.py` 由「静默放过」改判
+> **退出码 2 且不落 `--json-out` / `--report-md`**；`ioc_field` 双层拒绝含换行符的 key / value（退出码 2）。
+> 详见 `docs/releases/2026-11-04-v0.7.3.md`。**0.7.2 = 0.7.1 的缺陷修复与工程化批次**：**无新增能力**，但核验器有
+> 一处**判据语义变更**（`ProjectManager.CoupleFile=true` 的工程改扫 `--project-root` 下 `Core/Src/*.c`，
+> 见 `references/verify-contract.md` §4.2；两处用户可见缺陷的修复见 `docs/releases/2026-11-04-v0.7.2.md`）。
 > **0.7.0：路径白名单默认 fail-closed（BREAKING）**，迁移见 §0.2；同批含 `ioc_backup` 备份完整性摘要与原子还原、
 > `realpath` 防 junction 绕出。**0.7.1 = 文档与脚本修正，无行为变更**（注册指南随包下发并对齐 0.7.0 默认拒绝；
 > `ioc_field` 脚本轴 **1.1.0**：get 区分「多行歧义」与「键不存在」）。**Phase 2 首板 L5 已达成（2026-11-04）**：
