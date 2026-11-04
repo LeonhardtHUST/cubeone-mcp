@@ -16,26 +16,46 @@
 而 SKILL.md 的 Phase 2 整节仍停在「无硬件、整体挂起」，与 `9fac316` 已达成的 **L5** 相反。
 这不是文案瑕疵：**一个按 SKILL.md 行动的 agent，会判定走 CLI 通道、绕开本包的结构化结论，
 并拒绝执行一项已经在真板上验证过的能力**。
+更关键的是第二层分叉：**G1 这道「硬关卡」有四种彼此独立的方式会交出 `verdict=PASS`**
+（漏传 `ioc`、指错工程根、传任意文本当日志、日志里有 `KO` 而核验器不认），
+而 `ioc_field` 一个换行就能写入能力边界之外的外设键；再往外一层，发版前的三道机器门禁
+也都能在证据不全时保持绿灯。即：**问题不在代码跑不起来，而在 agent 会拿到没有依据的绿。**
 
 | 级别 | 条数 | 含义 |
 |---|---|---|
-| **P0** | 4 | 会让 agent 拿到**全绿但结论不成立**的结果，或让 MCP 能力链整体不可达 |
-| **P1** | 12 | 显著影响 agent 判断、可靠性或证据完整性 |
-| **P2** | 8 | 效率 / 可维护性 / 文档清晰度改进（多为合并列示） |
+| **P0** | **10** | 会让 agent 拿到**全绿但结论不成立**的结果、让 MCP 能力链整体不可达、让 `.ioc` 内容被静默污染，或让发版门禁形同虚设 |
+| **P1** | **17** | 显著影响 agent 判断、可靠性或证据完整性 |
+| **P2** | **10** | 效率 / 可维护性 / 文档清晰度改进（多为合并列示） |
 
-**四条 P0**：
-1. `A-1` SKILL 的「MCP 通道」列的是外部 server 工具，与本包 3 个工具零交集 ⇒ 装了 MCP 却不会被调用；
-2. `A-7` MCP 通道根本不落 `verify.json`，而全流程把它当 L4 证据 ⇒ 证据链断；
-3. `A-11` `expect_pins` 有 / `ioc` 无 → 引脚级检查静默 `skip`，`verdict` 仍 `pass`（**L2 只读实测**）；
-4. `A-14` `--project-root` 指错目录 → 静默退回单文件扫描，`verdict` 仍 `pass`（**L2 只读实测**）。
+> 计数口径：初稿为 P0 4 / P1 12 / P2 8；四个分面回传后补齐假绿、注入、发布门禁三类，
+> 并把 `A-5` 由 P1 升 P0、`A-20` 并入 `A-21`、架构分面第 4 项降 P2 并入 `B-4`，
+> 按「一条缺陷只计一次」去重后为 **10 / 17 / 10 = 37 条**。分歧与裁定见 §5.5、§5.7、§2.8。
 
-**三个最该先处理的**：① 修操作面（A-1 + A-5：本包工具面 / 通道判据 / Phase 2 现状）；
-② 给核验器加两条前置护栏（A-11 参数联动 + A-14 工程根有效性 + A-4 日志真实性）；
-③ 讲清 MCP 与 CLI 两套证据口径（A-7），避免 agent 交出拼出来的 `verify.json`。
+**十条 P0（按失效面分四组）**：
 
-**发版判断**：本轮审定**不改实现**。所列问题均不影响 `0.7.2` 已发布产物的运行正确性，
-但 ① ② 属「随包分发的 Agent 操作面」内容，修完需要新补丁版才能到达 npm 用户；
-建议与下一批文档修订合并发版，不必单独为审定报告发版。
+| 组 | 编号 | 一句话 |
+|---|---|---|
+| 操作面把 agent 引错路 | `A-1` | SKILL 的「MCP 通道」列外部 server 工具，与本包 3 个工具零交集 ⇒ 装了 MCP 却不会被调用 |
+| 操作面把 agent 引错路 | `A-5` | SKILL/README/TASKBOARD 仍写「无硬件 / Phase 2 挂起」，与已达成的 L5 相反 ⇒ agent 拒绝执行已验证能力，且去「真源」复核会二次得到同一错误结论（**初稿 P1，定稿升 P0**） |
+| G1 交出没有依据的 pass | `A-11` | `expect_pins` 有 / `ioc` 无 → 引脚级检查静默 `skip`，`verdict` 仍 `pass`（**主审 L2 只读实测**） |
+| G1 交出没有依据的 pass | `A-14` | `--project-root` 指错目录 → 静默退回单文件扫描，`verdict` 仍 `pass`（**主审 L2 只读实测**） |
+| G1 交出没有依据的 pass | `A-17` | 核验器不认 CubeMX 的 `KO` 行，也不认「日志是不是日志」：拿 `references/README.md` 当 `--log` 可得 `verdict=PASS errors=0`（**分面可复跑实跑**） |
+| 证据与内容完整性 | `A-7` | MCP 通道根本不落 `verify.json`，而全流程把它当 L4 证据 ⇒ 证据链断 |
+| 证据与内容完整性 | `A-21` | `ioc_field set` 的 `value` 含 `\r\n` 即可向 `.ioc` 注入任意键（含非 GPIO 外设），击穿能力边界且不触发路径白名单（**纯内存复现坐实**） |
+| 发版门禁不设防 | `A-22` | `check_release.py` 只比本地版本轴，不查 npm / Release / 台账；`--network` 只 WARN 且 `npm view` 未带官方 registry |
+| 发版门禁不设防 | `A-23` | `publish.yml` 的 `workflow_dispatch` 可在无 tag / 无 Release / 看板未收口的提交上发版 |
+| 发版门禁不设防 | `A-24` | `npm_mcp_handshake.mjs` 在 CI 恒 SKIP 的 T6 上仍输出 `[HANDSHAKE SMOKE] PASS`、rc=0 |
+
+**最该先处理的四批**：① 堵假绿（A-11 / A-14 / A-17 + A-4）：三条一起加进
+`validate_evidence_inputs()` 并补四个负样本；② 修操作面（A-1 + A-5 + A-10 + A-12），
+一次把「本包工具面 / 通道判据 / Phase 2 现状 / L2 命令 / 回滚口径」写对，投入最小、收益最大；
+③ 堵注入与讲清证据口径（A-21 双层拒绝换行 + A-7 写明 MCP 走 `structuredContent`）；
+④ 补发版门禁（A-22 / A-23 / A-24），让 D35 / GATE-3.1 不再完全靠人。
+
+**发版判断**：本轮审定**不改实现**。所列问题均不影响 `0.7.2` 已发布产物的运行正确性
+（A-22/23/24 是对**下一次**发版的门禁缺口，不是对已发版的追责），
+但 ①②③ 落在随包分发的 `SKILL.md` / `lib` / `scripts` 里，修完需要新补丁版才能到达 npm 用户；
+建议与下一批文档修订合并成**一次**补丁版，不必单独为审定报告发版。
 
 ---
 
@@ -49,10 +69,19 @@
 | 状态面 | `docs/TASKBOARD.md`（36 条任务 / 28 完成）、`docs/DECISIONS.md` D1–D36、`docs/releases/` 台账 |
 | 实测（只读） | `python tools/check_taskboard.py` rc=0、`check_release.py` rc=0、`pytest -q` **94 passed**、文档相对链接 0 断链、CI success |
 
-> **分面回传说明**：MCP 架构 / agent 效率 / 功能性三个分面的结论均已并入；
-> 测试·CI·发布分面在定稿前未回传独立报告，该维度由**主审按同一判据自行复核并写入 §5.6**
-> （测试覆盖空白、覆盖率门槛、`ci.yml` / `publish.yml`、发布台账与索引），维度没有缺失。
-> 三条分面结论中，凡定 P0 的都由主审做了可复现核实；两条被驳回 / 降级，理由见 §4.6、§5.5。
+> **分面回传说明（定稿更正）**：四个只读分面的结论**均已并入**。
+> MCP 架构 / agent 效率 / 功能性三分面先回传；测试·CI·发布分面在初稿之后补回，
+> 主审据其结论**撤回了初稿「发布链扎实、不要动」的判断**（§5.6），
+> 并新增 §5.7 的三条发布门禁 P0、A-25–A-28 与 B-10。
+> 凡定 P0 的都由主审做了可复现核实或逐条核对分面实跑证据；
+> 两条被驳回 / 降级，理由见 §4.6、§5.5。
+> 分面之间的定级分歧与去重过程见 §2.8、§4.2、§4.8、§5.2、§5.5、§5.7
+> ——**审定不是把四分面输出相加**，这一点本身就是报告结论的一部分。
+>
+> **引用约定**：`§x.y` 带本报告上下文时指**本报告**章节（如「见 §4.8」）；
+> 带文件名上下文时指**被审文档**章节（如 `SKILL.md:394` §6、`SKILL.md:83` §0.3、
+> `phase2-bringup-2026-11-04.md:175`），不带文件名的 `§0.3` / `§6.1` 一律按就近的文件名理解。
+> 所有行号以**审定基线 `76e28dc`** 为准；定稿只改本报告，不改被审文件，故行号不漂移。
 
 **没做**：不动实现、不跑 CubeMX 生成 / `pio` 构建 / 烧录（会写盘或需硬件）、不跑 npm 打包实测、
 不复核真板现象（沿用 `phase2-bringup-2026-11-04.md` §3.6 的 L5 证据）。
@@ -174,20 +203,23 @@ MCP 的 `ReadResource` 也只暴露 `SKILL.md` + `references/*.md`（`lib/server
 
 ### 2.8 【P1】MCP 层与 Python 脚本层的契约没有对齐（架构分面，主审逐条复核）
 
-`lib/server.mjs` 是薄封装层，靠一批「手写约定」与脚本对齐；以下 4 处约定没有对齐，
-且**每一处都会把 agent 引向错误的排障方向**：
+`lib/server.mjs` 是薄封装层，靠一批「手写约定」与脚本对齐；以下 3 处约定没有对齐，
+且都会把 agent 引向错误的排障方向（第 4 处经分面口径对齐后降为 P2）：
 
 | # | 位置 | 现象 | 后果 / 建议 |
 |---|---|---|---|
-| 1 | `lib/server.mjs:587–596`（对照同文件 `:20–22` 的注释） | 任何 `res.error` 都被写成「**无法启动 Python** … 处置：改 `CUBEONE_PYTHON`」，且**丢弃** `res.error.code` 之外的 stdout/stderr/诊断。但 `ETIMEDOUT`（`:312` 的 120 s 超时）与 `ENOENT` 是两类完全不同的失败 | 大日志核验或 Windows 冷启动超时会被指引去改 Python 路径，而真实原因是超时。注释里已明确「两类失败措辞有意不同、不要合并」，代码却合并了 ⇒ **自相矛盾**。建议按 `res.error.code` 分支，并把 res 的诊断带进文本 |
-| 2 | `lib/server.mjs:202–280` 三个 schema 都写了 `additionalProperties:false`，但 `validateArgs()`（`:421–474`）只遍历 `props` | MCP SDK **不做** JSON Schema 校验（架构分面已确认）；拼错参数名（如 `projectRoot` 代替 `project_root`）会被静默忽略 | 与 §4.2 的 `expect_pins`/`ioc` 同源：agent 以为传了保证，实际 `skip` + `verdict=pass`。建议在 `validateArgs` 里加一行未知键拒绝（成本 3 行） |
-| 3 | `lib/server.mjs:239` description 写「backup=备份(**默认**)」、`:253` `required` 却含 `action`、`:554–557` `buildArgs` 在 `action` 缺省时才 fallback 到 backup | 客户端按 description 省掉 `action` → 入口校验直接 `isError` 拒绝，fallback 分支永远到不了 | 三方口径取一：要么 `action` 移出 `required` 并真默认，要么删掉「默认」二字 |
-| 4 | `lib/server.mjs:319–327` `readJson()` 用裸 `catch { return null }` 吞掉一切读取/解析错误 | 结构化结论落盘失败时 `structured=null`，仍可能走成功分支：核验器 `verdict=fail` 会被 `isExecFailure` 改判成「执行层失败」文案；`verdict=pass` 则悄悄少了 `structuredContent` | 把解析失败作为独立诊断字段返回，至少写进 stderr 与 `summary.notes`，不要静默 |
+| 1 | `lib/server.mjs:587–596`（对照同文件 `:20–22` 的注释） | 任何 `res.error` 都被写成「**无法启动 Python** … 处置：改 `CUBEONE_PYTHON`」，且**丢弃** stdout/stderr/诊断。但 `ETIMEDOUT`（`:312` 的 120 s 超时）与 `ENOENT` 是两类完全不同的失败 | 大日志核验或冷启动超时会被指引去改 Python 路径。注释里已明确「两类失败措辞有意不同、不要合并」，代码却合并了 ⇒ **自相矛盾**。建议按 `res.error.code` 分支 |
+| 2 | 三个 schema 都写了 `additionalProperties:false`（`:202–280`），但 `validateArgs()`（`:421–474`）只遍历 `props` | MCP SDK **不做** JSON Schema 校验；拼错参数名（如 `projectRoot` 代替 `project_root`）被静默忽略 | **与 §4.2 / A-11 同根，按一条计、不重复计数**：agent 以为传了保证，实际 `skip` + `verdict=pass`。建议在 `validateArgs` 加一行未知键拒绝（成本 3 行） |
+| 3 | `lib/server.mjs:319–327` `readJson()` 用裸 `catch { return null }` 吞掉一切读取/解析错误 | 结构化结论落盘失败时 `structured=null`，仍可能走成功分支：核验器 `verdict=fail` 会被改判成「执行层失败」文案；`pass` 则悄悄少了 `structuredContent` | 把解析失败作为独立诊断字段返回，至少写进 stderr / `summary.notes` |
+| ~~4~~ | `lib/server.mjs:239` 写「backup=默认」、`:253` `required` 含 `action`、`:554–557` 才有 fallback | 客户端按 description 省掉 `action` → 入口校验**响亮拒绝**（`isError`），fallback 永远到不了 | **架构分面主动降为 P2**：是文档-门禁口径不一致，**无数据损失、无假绿**；并入 B-4。三方口径取一即可 |
 
-> **存疑未证实（不入发现计数）**：架构分面提出 `ioc_field` 的 `key`/`value` 含换行时可能注入
-> `.ioc` 的多行内容（`lib/server.mjs:563–565` 与 `scripts/ioc_field.py:147+`）。
-> 主审判断需要构造真实 `.ioc` 才能确认 `set_value` 的行匹配行为，本轮只读审定**未实测**，
-> 标为「待验证」，不写成确定缺陷。
+> **分面口径对齐记录（2026-11-04，定稿前）**：架构分面随后发来修订，
+> ① 撤回最初「本分面无 P0」的结论，确认 `value` 换行注入为 P0（与功能性分面 P0-3 是**同一条**，
+> 按一条计，见 §4.10 / A-21）；② 把上表第 4 项降为 P2；③ 明确第 2 项与假绿清单同源、归并计数。
+> 主审采纳这三点，总表按「一条缺陷只计一次」重算 —— 详见 §6。
+>
+> **「存疑 → 复现 → 定级」的过程留痕**：架构分面最初提出换行注入时主审标为「待实测、不入计数」，
+> 功能性分面随后用纯内存复现坐实，才升级为 P0。审定时不把猜测当结论。
 
 ### 2.9 【P2】架构层的其它改进点（合并列示，不逐条展开）
 
@@ -324,6 +356,14 @@ expect_pins 无 / ioc 无              -> status=skip  | 未提供 --expect-pins
 即：**只要漏传 `ioc`，判据就从「能抓错的 fail」退化成「什么都不做的 skip」**，
 而 `verdict` 对两者一视同仁地只看 `errors`（`:1429`）。这不是文档提醒能兜住的形态。
 
+> **主审裁定（分面口径分歧）**：功能性分面核对契约后认为
+> 「`--expect-pins` 没配 `--ioc` 就 skip」是**已登记的设计取舍**（`references/verify-contract.md` 与
+> `inputSchema` 都写了），建议并进假绿清单而不单列新 P0；效率分面则明确反对把已登记的 skip 设计
+> 过滤掉。主审**保留 A-11 为 P0**，理由是：契约登记的只是「skip 语义」，
+> 而这里的问题是「**调用方已经明确要求引脚级保证，工具层却既不拒绝也不警告，仍交出 `verdict=pass`**」——
+> 前者是判据设计，后者是工具契约，两者不是一回事。修复也不改判据语义，
+> 只需在 `validateArgs` 加一条联动规则（与 A-8 子项 2 的未知键拒绝合并实现，按一条计）。
+
 **建议**：`validateArgs` 加一条联动规则（`expect_pins` 非空 ⇒ 必须给 `ioc`，否则 `isError=true`）；
 或在 `check_pins_present` 把该情形升为 `fail`（既然调用方明确要求了引脚级保证）。
 配套补回归用例：只给 `expect_pins` 不给 `ioc` 必须**不能**得到 pass。
@@ -388,15 +428,17 @@ project_root=有 Core/Src 但为空      verdict=pass  errors=0  (mx_script_abs_
 `Core/Src/main.c` 或该目录下无任何 `.c` ⇒ `fail`（或至少 `warn` + 写 `summary.notes` 并让 `verdict` 不能是纯 `pass`）；
 `regen.sh` 已自己拼对路径，主链不受影响，主要保护「agent 裸调核验器」这条路径。
 
-### 4.6 功能性分面的两条定级，主审不予采纳（记录在案）
+### 4.6 复核、降级与一条环境事实（防止把线索当结论）
 
-| 分面结论 | 主审核实 | 裁定 |
+| 待核判断 | 主审核实 | 裁定 |
 |---|---|---|
-| **F-04（定为 P0）**：SKILL 的 CLI 示例命令跑不通，`regen.sh` 没有 `--main-c` / `--mxproject` / `--log` | `scripts/regen.sh:75/78/79` 的 usage 与 `:137–141` 的解析明确支持 `-l,--log` / `--main-c` / `--mxproject`；`SKILL.md:88–92` 那条命令是**裸调 `verify_generation.py`**（不是 `regen.sh`），`--help` 显示 8 个参数全部受支持 | **误报，不计入发现**。真正存在的只是「两套入口的参数面不同、SKILL 没讲清什么时候用哪个」，降为 P2 文档清晰度 |
-| **F-07（定为 P2）**：`regen.sh` 硬编码 Windows 路径，Linux 开箱不可用 | 该默认值可用 `ST_CUBEMX_JRE` / `ST_CUBEMX_EXE` 覆盖（`regen.sh:80–81`），`SKILL.md:124` §1.1 与 D1 已明确登记「本机锁 6.18.1、路径见 §0.2」，是有意的本机工具约束 | **已登记，不计为新发现**；可作为未来「自动探测安装路径」的 P2 改进 |
+| 审稿中出现过「SKILL 的 CLI 命令跑不通，`regen.sh` 没有 `--main-c` / `--mxproject` / `--log`」 | `scripts/regen.sh:75/78/79` 的 usage 与 `:137–141` 的解析明确支持 `-l,--log` / `--main-c` / `--mxproject`；`SKILL.md:88–92` 那条命令是**裸调 `verify_generation.py`**，`--help` 显示 8 个参数全部受支持 | **不成立，不计入发现**；只留「两套入口参数面不同、SKILL 没讲清何时用哪个」作 P2 文档清晰度 |
+| 分面 P2-7「`regen.sh` 硬编码 Windows 路径，Linux 开箱不可用」 | 默认值可用 `ST_CUBEMX_JRE` / `ST_CUBEMX_EXE` 覆盖（`regen.sh:80–81`），`SKILL.md:124` §1.1 与 D1 已明确登记「本机锁 6.18.1、路径见 §0.2」，是有意的本机工具约束 | **已登记，不计为新发现**；降为 P2「未来可自动探测安装路径」 |
+| 分面主动澄清「POSIX↔Windows 路径在 `regen.sh` → 核验器链上可能出错」 | 分面用 `config load` 相对/绝对 × `project path` 相对/绝对 × `--project-root` 相对/绝对 实跑 6 种组合，**G1 全部 `0/0/0`、无假红**；CubeMX 与 Python 各自处理边界 | **不是 bug，不计入发现** —— 这条澄清避免了一个很常见的误报方向 |
 
-> 这两条写进来是为了说明：**审定不是把四个分面的输出相加**。分面给的是线索，
-> 主审对每条 P0 都做了可复现核实，误报要驳回，否则报告本身就成了新的失真源。
+> **审定不是把分面输出相加**：分面给的是线索，主审对每条 P0 都做可复现核实；
+> 不成立的要驳回、已登记的要降级，否则报告本身会成为新的失真源。
+> 相应地，§4.1 / §4.8 的两条 P0 都有**可复跑的命令与完整输出**，不是静态推断。
 
 ### 4.7 功能性分面的其余改进点（P2，合并列示）
 
@@ -412,6 +454,112 @@ project_root=有 Core/Src 但为空      verdict=pass  errors=0  (mx_script_abs_
 
 ---
 
+### 4.8 【P0 / A-17】核验器不认 CubeMX 的 `KO` 行，且对「日志是不是日志」零识别（有实跑证据）
+
+这是本轮**证据最硬**的一条。功能性分面做了两次可复跑实验，主审复核了对应代码路径：
+
+**实验一：拿一份完全无关的 Markdown 当生成日志**
+
+```bash
+python scripts/verify_generation.py \
+  --log references/README.md \
+  --main-c testbeds/_verifier-regen/g474/Core/Src/main.c \
+  --mxproject testbeds/_verifier-regen/g474/.mxproject \
+  --expect GPIO --project-root testbeds/_verifier-regen/g474 \
+  --ioc testbeds/_verifier-regen/g474/stm32-g474-template.ioc \
+  --expect-pins PC13=GPIO_Output
+# → verdict=PASS  errors=0  warnings=0  rc=0
+#   log_cannot_map / main_init_present / main_init_called / pins_present /
+#   mxproject_abs_path / mx_script_abs_path / syscalls_path 全 pass
+```
+
+**实验二：拿一份含 2 个 `KO`、0 个 `Cannot map` 的真实生成日志**
+
+```text
+docs/logs/phase0/t1.8-s3/…/s3-probe2-raw.log  →  verdict=PASS  errors=0  warnings=0
+```
+
+**代码根因（两个独立缺口）**：
+
+1. `scripts/verify_generation.py` **全文没有 `KO` 正则**；唯一的 `KO` 判据在
+   `scripts/regen.sh:403–408` 的生成后检查里。也就是说 `regen.sh` 包住的时候能挡，
+   **直调核验器 / CLI 等价通道 / MCP 的 `verify_generation` 工具全都不设防**。
+   SKILL.md §3A 把「逐行 `OK` 不是 `KO`」列为三级确认的第 1 条，
+   但这条确认在核验器里**没有任何落点**。
+2. `:1671–1674` 读 `--log` / `--main-c` / `--mxproject` 时不做任何形态校验；
+   `check_log_cannot_map()`（`:584–618`）只扫 `Cannot map` 与判空，
+   一份 8 KB 的 Markdown 会被当成「无命中 ⇒ pass」，`:604–609` 的「日志为空」warn 都触发不了。
+
+**为什么必须 P0**：G1 是本项目宣称的「硬关卡」「非 GPIO 路径上唯一的安全网」
+（`SKILL.md:32`）。现在这层网对「日志内容完全不相干」和「CubeMX 明确回 `KO`」
+两种情形都返回全绿，而 agent 拿到的 `verdict=pass` 会被当成可执行构建的授权。
+配合 §4.2（`expect_pins`/`ioc`）、§4.5（`project_root`）两条，
+**四种不同方式都能让 G1 交出没有依据的 pass** —— 这是系统性问题，不是单点 bug。
+
+**建议**（按代价排序）：① `verify_generation.py` 增加 `log_ko_lines` 判据，
+或至少把 `KO` 命中直接计 `errors`；② 增加「日志形态」前置判据
+（CubeMX 特征行 / 最小行数 / 是否含 `config load`/`project generate` 回显），
+不满足判 fail 而非 warn；③ 把这两条与 §4.2、§4.5 的前置校验合并成
+一个 `validate_evidence_inputs()`，四个负样本一起进回归。
+
+> **编号澄清（功能性分面定稿前特别提示，主审采纳）**：有分面把「`json_out` 不落盘」
+> 与本节误当成同一条 P0 来合并。**两者同根（都缺「本次生成的可追溯物证」），
+> 但表现与优先级主体不同，本报告按两条 P0 分别保留**：
+> - **A-17（本节）＝ 判据可靠性面的头号假绿**：核验器读任意文本 / 含 `KO` 的日志都判
+>   `verdict=PASS`，是**结论本身错**，修复点是核验器判据，P0 主体；
+> - **A-7（§2.7）＝ 证据持久化缺口**：MCP 把结构化结论读回即删，不落 `verify.json`，
+>   是**证据留不住**，修复点是 MCP 返回 / 落盘策略，为同根的从属表现。
+>
+> 若按「证据持久化」一条成文，A-17 会被写成配置 / 效率问题而降级 —— 这是本次汇总要避免的失真。
+> 两条都保持 **P0**，但修的时候可以在同一个 `validate_evidence_inputs()` 批次里一起做。
+
+### 4.9 【P1 / A-18~A-20 + P2】`regen.sh` 编排链的功能性发现
+
+| 编号 | 级别 | 事实（分面实跑 / 主审核实） | 建议 |
+|---|---|---|---|
+| **A-18** | P1 | `--expect`/`-e` 等**带值选项漏给参数**时，`regen.sh:137–199` 的 `shift 2` 在 `$2` 不存在时不改变参数个数 ⇒ **无限循环**。分面用 `timeout 5` 复现：OOM/超时而非「参数错误」。`:132` 的 `while [ $# -gt 0 ]` 没有迭代上限；`:203–209` 的路径检查又在循环之后，救不了它 | 每个 `shift 2` 前判 `${2:-}` 为空就 `die 2`；或给 while 加迭代上限。补一条「缺参必须 2 秒内退 2」的用例 |
+| **A-19** | P1 | `regen.sh:556` 用 `exit "$VERIFY_RC"` 透传核验器退出码，但 `VERIFY_RC=9009`（WindowsApps Python 桩）、`127`、被信号杀死等都会原样透传；`references/regen-exit-codes.md` 约定的 `{0,1,2}` 契约在 shell 层被破坏 | 显式映射：只把 `0/1` 透传，其余统一归一成 `2` 并打印原始码 |
+| ~~A-20~~ → 并入 **A-21** | P0 | **能力边界在工具层完全没有落点**（与 §4.10 的换行注入同根，按一条 P0 计）：`SKILL.md:3`、`:29–31`、`references/capability-boundary.md:54` 都宣称「非 GPIO 外设增改没有工具能力」，但 `lib/server.mjs` 的 `CAPABILITY_NOTE` 只是 description 文字，`validateArgs` 不检查键名，`scripts/ioc_field.py:147+` 的 `set_value()` 对任意键通用。分面实测 `set key PA9.Signal value USART1_TX` → `changed=true`、`rc=0`，工具既不拒绝也不警告 | 不要求「权限层拦截」（能力层 ≠ 权限层，见 `capability-boundary.md:8–10`），但至少应：① `ioc_field set` 命中 `*.Signal=非 GPIO` / `Mcu.IP*` 时返回显式文案「该改动超出工具能力，须手改 .ioc/GUI 并强制过 G1」；② 在 `structuredContent` 加 `capability_warning` 字段，让 agent 可机读，而不是只靠读 SKILL |
+| B-9 | P2 | 脚本链杂项（分面逐条静态核实）：`*.ioc.bak.sha256` **未进 `.gitignore`**（实测 `NOT-IGNORED`），与 `ioc_backup.py:27–28`「不污染 git status」的注释矛盾；`--dry-run` 仍执行 `mkdir -p`（`:216–218`、`:240–245`）⇒ 纯预演会建目录；超时分支在 `rollback` **之前**就打印「本次已从备份回滚」（`:451` vs `:515`），失败时序上是不实陈述；三脚本对 BOM/CRLF 的口径不一致 + 无文件锁（两个 MCP 会话同时 `set` 同一 `.ioc` 会 lost-update，属**未登记的真实竞态**）；`resolve_init_symbol` 在多定义时 FAIL 造成假红（分面静态复现） | 逐条小修；竞态建议至少在文档登记，或用 `O_EXCL` 锁文件 |
+
+> §4.9 的 BOM/并发竞态**是已登记 TOCTOU 之外的另一类并发问题**：TOCTOU 说的是路径校验与打开之间，
+> 这里说的是「读-改-写整个 `.ioc`」没有互斥，两者不要混为一谈。
+
+---
+
+### 4.10 【P0 / A-21】`ioc_field set` 的 `value` 含换行即可向 `.ioc` 注入任意键（纯内存复现已坐实）
+
+两个分面独立提出、并由功能性分面完成复现；主审据此把先前「存疑」升级为 P0：
+
+- `lib/server.mjs:563–565` 用 `--` 把 `action/key/value` 作为位置参数传给 Python；
+  `spawnSync` 的 argv **允许字符串里含 `\r` / `\n`**，入口 `validateArgs()`（`:421–474`）只查类型 / enum / 必填，
+  **不查内容**。
+- `scripts/ioc_field.py:147+` 的 `set_value()` 按行读写 `.ioc`，`value` 未做换行拒绝。
+  分面用纯内存构造 `value = "GPIO_Output\r\nMcu.IP5=USART1\r\nPA9.Signal=USART1_TX"` 复现：
+  工具回 `changed=true` / `rc=0`，**一次 `set` 把三行写进了 `.ioc`**。
+
+**为什么是 P0 而不只是「能力边界没护栏」**：
+
+1. 它同时击穿了两条红线 —— `SKILL.md:3/29–31` 宣称「非 GPIO 外设增改没有工具能力」，
+   而这里只要一个换行就能写入 `Mcu.IP5=USART1`；
+   `SKILL.md:79–80` 与 D9 的「只在 testbeds 副本里写」由路径白名单守着，
+   但**注入的是内容而不是路径**，白名单看不见。
+2. 它让 §4.9 A-20 从「能改一个键」升级为「能**新增任意键**」，
+   且 `ioc_backup` 的 SHA-256 sidecar 只能证明「还原到了这份被改过的文件」，
+   **证明不了没被注入**（备份发生在写之前，内容本身已被污染）。
+3. G1 对「参数级 / 漏 `IPParameters`」失明（已登记限制），
+   所以注入后的 `.ioc` 很可能生成出**日志干净、构建通过、但外设不存在**的固件 ——
+   正是本项目最反对的假绿形态。
+
+**建议**：`validateArgs()` 与 `set_value()` 双层拒绝 `key` / `value` 中的 `\r` / `\n`
+（或显式转义并写进 `structuredContent`），返回 `isError` 而不是静默写入；
+补负样本回归（含 CRLF / LF / 尾部空格变体）。与 A-20 是**同一处修复**，按一条 P0 计。
+
+> **按一条计**：架构分面已确认这与功能性分面 P0-3 是同一条，
+> 总表只记 A-21，不重复计数。
+
+---
+
 ## 5. 测试 / CI / 发布 / 文档一致性
 
 ### 5.1 两道机器校验都没有覆盖「操作面状态」
@@ -419,7 +567,7 @@ project_root=有 Core/Src 但为空      verdict=pass  errors=0  (mx_script_abs_
 `tools/check_taskboard.py` 校验快照 / 证据路径 / tag，`tools/check_release.py` 校验四处版本轴 + 发布正文。
 两者都不读 `SKILL.md` / `README.md` 里的**状态陈述**。结果就是下面这张表：
 
-### 5.2 【P1】过期 / 自相矛盾陈述清单（L5 已达成，操作面仍写「无硬件」）
+### 5.2 【P0 / A-5】过期 / 自相矛盾陈述清单（L5 已达成，操作面仍写「无硬件」）
 
 | 位置 | 原文片段 | 当前事实 | 建议 |
 |---|---|---|---|
@@ -436,6 +584,34 @@ project_root=有 Core/Src 但为空      verdict=pass  errors=0  (mx_script_abs_
 
 `git log -- SKILL.md` 显示 `9fac316`（L5 收口）之后 SKILL.md **只被 `76e28dc` 改过 §0.3 一处**，
 §6 从来没有同步过 —— 说明这不是一次漏改，而是**状态真源与操作面之间没有机器校验的结构性缺口**。
+
+> **定级更正（主审采纳效率分面补充，A-5 由 P1 升 P0）**：初稿把它当「文档漂移」，
+> 分面补出的三条证据说明它其实会让 agent **得出并执行错误结论**：
+> ① `SKILL.md` **内部自相矛盾** —— `:83`（§0.3 红线 2）已引用同一份 phase2 报告的 F4 现场
+> （「烧录成功 + 寄存器正确 + 人眼无现象」），`:276` 也吸收了「2026-11-04 实测」的超时结论，
+> 而 `:378` / `:394` 仍写「无硬件」「本节一律按**无能力**对待」；
+> ② frontmatter `:3` 把「烧进去看看」「串口有输出吗」列为**触发词**，命中后 agent 按 §6
+> 会直接回复「无硬件不支持」，不会去用 `phase2-bringup-2026-11-04.md:193–209` 已有的复现命令
+> ⇒ **走错路径概率接近 1**；
+> ③ `:327` 说 L5「一律缺」而 §4 提交模板 `:349` 又要求声明 `L<n>` ⇒ agent 无法为已达 L5 的场景
+> 正确声明等级，只能降级报 L3/L4 或反过来报错；
+> ④ **代价补强（效率分面 + 测试/CI/发布分面共同补出，不新增条目）**：
+> `SKILL.md:413`（§7）把 agent 明确导向 `docs/TASKBOARD.md`「唯一状态真源」，
+> 而 TASKBOARD.md 的 Phase 2 六项 / GATE 关卡**同样写「挂起 / 无硬件」**（见 A-28）。
+> agent 在 §6 读到「按无能力对待」后去真源复核，会**第二次得到同样的错误结论**
+> ⇒ 错误路径被钉死、几乎无法自纠。这也正好坐实「`check_taskboard.py` 只校验表↔快照内部一致、
+> 抓不到与事实不符」的危害：**真源自洽但仍然错**。
+>
+> 与 A-1 的区别：A-1 让 agent **绕开 MCP 工具**，A-5 让 agent **放弃整个 Phase 2 能力**，
+> 两条都是「能力宣称与实际可达性脱节」，但路径独立，按两条 P0 计。
+>
+> **修法必须分段更新，不能整体翻转**（分面建议，主审认同）：
+> 已达 L5 的（烧录 / 寄存器回读 / 目视 / LED 现象）→ §6.1 改「已实测（2026-11-04）」、
+> §3 L5 行去掉「一律缺」、§6 标题去掉「挂起」；
+> **仍未覆盖的要如实保留** —— 串口段（phase2 报告 `:175` 明确「本工程未启用任何 USART」）、
+> `pio device monitor` 未实测 ⇒ `:96` 只保留 monitor 的「未实测」、`:134` 拆成
+> 「烧录已实测 / 串口未实测」；`:78` 的 GATE-2.1 安全确认**保留**，只去掉「无硬件」前提；
+> §7 参考清单补上 `docs/reports/phase2-bringup-2026-11-04.md`（它是 L5 真源，却唯一没被 §7 列出）。
 
 **建议（机制）**：给 CI `lint` job 加一条轻量扫描，禁止 `SKILL.md` / `README.md` 出现
 「无硬件 / 整体挂起 / 未实测（无硬件）」等已失效状态词，
@@ -462,10 +638,13 @@ project_root=有 Core/Src 但为空      verdict=pass  errors=0  (mx_script_abs_
 
 | 漏项 | 为什么不该漏 |
 |---|---|
-| `releases/2026-11-04-v0.7.2.md` | 当前版本的发布正文；`docs/README.md:57` 反而把 `v0.7.1` 标成「当前版本」 |
-| `reports/phase2-bringup-2026-11-04.md` | **唯一的 L5 证据报告**，接板首日的全部结论都在这里 |
-| `reports/t0-redaction-audit.md` | 脱敏审计结论（安全相关） |
-| `reports/audit-2026-11-04-agent-engineer.md` | 本报告（本轮交付时已补入索引） |
+| `releases/2026-11-04-v0.7.2.md` | 当前版本的发布正文；`docs/README.md:57` 反而把 `v0.7.1` 标成「当前版本」｜**仍未补** |
+| `reports/phase2-bringup-2026-11-04.md` | **唯一的 L5 证据报告**，接板首日的全部结论都在这里｜✅ 本轮已补入索引 |
+| `reports/t0-redaction-audit.md` | 脱敏审计结论（安全相关）｜**仍未补** |
+| `reports/audit-2026-11-04-agent-engineer.md` | 本报告｜✅ 本轮已补入索引 |
+
+> 效率分面复核后特别提示：按**当前 HEAD** 计，真漏项已从 4 个降到 **2 个**
+> （`v0.7.2` 发布正文、`t0-redaction-audit.md`）；本报告不把已补入的两项继续算作缺口。
 
 `docs/releases/README.md:21` 里 **0.7.2 台账行是齐的**，所以问题只在总索引漂移。
 结合 §5.2 的 D 编号与版本措辞，说明这个「一页索引」缺机器校验。
@@ -483,7 +662,10 @@ project_root=有 Core/Src 但为空      verdict=pass  errors=0  (mx_script_abs_
   （拒绝执行一项已验证的能力、把可声明 L5 的结论压成 L3）。
 - 佐证：`git log -- SKILL.md` 显示 `9fac316` 之后 SKILL.md 只被 `76e28dc` 改过 §0.3 一行组，§6 从未动过。
 
-**裁定**：保留为 **P1（A-5）**，并在 §5.2 逐条列出 11 处位置。
+**裁定**：保留为发现，并在 §5.2 逐条列出 11 处位置。
+**级别以定稿为准**：初稿定 **P1**，效率分面与测试/CI/发布分面补出「错误路径被真源二次确认、
+触发词直接命中、L5 无法声明」三条代价后，主审**升为 P0**（完整依据见 §5.2 的定级更正框）。
+本节的「排除 vs 保留」之争与级别之争是两件事，不要据此把 A-5 读回 P1。
 
 ---
 
@@ -509,7 +691,9 @@ project_root=有 Core/Src 但为空      verdict=pass  errors=0  (mx_script_abs_
 新增一个未覆盖的分支就可能把 CI 判红，反过来也说明这个门槛几乎不提供保护；
 建议要么随覆盖率上升逐步抬门槛，要么改成「只允许下降不超过 N 点」的相对门禁。
 
-**CI / 发布链复核结论：这一段是扎实的，不要动**：
+**发布链复核结论（经测试/CI/发布分面补充后修正）**：**工程细节扎实，但门禁层有三条 P0 缺口**，
+因此初稿「这一段是扎实的，不要动」的判断**已被主审撤回**，三条缺口见 §5.7。
+下面这些确实做得好、修门禁时不要顺手拆掉：
 - 顶层 4 个 job（`pytest` / `node` / `windows` / `lint`）经 matrix 展开为 7 个，与 D35 修正后口径一致；
 - `lint` job 显式 `fetch-depth: 0`，理由写清了「浅克隆会让判据③静默降级成 note」——
   这是把「静默跳过等于假装检查过」落到配置层的范例；
@@ -525,40 +709,112 @@ project_root=有 Core/Src 但为空      verdict=pass  errors=0  (mx_script_abs_
 
 ---
 
+### 5.7 【P0×3 / P1×4 / P2】发布与门禁链（测试/CI/发布分面，主审复核）
+
+| 编号 | 级别 | 事实 | 后果 / 建议 |
+|---|---|---|---|
+| **A-22** | **P0** | `tools/check_release.py` 自称「版本轴 + 发布正文 + 未发版提醒」的**机器校验**，三条判据实际只查：本地四处版本同值、tag 存在、发布正文文件存在、HEAD 领先提醒；**不查** npm registry 上该版本是否真在、GitHub Release 是否存在、`docs/releases/README.md` 台账是否回填、工作区是否干净、CI 是否绿。`--network` 的 `npm_dist_tags()`（`:233–263`）只打 WARN、rc 仍 0，且 `npm view` 未带官方 `--registry` | 本机 `npm view` 默认读 npmmirror（只同步到 0.7.1/0.7.0），绿灯可能建立在错误数据源上；`docs/releases/README.md` 把 `check_release` 绿当「三证齐全」证据之一 ⇒ **「轴一致」被当成「发布收口」**。建议：改名或补齐判据；发版 SOP（D35）明确「哪些机器查、哪些人核」；`npm view` 显式官方源；台账回填加机械校验 |
+| **A-23** | **P0** | `.github/workflows/publish.yml` 的 `on:` 同时含 `workflow_dispatch` 与 `release: published`，但 `publish` job **不校验 tag == package.json、不校验 Release 存在、不跑 `check_release.py` / `check_taskboard.py`**；只跑 `pytest tests/ -q` | 手动 dispatch 可在任意 master 提交上发版 ⇒ 无 tag / 无 Release / 看板未收口也能把包推出去。D35 / GATE-3.1 的「发版前证据包 + 用户明确放行」目前**完全靠人**，机器不设防。建议：job 开头加 `check_release.py --network`（判红）+ `check_taskboard.py` + `github.ref`/tag 一致性；dispatch 要求输入 tag 或收窄为仅 release 事件 |
+| **A-24** | **P0** | `tools/npm_mcp_handshake.mjs` 在 CI 的 ubuntu node 22 档只带 `--ci`、**没带 `--require-materials`**，缺素材时 T6（`verify_generation` 真调用）恒 SKIP | **措辞精确化（分面更正，主审采纳）**：不是「完全静默」—— `skipCheck()` 会打 `⏭ SKIPPED: …`，但 **headline 与退出码只看 `fail`**，于是 `pass=11 skip=1` 仍输出 `[HANDSHAKE SMOKE] PASS` ⇒ 绿灯被读成「MCP 工具通道全测过」。建议：headline 改成 `PASS (with N SKIP)` 并把 skip 写进 Job Summary，或给 CI 提供真素材让 T6 真跑 |
+
+**P1 四条**：
+
+| 编号 | 事实 |
+|---|---|
+| A-25 | **R1 三项裁决新增分支零覆盖**：`log_tail_stalled_at_loadconfig()` / `report_migrate_stall()` / `--fail-fast-on-migrate` 与超时回滚路径在 `tests/` 里没有对应用例；`tests/test_regen_preflight.py` 只测三档前置提示。详见下方「R1 具体缺陷」 |
+| A-26 | **测试数字四套口径**：`74 / 77 / 72 / 94`（Python）、`37`（Node）、`12`（冒烟）、`pass=11 skip=1`（CI）散落在看板 / README / 发布正文，多数是不同时间点快照却没标基准，读者无法判断哪个是当前值 |
+| A-27 | `check_taskboard.py` 判据③只做**全局代理**（「存在任意 v0.6/v0.7 tag ⇒ T3.5 不得待开始」），不校验当前版本 tag；`TAG_RE = ^v0\.[67]\.\d+` 把版本前缀钉死，发到 `v0.8.0` 后该判据**自动失效且不会报警** |
+| A-28 | **状态真源内部与事实不符、且散文与表格自相矛盾**：`docs/TASKBOARD.md:46–48` 仍写「**当前会话无硬件**（GATE-D 已确认，Phase 2 整体后移）」、Phase 2 六项（T2.1–T2.6）与 `:172–174` 的 GATE-2.0/2.1/2.2 **全为「挂起」**，而 `:158` 的 R2 行已是「已完成 / **L5**」；`:204` 快照里 Phase 2 仍是 `0 完成 / 6 挂起`；散文写「批次表 10 条、合计 **35**」而 `:207` 表格与 `:208` 合计行是 **11 / 36**。`check_taskboard.py` 只校验表↔快照内部自洽，所以 `rc=0` 抓不到「账算对了、事实错了」。⚠️ 本轮**未擅自改状态真源**（会连锁改快照），留作独立批次 |
+
+> **R1 零覆盖的三个具体缺陷（功能性分面补充，主审采纳；按 A-25 一条计，不重复计数）**：
+> ① `regen.sh:232–246` 的超时归因是「尾部 10 行宽匹配」，成功日志尾部若含 `Begin LoadConfig`
+> 且窗口内无 `Change cursor` 就会**误归因**；② `:451` 的「本次已从备份回滚」打印在
+> `:515` 的 `rollback_project` **之前**，是时序上的不实陈述；③ 提示匹配按「行首 + 精确字符串」，
+> 值变体（大小写 / 尾随空格）会漏。
+> **补测不能只加 happy-path**，必须含负样本与值变体。好消息是素材现成：
+> `docs/logs/phase4/02-first-generate.log`、`04-first-generate-retry.log` 已入库，
+> `phase2-bringup-2026-11-04.md` 还记了一次「真超时但尾部未命中 ⇒ 不能归因」的现场
+> ⇒ 可直接做自动回归，不必造假素材（这也符合本仓 T6 有意保留 SKIP 的取舍）。
+
+**P2 合集（B-10）**：散文数字与表格口径不一（A-28 已列）、D 编号重号、
+「三证 / 四证」口径不统一、若干测试为「只查字符串包含」的弱断言、
+跨平台差异未在测试里覆盖、`.coverage` 陈旧产物、
+owner 声明与实际改动角色冲突（`SKILL.md:416`）、历史 CI job 数（2 vs 7）未标时间点。
+
+**分面特别提示（主审照录，避免误报）**：
+`docs/guides/gate-2.0-checklist.md:174` 的 F4「首烧目标勘误」**已在当前 HEAD 完成**，
+审定不得把它报成「未做」；`docs/releases/2026-11-04-v0.7.2.md` 里三条 CLI 命令
+与脚本 argparse **逐一对得上**，这是发布正文里少见地经得起复核的一处。
+
+---
+
 ## 6. 发现总表
 
 > 「需发版」= 修改落在随 npm 包分发的文件（SKILL.md / lib / scripts / package.json）里，
 > 修完要新补丁版才能到达用户；纯 CI / 仓库文档改动不需要。
 
+**合计 37 条：P0 10 / P1 17 / P2 10**。一条缺陷只计一次；
+分面重复提出的合并到同一编号，定级变化以定稿为准，过程留在 §2.8 / §5.2 / §5.5 / §5.7。
+
+**P0（10 条）**
+
 | 编号 | 级别 | 标题 | 章节 / 关键证据 | 需发版 |
 |---|---|---|---|---|
 | **A-1** | **P0** | SKILL 的「MCP 通道」列外部 server 工具，与本包 3 个工具零交集 ⇒ MCP 能力不可达 | §2.2 `SKILL.md:43`, `:127–134` vs `lib/server.mjs:190–281` | 是 |
+| **A-5** | **P0** | SKILL/README/TASKBOARD 仍写「无硬件 / Phase 2 挂起」，与已达成的 L5 相反；真源复核会二次确认错误路径 | §5.2 逐条 11 处；§5.5 主审裁定；**初稿 P1 → 定稿 P0** | 是 |
 | **A-7** | **P0** | MCP 通道不落 `verify.json`，而全流程把它当 L4 证据 | §2.7 `lib/server.mjs:297–329` vs `SKILL.md:351` | 是 |
-| **A-11** | **P0** | `expect_pins` 有 / `ioc` 无 → 静默 `skip`，`verdict` 仍 `pass`（L2 实测） | §4.2 `verify_generation.py:920–928`, `:1429`；`lib/server.mjs:421–474` | 是 |
-| **A-14** | **P0** | `--project-root` 指错目录 → 静默退回单文件扫描，`verdict` 仍 `pass`（L2 实测） | §4.5 `verify_generation.py:406–446` | 是 |
-| A-2 | P1 | `readOnlyHint=true` 与实际写盘、三处文档口径矛盾 | §2.3 `lib/server.mjs:201`, `SKILL.md:142–145`, 注册指南 `:61` | 是 |
-| A-3 | P1 | 随包 SKILL 的 7 个 `docs/` 引用是死链（含接板清单、板卡对照） | §2.5 `package.json:25–36`, `lib/server.mjs:620–636` | 是 |
-| A-4 | P1 | 「`--log` 必须是真日志」只有文档护栏；空日志仅 warn，仍 `pass` | §4.1 `verify_generation.py:604–618`, `:1671–1674`, `:1429` | 是 |
-| A-5 | P1 | SKILL/README 共 11 处停在「无硬件 / 挂起」，与已达成的 L5 相反 | §5.2 逐条清单；§5.5 主审裁定 | 是 |
+| **A-11** | **P0** | `expect_pins` 有 / `ioc` 无 → 静默 `skip`，`verdict` 仍 `pass`（主审 L2 只读实测） | §4.2 `verify_generation.py:920–928`, `:1429`；`lib/server.mjs:421–474` | 是 |
+| **A-14** | **P0** | `--project-root` 指错目录 → 静默退回单文件扫描，`verdict` 仍 `pass`（主审 L2 只读实测） | §4.5 `verify_generation.py:406–446` | 是 |
+| **A-17** | **P0** | 核验器不认 `KO` 行、也不认日志形态：`references/README.md` 当 `--log` ⇒ `verdict=PASS errors=0`（分面可复跑实跑） | §4.8 `verify_generation.py:584–618`, `:1671–1674` vs `regen.sh:403–408` | 是 |
+| **A-21** | **P0** | `ioc_field set` 的 `value` 含 `\r\n` 可注入任意 `.ioc` 键；**含 A-20「能力边界无护栏」**（纯内存复现坐实） | §4.10 `lib/server.mjs:563–565`, `scripts/ioc_field.py:147+`；§4.9 | 是 |
+| **A-22** | **P0** | `check_release.py` 只比本地版本轴，不查 npm / Release / 台账；`--network` 只 WARN 且未带官方 registry | §5.7 `tools/check_release.py:233–263` | 否 |
+| **A-23** | **P0** | `publish.yml` 的 `workflow_dispatch` 可在无 tag / 无 Release / 看板未收口时发版 | §5.7 `.github/workflows/publish.yml` | 否 |
+| **A-24** | **P0** | T6 恒 SKIP 时 `npm_mcp_handshake.mjs` 仍输出 `[HANDSHAKE SMOKE] PASS`、rc=0 | §5.7 `tools/npm_mcp_handshake.mjs` + `ci.yml` node 22 档 | 否 |
+
+**P1（17 条）**
+
+| 编号 | 级别 | 标题 | 章节 / 关键证据 | 需发版 |
+|---|---|---|---|---|
+| A-2 | P1 | `readOnlyHint=true` 与实际写盘、三处文档口径矛盾 | §2.3 `lib/server.mjs:201`, `SKILL.md:142–145` | 是 |
+| A-3 | P1 | 随包 SKILL 的 7 个 `docs/` 引用是死链（含接板清单、板卡对照） | §2.5 `package.json:25–36` | 是 |
+| A-4 | P1 | 「`--log` 必须是真日志」只有文档护栏；空日志仅 warn，仍 `pass` | §4.1 `verify_generation.py:604–618`, `:1429` | 是 |
 | A-6 | P1 | 状态真源与操作面之间无机器校验，漂移可再次发生 | §5.1 两道校验均不读 SKILL/README | 否（CI） |
-| A-8 | P1 | MCP 层与脚本层契约未对齐（4 子项：ETIMEDOUT 误归因 / 未知参数静默 / `action` 默认三方矛盾 / `readJson` 吞错） | §2.8 `lib/server.mjs:587–596`, `:421–474`, `:239/253`, `:319–327` | 是 |
+| A-8 | P1 | MCP 层与脚本层契约未对齐（**3 子项**：ETIMEDOUT 误归因 / 未知参数静默 / `readJson` 吞错；第 4 项降 P2 并入 B-4） | §2.8 `lib/server.mjs:587–596`, `:421–474`, `:319–327` | 是 |
 | A-9 | P1 | 返回文本含必然失效的临时路径；「verdict/checks」提示对 2/3 工具不成立 | §3.4 `verify_generation.py:1705`, `lib/server.mjs:613` | 是 |
 | A-10 | P1 | SKILL 的 L2 命令引用本仓不存在的 `stdio_port.c` / `AGENTS.md` | §3.5 `SKILL.md:318`, `:329–336` | 是 |
-| A-12 | P1 | SKILL 第 2 步与第 5 步回滚口径自相矛盾，其中 `git checkout --` 会丢用户改动 | §4.3 `SKILL.md:230–231`, `:287`, `regen.sh:113` | 是 |
-| A-13 | P1 | `docs/README.md` 索引漏掉 0.7.2 正文 / L5 报告 / 脱敏审计 / 审定报告，且把 0.7.1 标「当前版本」 | §5.4 脚本比对 49 份 md | 否 |
+| A-12 | P1 | SKILL 第 2 步与第 5 步回滚口径自相矛盾，`git checkout --` 会丢用户改动 | §4.3 `SKILL.md:230–231`, `:287` | 是 |
+| A-13 | P1 | `docs/README.md` 索引真漏项 **2 个**（0.7.2 正文 / 脱敏审计；另 2 项本轮已补），且把 0.7.1 标「当前版本」 | §5.4 脚本比对 49 份 md | 否 |
 | A-15 | P1 | `spawnSync` 同步阻塞 + 120 s，单 server 串行，超时又被误归因（与 A-8①叠加） | §2.4 `lib/server.mjs:310–317` | 是 |
-| A-16 | P1 | `physical()` 全链解析失败时退回纯词法路径（fail-open），与「物理路径才是判据」承诺冲突 | §2.9 `lib/server.mjs:128–146` | 是 |
-| B-1 | P2 | 触发词覆盖本包做不到的 4 类任务；返回噪声与 12 000 字符尾部截断 | §3.2/§3.3 `SKILL.md:3`, `lib/server.mjs:291–294`, `:611–614` | 是 |
-| B-2 | P2 | 无 `outputSchema`；`structuredContent` 无体积上限；长 stdout 会截掉首行 `verdict` | §3.3 `lib/server.mjs:190–281`, `:375–380` | 是 |
-| B-3 | P2 | 单写者名分、工具数量措辞、发布台账「当前版本」、D 编号四处小漂移 | §5.3 `SKILL.md:416`, `:413`, `README.md:271`, `docs/README.md:57` | 否 |
-| B-4 | P2 | `ListTools` 夹带内部字段；临时目录写盘未声明；bin 可执行位 / Promise 未 catch；SDK 95 包依赖 | §2.9 | 部分 |
-| B-5 | P2 | 编码加固未覆盖 `tools/*`；`--log` 读入前无形态校验；`regen.sh` 参数组合缺负样本 | §4.7 | 否 |
-| B-6 | P2 | 两套入口（regen.sh / verify_generation.py）参数面不同，SKILL 未讲清何时用哪个 | §4.6 F-04 降级后的有效部分 | 否 |
-| B-7 | P2 | 硬编码 Windows CubeMX 路径（已有 env 覆盖、已登记），可升级为自动探测 | §4.6 F-07 降级 | 否 |
-| B-8 | P2 | `regen.sh` 头部 sandbox 约定注释与代码不逐条对应 | §4.7 | 否 |
+| A-16 | P1 | `physical()` 全链解析失败时退回纯词法路径（fail-open） | §2.9 `lib/server.mjs:128–146` | 是 |
+| A-18 | P1 | `regen.sh` 带值选项漏参时 `shift 2` 不改变参数个数 ⇒ 死循环（`timeout 5` 复现） | §4.9 `regen.sh:132–209` | 是 |
+| A-19 | P1 | `exit "$VERIFY_RC"` 透传 `9009` / `127` / 信号码，破坏 `{0,1,2}` 契约 | §4.9 `regen.sh:556` vs `regen-exit-codes.md` | 是 |
+| A-25 | P1 | R1 新增分支零测试覆盖（超时归因 / `--fail-fast-on-migrate` / 回滚 / 值变体） | §5.7 `tests/test_regen_preflight.py` | 部分 |
+| A-26 | P1 | 测试数字四套口径（74/77/72/94、37、12、pass=11 skip=1）未标基准 | §5.7 看板 / README / 发布正文 | 部分 |
+| A-27 | P1 | `check_taskboard.py` 判据③只做全局代理，`TAG_RE` 钉死 `^v0\.[67]` ⇒ 发到 0.8 自动失效 | §5.7 `tools/check_taskboard.py` | 否 |
+| A-28 | P1 | TASKBOARD 自身与事实不符、散文 35 与表格 36 自相矛盾；`rc=0` 抓不到「账对、事实错」 | §5.7 `docs/TASKBOARD.md:46–48`, `:158`, `:204–208` | 否 |
 
-**未计入发现**：功能性分面 F-04（主审核实为误报，§4.6）、F-07（已登记，§4.6）、
-架构分面的换行注入猜想（待实测，§2.8）、以及 §4.4 列出的 6 类已登记已知限制。
+**P2（10 条，含合并列示）**
+
+| 编号 | 级别 | 标题 | 章节 / 关键证据 | 需发版 |
+|---|---|---|---|---|
+| B-1 | P2 | 触发词覆盖本包做不到的 4 类任务；返回噪声与 12 000 字符尾部截断 | §3.2/§3.3 `SKILL.md:3`, `lib/server.mjs:611–614` | 是 |
+| B-2 | P2 | 无 `outputSchema`；`structuredContent` 无体积上限；长 stdout 会截掉首行 `verdict` | §3.3 `lib/server.mjs:190–281` | 是 |
+| B-3 | P2 | 单写者名分、工具数量措辞、发布台账「当前版本」、D 编号四处小漂移 | §5.3 `SKILL.md:416`, `:413`, `README.md:271` | 否 |
+| B-4 | P2 | `ListTools` 夹带内部字段；临时目录写盘未声明；bin 可执行位 / Promise 未 catch；SDK 95 包依赖；**含 §2.8 降级第 4 项**（`action` 默认三方口径） | §2.9 / §2.8 | 部分 |
+| B-5 | P2 | 编码加固未覆盖 `tools/*`；`--log` 读入前无形态校验；`regen.sh` 参数组合缺负样本 | §4.7 | 否 |
+| B-6 | P2 | 两套入口参数面不同，SKILL 未讲清何时用哪个（F-04 误报驳回后的有效部分） | §4.6 | 否 |
+| B-7 | P2 | 硬编码 Windows CubeMX 路径（已有 env 覆盖、已登记），可升级为自动探测 | §4.6 | 部分 |
+| B-8 | P2 | `regen.sh` 头部 sandbox 约定注释与代码不逐条对应 | §4.7 | 部分 |
+| B-9 | P2 | `*.ioc.bak.sha256` 未忽略；`--dry-run` 仍 `mkdir -p`；回滚时序不实；BOM/CRLF 口径不一；双会话 lost-update 竞态；`resolve_init_symbol` 假红 | §4.9 | 部分 |
+| B-10 | P2 | 散文/表格口径、D 编号重号、三证/四证、弱断言、跨平台未覆盖、`.coverage` 陈旧、owner 冲突、历史 job 数未标时间点 | §5.7 | 否 |
+
+**未计入发现（去重 / 驳回 / 已登记）**：
+`A-20`（能力边界无护栏，与 `A-21` 同根 ⇒ 并入 A-21）、
+架构分面「换行注入猜想」（**已由分面纯内存复现坐实**，升级为 A-21，不再算存疑）、
+功能性分面 F-04（主审核实为误报，§4.6）、F-07 硬编码路径（已登记，§4.6，仅留 B-7 改进项）、
+「POSIX↔Windows 路径」6 种组合实跑全绿（不是 bug，§4.6）、
+`gate-2.0-checklist.md` F4 勘误与 0.7.2 发布正文三条 CLI 命令（**已在当前 HEAD 完成 / 经复核正确**，§5.7）、
+以及 §4.4 列出的 6 类已登记已知限制。
 
 ---
 
@@ -594,23 +850,34 @@ project_root=有 Core/Src 但为空      verdict=pass  errors=0  (mx_script_abs_
 
 ## 8. 处置建议（按优先级，不排期、不擅自改实现）
 
-1. **先堵假绿（最优先，因为会产出错误结论）**：A-11 参数联动校验、A-14 `--project-root` 有效性判据、
-   A-4 日志真实性判据，三条一起加进 `verify_generation.py` / `validateArgs`，
-   并补负样本回归（「只给 expect_pins 不给 ioc 必须不能 pass」「空日志必须不能 pass」
-   「project_root 指到空目录必须不能 pass」「传 MCP 返回文本必须不能 pass」）。
-   这三条都不改判据语义，只补前置校验，风险最低。
-2. **修操作面**：A-1 + A-5 + A-10 + A-12 合批处理，一次把 SKILL.md 的
-   「本包 3 个工具 / 通道判据 / Phase 2 现状 / L2 命令 / 回滚口径 / D 编号 / 触发词」写对，
-   README.md 与 docs/README.md 同步。**投入最小、收益最大**的一批。
-3. **讲清证据口径**：A-7 在 SKILL 第 5 步写清「走 MCP 时证据是 `structuredContent`，不产生 `verify.json`」，
-   顺手修 A-9 的死路径提示与 A-8 的 4 处契约缺口（其中「未知参数拒绝」只需 3 行）。
-4. **补随包可达性**：A-3 选最小方案（两份指南进 `files` + 顶部注明 `docs/` 仅仓库可见）；
-   A-2 注解、A-16 fail-open、A-15 阻塞调用一并处理。
-5. **机制化**：A-6 的 CI 状态词扫描（防操作面再次漂移）+ A-13 的索引完整性检查。
-6. P2（B-1…B-8）按顺手程度并入同一补丁版，不必单独开发。
+1. **先堵假绿（最优先，因为会产出错误结论）**：A-11 参数联动、A-14 工程根有效性、
+   A-17 `KO` 行 / 日志形态、A-4 空日志，四条合并成一个 `validate_evidence_inputs()`
+   加进 `verify_generation.py` 与 `validateArgs`；配四个负样本回归（漏传 `ioc` 不能 pass、
+   工程根指到空目录不能 pass、传任意文本当日志不能 pass、日志含 `KO` 不能 pass）。
+   不改判据语义、只补前置校验，风险最低、收益最高。
+2. **堵内容注入**：A-21 在 `validateArgs()` 与 `set_value()` 双层拒绝 `key`/`value` 中的
+   `\r`/`\n`，返回 `isError`；同时给非 GPIO 键加 `capability_warning`（把 A-20 的能力边界
+   从「只有 SKILL 文字」变成 agent 可机读的字段）。补 CRLF / LF / 尾空格变体负样本。
+3. **修操作面**：A-1 + A-5 + A-10 + A-12 合批处理，一次把 SKILL.md 的
+   「本包 3 个工具 / 通道判据 / Phase 2 现状（分段更新，串口段如实保留未实测）/ L2 命令 /
+   回滚口径 / D 编号 / 触发词」写对，README.md 与 docs/README.md 同步；
+   A-5 还要同步 `docs/TASKBOARD.md` 的 Phase 2 与 GATE 状态（与 A-28 一起做，会连锁改快照，
+   **必须单独一批并跑 `check_taskboard.py`**）。**投入最小、收益最大**的一批。
+4. **讲清证据口径**：A-7 在 SKILL 第 5 步写清「走 MCP 时证据是 `structuredContent`，
+   不产生 `verify.json`」，顺手修 A-9 死路径提示与 A-8 的三处契约缺口
+   （其中「未知参数拒绝」只需 3 行，且与第 1 批共用 `validateArgs`）。
+5. **补发版门禁**：A-22 给 `check_release.py --network` 加官方 registry + 台账 / Release 判红；
+   A-23 在 `publish.yml` job 开头跑 `check_release.py` / `check_taskboard.py` 并校验 tag；
+   A-24 把 SKIP 数写进 headline 与 Job Summary。**注意别把 `check_release.py` 挂进 CI**
+   （§5.6 已说明那是有意取舍），门禁只加在发布流。
+6. **补随包可达性与机制化**：A-3（两份指南进 `files` + 注明 `docs/` 仅仓库可见）、
+   A-2 注解、A-16 fail-open、A-15 阻塞调用；A-6 的 CI 状态词扫描 + A-13 索引完整性检查；
+   A-25 用 `docs/logs/phase4/` 现成素材补 R1 负样本回归（不必造假素材）。
+7. P2（B-1…B-10）按顺手程度并入同一补丁版，不必单独开发。
 
 > **不建议**为修这些单独发一个紧急版：0.7.2 的运行正确性没有受影响，
-> 但 1–4 批都落在随包文件里，**合并成一次补丁版**才不会让用户连着升级三次。
+> 但 1–4、6 批里落在 `SKILL.md` / `lib` / `scripts` 的部分**合并成一次补丁版**
+> 才不会让用户连着升级三次；第 5 批（CI / 发布流）与仓库文档随时可改，不必等版本。
 
 **本次审定未修改任何实现文件**；F4 标注（`76e28dc`）与本报告是两笔独立产物。
 
@@ -619,16 +886,19 @@ project_root=有 Core/Src 但为空      verdict=pass  errors=0  (mx_script_abs_
 ## 9. 附录：核对数据
 
 ```text
-HEAD              76e28dc（9fac316..76e28dc 已推 origin/master）
+审定基线 HEAD     76e28dc（9fac316..76e28dc 已推 origin/master，CI 41801100803 success）
+报告落盘          三笔只改 docs/ 的提交（初稿 / 分面回传补注 / 定稿去重与统计统一）
 CI                41801100803 success
 pytest            94 passed in 93.73s
 check_taskboard   rc=0（36 条 / 28 完成 / 0 进行中 / 6 挂起 / 1 待开始 / 1 已关闭）
-check_release     rc=0（0.7.2 四处同值、tag v0.7.2、发布正文在位；HEAD 领先 8 提交属正常）
-文档相对链接      7 份受检文件 / 0 断链
+check_release     rc=0（0.7.2 四处同值、tag v0.7.2、发布正文在位；HEAD 领先属正常）
+F4 批次文档检查    7 份受检文件 / 0 断链
 tools/list        3（verify_generation / ioc_backup / ioc_field）
 SKILL.md          416 行 / 19 274 字符 / 31 719 字节
 references/       6 份 / 35 121 字符
 docs/             49 份 md / 407 599 字符（不随 npm 包分发）
+最终发现计数      P0 10 / P1 17 / P2 10 = 37 条（一条缺陷只计一次）
+报告定稿自查      917 行 / 46 731 字符 / 20 张表 0 列数不一致 / 37 个编号一一对应 / 0 个 Markdown 外链
 ```
 
 ### 9.1 本轮做过的只读实测（L2，均不写仓库文件）
@@ -641,7 +911,7 @@ docs/             49 份 md / 407 599 字符（不随 npm 包分发）
 | **复现 A-11** | `importlib` 载入 `verify_generation.py`，内存里调 `check_pins_present()` 四种入参 | `expect_pins` 有 / `ioc` 无 → `skip`；有 `ioc` 且不符 → `fail`；符合 → `pass` |
 | **复现 A-14** | 内存里调 `verify_documents()`，`project_root` 分别取 `None` / 不存在 / 空目录 / 有空 `Core/Src` | 后两种 `verdict=pass`（`mx_script_abs_path=skip`），不存在的反而 `fail` |
 | 复核分面 F-04（疑似误报） | `regen.sh` usage + 参数解析 + `verify_generation.py --help` | 参数全部存在，SKILL 的命令是裸调核验器 ⇒ 误报 |
-| 报告自查 | 相对链接解析 + 相邻表格列数比对 | 0 断链 / 0 列数不一致 |
+| 报告定稿自查 | 编号定义 vs 全文引用、20 张表列数、章节引用、反引号路径存在性 | 37 个编号一一对应（`A-20` 已显式并入 `A-21`）、0 列数不一致、0 个 Markdown 外链；未解析的路径 token 均为裸文件名、包名、占位符或 A-10「仓内不存在」的举证本身 |
 
 > 临时空目录建在系统 temp 后立即清理；所有 Python 片段都设了 `PYTHONDONTWRITEBYTECODE=1`，
 > **未修改仓库内任何文件**（本报告与 `docs/README.md` 索引两处文档新增除外）。
