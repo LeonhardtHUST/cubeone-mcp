@@ -33,6 +33,7 @@ import {
   checkPath,
   buildArgs,
   validateArgs,
+  applyCapabilityWarning,
   policy,
   allowedRoots,
   requireRootsEnabled,
@@ -548,6 +549,73 @@ describe("组4 validateArgs 入口校验（R-B3）", () => {
       ioc: path.join(TMP, "board.ioc"),
     });
     assert.equal(ok, null, `两者齐备应放行，实际：${JSON.stringify(ok)}`);
+  });
+
+  // W1-1 / A-21：MCP 参数层第一层拒绝（CLI 侧还有第二层，见 test_ioc_field.py）。
+  test("组4-8 key/value 含 CR / LF ⇒ isError，合法值仍放行", () => {
+    const ioc = path.join(TMP, "board.ioc");
+    const cases = [
+      ["key", "Mcu.Name\r\nPA9.Signal=USART1_TX"],
+      ["value", "false\nPA9.Signal=USART1_TX"],
+      ["value", "false \r\nPA9.Signal=USART1_TX"],
+      ["value", "false \nPA9.Signal=USART1_TX"],
+    ];
+    for (const [field, payload] of cases) {
+      const bad = validateArgs("ioc_field", {
+        ioc,
+        action: "set",
+        key: "Mcu.Name",
+        value: "false",
+        [field]: payload,
+      });
+      assert.notEqual(bad, null, `${field} 含换行必须被拒`);
+      assert.equal(bad.isError, true, "必须是可机读的 isError");
+      const text = errorText(bad);
+      assert.ok(text.includes(field), `文案应点名 ${field}，实际：${text}`);
+      assert.ok(/换行|注入/.test(text), `文案应说明原因，实际：${text}`);
+    }
+    const ok = validateArgs("ioc_field", { ioc, action: "set", key: "Mcu.Name", value: "false" });
+    assert.equal(ok, null, "合法写入值必须放行");
+  });
+
+  // W1-2 / A-20：能力层 ≠ 权限层 —— 只加机读告警，不拦截写入。
+  test("组4-9 capability_warning 机读字段存在、文案可读，且不做权限层拦截", () => {
+    const structured = { action: "set", key: "PA9.Signal", changed: true };
+    const warned = applyCapabilityWarning(
+      "ioc_field",
+      { action: "set", key: "PA9.Signal", value: "USART1_TX" },
+      structured,
+    );
+    assert.ok(warned.capability_warning, "命中能力边界必须有机读字段");
+    assert.equal(warned.capability_warning.code, "OUT_OF_TOOL_CAPABILITY");
+    assert.equal(warned.capability_warning.key, "PA9.Signal");
+    assert.ok(
+      /能力边界|手改|G1/.test(warned.capability_warning.message),
+      `文案须可读且给出处置，实际：${warned.capability_warning.message}`,
+    );
+    assert.equal(warned.changed, true, "不得改写 changed（不拦截写入）");
+    assert.equal(warned.action, "set", "原 structuredContent 字段必须保留");
+
+    // 参数层仍放行：能力告警不是权限拦截
+    const ok = validateArgs("ioc_field", {
+      ioc: path.join(TMP, "board.ioc"),
+      action: "set",
+      key: "PA9.Signal",
+      value: "USART1_TX",
+    });
+    assert.equal(ok, null, "set PA9.Signal USART1_TX 必须仍可执行（只带告警）");
+
+    // 不告警的情形：GPIO 值 / 非 .Signal 键 / get / 其它工具 / structured 为空
+    const noWarning = [
+      ["ioc_field", { action: "set", key: "PA9.Signal", value: "GPIO_Output" }, structured],
+      ["ioc_field", { action: "set", key: "Mcu.IP0", value: "USART1" }, structured],
+      ["ioc_field", { action: "get", key: "PA9.Signal" }, structured],
+      ["verify_generation", { action: "set", key: "PA9.Signal", value: "USART1_TX" }, structured],
+      ["ioc_field", { action: "set", key: "PA9.Signal", value: "USART1_TX" }, null],
+    ];
+    for (const [tool, args, payload] of noWarning) {
+      assert.equal(applyCapabilityWarning(tool, args, payload), payload, "不该注入告警");
+    }
   });
 });
 

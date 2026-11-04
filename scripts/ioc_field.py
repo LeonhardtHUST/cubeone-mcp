@@ -109,6 +109,28 @@ def split_line_ending(line: str) -> tuple[str, str]:
     return line, ""
 
 
+def _reject_newlines(key: str, value: str | None = None) -> None:
+    """拒绝 ``key`` / ``value`` 里的回车 / 换行符，防 ``.ioc`` 内容注入（W1-1 / A-21）。
+
+    ``set_value()`` 会把值原样拼进 ``lines[index] = f"{key}={value}{ending}"``；
+    只要 ``value`` 带换行，就能在 ``.ioc`` 里凭空写出任意键值行。护栏分两层：
+    MCP 侧 ``lib/server.mjs`` 的 ``validateArgs()`` 提前给可机读错误；本函数是
+    CLI 侧兜底 —— 直接跑脚本、或经 ``regen.sh`` 调用，同样生效。
+
+    Args:
+        key: 键名。
+        value: ``set`` 时的新值；``get`` 时传 ``None``。
+
+    Raises:
+        ValueError: 任一参数含 CR（回车）或 LF（换行）。``main()`` 统一退 2。
+    """
+    for label, text in (("key", key), ("value", value)):
+        if text is not None and ("\r" in text or "\n" in text):
+            raise ValueError(
+                f"{label} 含换行符（CR / LF），拒绝写入：避免 .ioc 内容注入"
+            )
+
+
 def get_value(path: str | os.PathLike[str], key: str) -> tuple[str | None, int]:
     """读取单键的值。
 
@@ -129,7 +151,9 @@ def get_value(path: str | os.PathLike[str], key: str) -> tuple[str | None, int]:
 
     Raises:
         KeyError: 同名键出现多行（报文含行号列表）。
+        ValueError: ``key`` 含 CR / LF（内容注入护栏，W1-1）。
     """
+    _reject_newlines(key)
     text = read_preserving_newlines(path)
     lines = text.splitlines(keepends=True)
     hits = find_key_lines(lines, key)
@@ -160,8 +184,10 @@ def set_value(
 
     Raises:
         KeyError: 键不存在或存在多行同名键。
+        ValueError: ``key`` / ``value`` 含 CR / LF（内容注入护栏，W1-1）。
         OSError: 读写失败。
     """
+    _reject_newlines(key, value)
     text = read_preserving_newlines(path)
     lines = text.splitlines(keepends=True)
     hits = find_key_lines(lines, key)
@@ -287,6 +313,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"[ioc_field] {args.key}: {result['before']} → {result['after']} "
                 f"（L{result['line']}, {state}）"
             )
+    except ValueError as error:
+        # W1-1：key / value 含换行的注入尝试 → 输入错误（rc=2），.ioc 一个字节都不动。
+        print(f"[ioc_field][input-error] {error}", file=sys.stderr)
+        return EXIT_INPUT_ERROR
     except KeyError as error:
         # `str(KeyError("x"))` 会带上引号（`'x'`）——直接用 args[0] 去掉那层噪音，
         # 否则 stderr 里会出现 `[ioc_field][not-found] 'Mcu.Name 出现 2 次…'` 这种难读形态。

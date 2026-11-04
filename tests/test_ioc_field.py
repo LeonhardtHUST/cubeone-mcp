@@ -165,3 +165,72 @@ def test_missing_ioc_returns_2(tmp_path: Path) -> None:
     """文件不存在 → 退出码 2。"""
     result = run_cli("--ioc", str(tmp_path / "nope.ioc"), "get", "Mcu.CPN")
     assert result.returncode == iof.EXIT_INPUT_ERROR
+
+
+# ---------------------------------------------------------------------------
+# W1-1 / A-21：.ioc 内容注入双层拒绝 + W1-2 能力层不拦截（2026-11-04）
+# ---------------------------------------------------------------------------
+INJECTION_VALUES: tuple[str, ...] = (
+    "false\r\nPA9.Signal=USART1_TX",   # CRLF 注入
+    "false\nPA9.Signal=USART1_TX",     # LF 注入
+    "false \r\nPA9.Signal=USART1_TX",  # 尾空格 + CRLF 注入
+)
+
+
+@pytest.mark.parametrize("payload", INJECTION_VALUES, ids=["CRLF", "LF", "尾空格+CRLF"])
+def test_set_rejects_newline_in_value(ioc_file: Path, tmp_path: Path, payload: str) -> None:
+    """三种变体 ⇒ rc=2、`.ioc` 行数与内容不变、不落 JSON（changed=false 的可观察面）。
+
+    rc=2 不落结构化 JSON，所以 ``changed`` 没有输出；可观察面就是「文件一个字节
+    都没动 + 没有 JSON 报告」（见退出码契约：2 = 输入错误，不落盘）。
+    """
+    before_text = ioc_file.read_text(encoding="utf-8")
+    before_lines = before_text.splitlines()
+    json_out = tmp_path / "field.json"
+    result = run_cli(
+        "--ioc", str(ioc_file),
+        "set", "ProjectManager.AskForMigrate", payload,
+        "--json-out", str(json_out),
+    )
+    assert result.returncode == iof.EXIT_INPUT_ERROR, result.stdout + result.stderr
+    assert "[ioc_field][input-error]" in result.stderr
+    assert "换行" in result.stderr
+    assert ioc_file.read_text(encoding="utf-8") == before_text
+    assert ioc_file.read_text(encoding="utf-8").splitlines() == before_lines
+    assert not json_out.exists(), "rc=2 不得落结构化 JSON"
+
+
+def test_get_rejects_newline_in_key(ioc_file: Path) -> None:
+    """get 入口同样拒绝换行（CLI 直调也要挡，不只 MCP 通道）。"""
+    result = run_cli("--ioc", str(ioc_file), "get", "Mcu.CPN\nPA9.Signal=USART1_TX")
+    assert result.returncode == iof.EXIT_INPUT_ERROR
+    assert "换行" in result.stderr
+
+
+def test_python_entry_points_reject_newlines(ioc_file: Path) -> None:
+    """函数入口层：get_value / set_value 直接调用也抛 ValueError，且文件不变。"""
+    before = ioc_file.read_text(encoding="utf-8")
+    with pytest.raises(ValueError):
+        iof.get_value(ioc_file, "Mcu.CPN\r\nPA9.Signal=USART1_TX")
+    with pytest.raises(ValueError):
+        iof.set_value(ioc_file, "Mcu.CPN", "x\nPA9.Signal=USART1_TX")
+    with pytest.raises(ValueError):
+        iof.set_value(ioc_file, "Mcu.CPN\nPA9.Signal=USART1_TX", "x")
+    assert ioc_file.read_text(encoding="utf-8") == before
+
+
+def test_signal_write_is_not_blocked_by_capability_boundary(tmp_path: Path) -> None:
+    """W1-2：能力层 ≠ 权限层 —— ``set PA9.Signal USART1_TX`` 仍成功、只带告警。
+
+    脚本层不拦、不改 ``changed``；告警字段由 ``lib/server.mjs`` 注入
+    ``structuredContent``（Node 组 4-9 断言），CLI 输出结构保持纯净。
+    """
+    path = tmp_path / "signal.ioc"
+    path.write_text(IOC_BODY + "PA9.Signal=GPIO_Input\n", encoding="utf-8", newline="\n")
+    result = run_cli("--ioc", str(path), "set", "PA9.Signal", "USART1_TX")
+    assert result.returncode == iof.EXIT_OK, result.stdout + result.stderr
+    after = path.read_text(encoding="utf-8")
+    assert "PA9.Signal=USART1_TX" in after
+    assert "PA9.Signal=GPIO_Input" not in after
+    summary = iof.set_value(path, "PA9.Signal", "USART1_TX")
+    assert summary["changed"] is False
