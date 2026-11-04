@@ -118,7 +118,7 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
 | 能力 | 入口 |
 |---|---|
 | **生成核验（G1 硬关卡）** | `scripts/verify_generation.py` —— 契约见 `references/verify-contract.md` |
-| 备份 → 生成 → 核验 → 失败回滚 | `scripts/regen.sh <工程> [-e …] [-o …] [--require-clean]` —— 见 `references/regen-exit-codes.md`。**包内可用**，但编排 CubeMX 生成需本机存在 CubeMX/JRE（路径可用 `ST_CUBEMX_JRE`/`ST_CUBEMX_EXE` 覆盖） |
+| 备份 → 生成 → 核验 → 失败回滚 | `scripts/regen.sh <工程> [-e …] [-o …] [--require-clean] [--fail-fast-on-migrate]` —— 见 `references/regen-exit-codes.md`。**包内可用**，但编排 CubeMX 生成需本机存在 CubeMX/JRE（路径可用 `ST_CUBEMX_JRE`/`ST_CUBEMX_EXE` 覆盖） |
 | `.ioc` 字段读写 / 备份还原 | `scripts/ioc_field.py`、`ioc_backup.py --project <工程根> [--restore\|--list]`。备份会同时落 `<name>.ioc.bak.sha256` 旁路摘要；`--restore` 先校验摘要再原子替换（不一致 → 拒还原、退出码 2、`.ioc` 不动；无摘要的旧备份 → 警告后照常还原）。**不要手删/手改 `.bak.sha256`**——删了就等于放弃篡改检测 |
 
 ### 1.2 双通道对照
@@ -190,7 +190,7 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
 |---|---|
 | `0` | 生成 + 核验通过 |
 | `1` | **跑过了但结果不对**（日志有整行 `KO`，或核验 FAIL）；**已从备份回滚** |
-| `2` | **压根没跑**（`--require-clean` 命中脏 `.ioc`、目录不存在、找不到 CubeMX/java、缺 `.mx`、`--expect` 解析失败） |
+| `2` | **压根没跑**（`--require-clean` 命中脏 `.ioc`、`--fail-fast-on-migrate` 命中 `AskForMigrate=true`、目录不存在、找不到 CubeMX/java、缺 `.mx`、`--expect` 解析失败） |
 
 看到 `2` **不要去翻核验报告**——报告根本没生成。
 ⚠️ **`KO` 判据必要不充分**：抓不到 `set ip parameters` 那种"回 OK 却静默空操作"，
@@ -265,8 +265,14 @@ MCP `cubemx_generate` / CLI §0.4。**stdout/stderr 必须重定向到文件**�
 （故意不污染 `git status`），要入库时显式指到 `docs/logs/phaseN/<场景>/`。
 
 **行为约束**：`regen.sh` **不修改** `.ioc` 中 `ProjectManager.AskForMigrate` 的值；生成后它为 `true`
-属 CubeMX `saveas` 的正常结果，**不要在提交前手工复位**。（`-q` 是否被它阻塞至今零证据；
-生成长时间无输出时先查 `MxCube.Version` 是否低于本机版本——**这条现在是因果结论**（2026-11-04 实测：旧版本戳 + `AskForMigrate=true` 会让 `-q` 挂死 300 s，日志停在 `Begin LoadConfig()`）。见 `references/pitfalls.md` P1。）
+属 CubeMX 的正常结果（`saveas` 与 `project generate` 都会写回），**不要在提交前手工复位**。
+**但生成前会读它**：读到 `true` 就打一条醒目 warn（附可直接复制的置 `false` 命令），
+`--dry-run` 下也照样打；需要"宁可退 `2` 也不要挂住"的场景（CI / 批处理）加 `--fail-fast-on-migrate`。
+生成长时间无输出时先查 `MxCube.Version` 是否低于本机版本——**这条是因果结论**（2026-11-04 实测：
+旧版本戳 + `AskForMigrate=true` 会让 `-q` 挂死 300 s，日志停在 `Begin LoadConfig()`；
+置 `false` 后同一脚本 62 s 成功）。超时后 `regen.sh` 还会按日志形态给**定向诊断**：
+只有末行附近真停在 `Begin LoadConfig()` 才判为此因，否则明确说"不能归因"。
+见 `references/pitfalls.md` P1 与 `references/regen-exit-codes.md` §4.1 / §4.2。
 
 ### 第 5 步 · **生成核验（G1，硬关卡）**
 
@@ -352,7 +358,7 @@ pio run
 
 | # | 症状 → 处置 |
 |---|---|
-| P1 | `AskForMigrate`：`project generate` **也会写回 `true`**（旧判断「不改」已被 2026-11-04 实测推翻）；版本戳更旧 + 该键为 `true` 时 `-q` **挂死 300 s**；仍然**不拦不改不注入**，所以执行者必须自己先置 `false` |
+| P1 | `AskForMigrate`：`project generate` **也会写回 `true`**（旧判断「不改」已被 2026-11-04 实测推翻）；版本戳更旧 + 该键为 `true` 时 `-q` **挂死 300 s**（置 `false` 后 62 s 成功）。`regen.sh` **不改值、默认不拦**，但**生成前会告警**（`--fail-fast-on-migrate` 可把告警变退 `2`），超时后按日志形态定向诊断。执行者仍必须自己先确认它是 `false` |
 | P2 | 只改 1 个 GPIO 却 619/106 重写 → 版本戳不匹配，拆 `chore(ioc):` |
 | P3 | Flash/RAM 对不上 → PIO size 不计 stack/heap，以链接器/bin 为准 |
 | P4 | `.mxproject` 干净但换机跑不了 → `.mx` 写死绝对路径（指向本工程是合规） |
@@ -388,8 +394,9 @@ H-5 `Error_Handler` 后无诊断 ｜ **H-6 新增外设没落进生成物且日�
   NVIC/RCC/SYS/TIM17），所以"串口验证"必须换带 USART 的工程，或先给该工程加外设——
   而**非 GPIO 外设的增改没有工具能力**（§0.0），只能手改 `.ioc`/走 GUI 并强制过 G1。
 - **首次生成会挂死**：`.ioc` 版本戳低于本机 CubeMX 且 `ProjectManager.AskForMigrate=true` 时，无 GUI 的 `-q`
-  生成会弹模态框并挂住直到超时（实测 300 s）。且该键**会被 `project generate` 写回 `true`**，
-  每次拿旧工程生成前都要重新确认。详见 `references/pitfalls.md` P1 与接板清单 §2.1。
+  生成会弹模态框并挂住直到超时（实测 300 s；置 `false` 后 62 s 成功）。且该键**会被 `project generate`
+  写回 `true`**，每次拿旧工程生成前都要重新确认。`regen.sh` 会在生成前就此打告警（`--fail-fast-on-migrate`
+  可直接退 `2`），超时后按日志形态定向诊断。详见 `references/pitfalls.md` P1 与接板清单 §2.1。
 
 ## 7. 参考与依赖
 
