@@ -179,8 +179,11 @@ restored … .ioc ← ….ioc.bak
    需在 `main.c` 的 `USER CODE` 区写循环 —— 属**工程代码**，不是工具的配置能力。
 3. **把 `--timeout 480` 写进 regen 的常用参数**（或由模板工程的 `platformio.ini` 旁给一个 `regen.sh` 包装脚本），
    避免下次又卡在 300 s。
-4. **F4 的后续**：给仓库内的 testbed 明确标注"面向哪块板"（NUEDC 副本面向原板，X-Pulse 用 `testbeds/xpulse-min`），
-   否则下一个人还会照着"同 MCU"去烧。
+4. ~~**F4 的后续**：给仓库内的 testbed 明确标注"面向哪块板"~~ → **已完成（2026-11-04）**：
+   新建 `docs/guides/testbeds-board-map.md`（`testbeds/` 被 `.gitignore:9` 整体忽略，标注必须放 `docs/`
+   才能随仓库分发），登记两个绑定实板工程与全部模板/一次性副本，写清 LED 引脚、有效电平、首烧适用范围；
+   `gate-2.0-checklist.md` §0/§1/§5、`docs/README.md`、`SKILL.md` §0.3 均已指向该表，
+   并**勘误了 §5 旧版「唯一首烧目标 = NUEDC 工程」这条会把人带错板的默认项**。
 
 
 ---

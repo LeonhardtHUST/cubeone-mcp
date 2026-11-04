@@ -64,6 +64,7 @@
 | [`guides/npm-publish-and-codebuddy.md`](guides/npm-publish-and-codebuddy.md) | **要注册本包（`npx cubeone-mcp`）或配 `CUBEONE_*` 时看这本**——含 0.7.0 BREAKING 迁移、env 表、**注册后自检**、发布流程与 9 个反直觉坑 |
 | [`guides/mcp-registration.md`](guides/mcp-registration.md) | 要把 **`vscode-cube-mcp` / `platformio.mcp` 两个外部 server** 接进客户端时看这本（与本包注册是两件事） |
 | [`guides/gate-2.0-checklist.md`](guides/gate-2.0-checklist.md) | **接板日**（GATE-2.0）当天的执行清单：探针/供电/共地/安全确认/COM 口/首烧目标/串口预期 |
+| [`guides/testbeds-board-map.md`](guides/testbeds-board-map.md) | **选 testbed / 首烧之前先看**：哪个副本面向哪块板、LED 引脚与有效电平、哪些只是模板不能烧（F4 后续；`testbeds/` 被忽略，这页才是随仓库分发的真源） |
 
 ## 6. 其它
 

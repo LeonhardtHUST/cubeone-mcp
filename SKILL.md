@@ -77,7 +77,10 @@ MCP 通道另有 env：`ST_CUBEMX_EXE`、`ST_CUBEMX_ALLOWED_ROOTS`（白名单�
 
 1. **要烧录就必须显式确认**（MCP 下 `build_only` 会拒；CLI 下没人拦，见 §0.5）。属 L5，需 GATE-2.1。
 2. **只在 `testbeds/` 的克隆副本里做写操作**；`D:\Projects\GitHub\` 下模板仓、`NUEDC_2027`、
-   `HUSTRadio`、`leonskill-*` **一律只读**（✅ D9）。
+   `HUSTRadio`、`leonskill-*` **一律只读**（✅ D9）。**接板 / 选首烧目标前先查
+   `docs/guides/testbeds-board-map.md` §2.1**：同是 `STM32G474VETx` 也可能是两块板卡完全不同的工程
+   （NUEDC 原板 PC13/14/15 vs X-Pulse PC0/1/2 共阳低亮）；烧错时"烧录成功 + 寄存器正确 + 人眼无现象"，
+   见 F4 / `docs/reports/phase2-bringup-2026-11-04.md`。
 3. **生成后不核验 = 没做**：CubeMX 对 `.ioc` 错误是非致命的，外设会被静默丢弃（📄 D5 / H-6）。
 
 ### 0.4 CLI 等价通道

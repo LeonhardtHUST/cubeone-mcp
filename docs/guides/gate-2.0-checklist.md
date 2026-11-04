@@ -9,7 +9,7 @@
 
 ## 0. 三条底线（先读）
 
-1. **首烧目标必须是 `testbeds/` 里的副本产物**，不是 `D:\Projects\GitHub\` 下的模板仓 / `NUEDC_2027` 原仓（D9 硬红线）。
+1. **首烧目标必须是 `testbeds/` 里的副本产物**，不是 `D:\Projects\GitHub\` 下的模板仓 / `NUEDC_2027` 原仓（D9 硬红线）；且**必须是「面向手上这块板」的那一个**——先查 [`testbeds-board-map.md`](testbeds-board-map.md) §2.1，不要从"同 MCU"里挑。
 2. **GATE-2.1 未过不许上电烧录**：目标板不得串接执行器 / 继电器 / 电机驱动（见 §4）。
 3. **没有 `verdict` 与 `diff` 解释就不许烧**：G1 没跑过，或 diff 里有解释不了的改动，一律停手。
 
@@ -21,7 +21,7 @@
 |---|---|---|
 | ST-Link 被系统识别 | PowerShell：`Get-CimInstance Win32_PnPEntity \| ? {$_.DeviceID -match "VID_0483"}` | 有 `STM32 STLink`（`VID:PID 0483:3748` = V2）。**`pio device list` 只列串口、不列调试器**，ST-Link V2 无 VCP，看不见它属正常 |
 | 探针型号与固件 | openocd 连一次（见 §1.1）或 `pio system info` | 输出里能看到 `STLINK V2J35S7` 一类固件号与 `Target voltage`；**记下型号** |
-| **工程引脚与实板是否对得上**（2026-11-04 实测新增） | 读板级头文件（X-Pulse：`Core/Inc/xpulse.h`）+ 板 README | **灯的引脚、有效电平、按键、串口都必须逐项对上**。X-Pulse：RGB = **PC0/PC1/PC2，共阳 3V3、低电平点亮**；**PC13 只引到排针、无 LED** |
+| **工程引脚与实板是否对得上**（2026-11-04 实测新增） | ① 查 [`testbeds-board-map.md`](testbeds-board-map.md) §2.1 确认**这个 testbed 面向哪块板**；② 读板级头文件（X-Pulse：`Core/Inc/xpulse.h`）+ 板 README；③ 逐项比对 | **灯的引脚、有效电平、按键、串口都必须逐项对上**。X-Pulse：RGB = **PC0/PC1/PC2，共阳 3V3、低电平点亮**；**PC13 只引到排针、无 LED**。板级事实以板级头文件/原理图为准，**不要从 `.ioc` 的 `GPIO_Label` 或模板 README 猜** |
 | 目标板 QSPI/供电档位 | 目视 | 板子标注的供电范围与探针 `3.3V` 输出一致；**不要用 5V 直连** |
 | 共地 | 目视 + 万用表通断 | 探针 GND 与目标板 GND **导通**；SWD 的 GND/SWDIO/SWCLK/NRST 四线到位 |
 | CubeMX 可用 | `"C:\ST\STM32CubeMX\jre\bin\java.exe" -version` | 有版本输出；本仓锁 **6.18.1**（D1） |
@@ -33,6 +33,8 @@
 > ⚠️ **"同 MCU" 不构成可烧理由**（2026-11-04 F4 现场教训）：C3 选的首烧目标 `NUEDC/G474_01_gpio`
 > 用 PC13/14/15 点灯，而实板 X-Pulse 的灯在 PC0/1/2。烧录成功、寄存器回读也对（`ODR` bit13=0），
 > **但人眼什么也看不到**——最容易被误判成"工具没生效"。先对引脚，再选工程。
+> **已固化**：两个绑定实板工程的板卡归属、LED 引脚与有效电平见
+> [`testbeds-board-map.md`](testbeds-board-map.md)（F4 后续，2026-11-04）。
 
 ### 1.1 用 openocd 确认探针与目标（不烧录，5 秒）
 
@@ -160,14 +162,23 @@ diff -u /tmp/Core-before-HHMM/main.c <副本>/Core/Src/main.c   # 变了什么
 #   flash_standalone（reset=hard, run=true）
 ```
 
-**首烧目标**：C3.1 预演产物（`testbeds/nuedc/G474_01_gpio`，`PC13.PinState=GPIO_PIN_RESET`）。
-它的可观测现象最干净：**上电后 LED_R 应为灭**（原配置是亮）——这条就是"固件真的换了"的判据。
+**首烧目标按板选**（对照表：[`testbeds-board-map.md`](testbeds-board-map.md) §2.1）——
+**不要默认沿用"上一个预演产物"**，先定板、再选工程：
+
+| 手上的板 | 该用哪个 testbed | 可观测判据（烧完必须有人眼能看见的现象） |
+|---|---|---|
+| **X-Pulse / Penguins-G474**（2026-11-04 实测板） | **`testbeds/xpulse-min`** | **红灯亮、绿/蓝灭**；客观判据 `GPIOC MODER=0xF7FFFFDF`（PC2 输出）、`ODR=0x00000000`（bit2=0）、`PC` 在 Flash。F4 之后的推荐目标，已达成 L5 |
+| **NUEDC_2027 原板** | `testbeds/nuedc/G474_01_gpio`（C3.1 预演产物，`PC13.PinState=GPIO_PIN_RESET`） | 与 `Core/Src/gpio.c` 的 `HAL_GPIO_WritePin` 一致：**LED_R 灭、LED_G/LED_B 亮** ⇒ 固件确实换了。⚠️ **该板 LED 极性未在本仓取证**，烧前先对原理图 |
+| 其它板 / 查不到板卡归属 | — | **停手**：先建副本、按实板改引脚、跑完 §3 全链再烧（照 `testbeds-board-map.md` §3 的顺序） |
+
+> ⚠️ **勘误（F4，2026-11-04）**：本节此前把 `testbeds/nuedc/G474_01_gpio` 写成唯一首烧目标。
+> 那是**无实板的预演阶段**留下的默认项，不是板级结论。接板日照上表按板选，
+> 否则会重演「烧录 `Verified OK`、寄存器回读也对，**但人眼什么也看不到**」。
 
 | 观察 | 说明 |
 |---|---|
-| LED_R 灭、LED_G/LED_B 亮 | 与 `gpio.c` 的 `HAL_GPIO_WritePin` 一致 ⇒ 烧录成功且配置生效 |
-| 全灭或全亮不变 | 可能没烧进去 / 复位没生效 / 板子 LED 极性相反（先确认硬件极性） |
-| 完全不亮且无反应 | 先进 §3.1 的 diff 检查（可能 `HAL_RCC_ClockConfig` 失败进了 `Error_Handler`） |
+| 预期颜色亮、其余灭 | 与工程 `HAL_GPIO_WritePin` + 板级有效电平一致 ⇒ 烧录成功且配置生效 |
+| 全灭 / 全亮不变 / 无反应 | ① **先查 `testbeds-board-map.md`：工程与板是不是同一块**（F4 的第一嫌疑）；② 再查是否没烧进去 / 复位没生效 / LED 极性相反；③ 最后才进 §3.1 的 diff 检查（可能 `HAL_RCC_ClockConfig` 失败进了 `Error_Handler`） |
 
 记录：烧录日志 → `docs/logs/phase2/`；现象（含时间与照片路径）→ 当天的 `docs/reports/`。
 
