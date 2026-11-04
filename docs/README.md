@@ -58,6 +58,29 @@
    `TRUE` / `True` / 带尾空格的 `true ` 会漏（审定报告 :733 列为「会漏」）。C7 的 W6-3 值变体
    用例**如实断言当前行为（不拦截 / 不告警）以锁住边界**，**不修判据**——改判据属范围扩张且与
    D36① 冲突。将来若要放宽，须与 D36①、`pitfalls.md` P1、本仓 `regen-exit-codes.md` §4.1 同批修订。
+5. **CRLF 归一口径（0.7.4 B 组：方案 2 为硬纪律、方案 1 为可选自检）**：
+   - **陷阱**：**`git status` 干净 ≠ 工作区逐字节等于 index**。`.gitattributes` 的 `text=auto`
+     让 index 存 LF，而工作区文件可以仍是 CRLF——`git status` 按**归一化后**比较，所以看不见这层差异。
+     后果是**本机 `npm pack` 的体积与 CI / registry 不一致**（0.7.3 实测 `138.1 kB` vs `137.6 kB`），
+     当前实测 `git ls-files --eol | grep -c "w/crlf"` = **21** 个文件属这种情况。
+   - **硬纪律（方案 2，必须）**：**发版证据只认 CI 的 LF pack**（本机 `npm pack` 尺寸不作证据）。
+     落点见 [`releases/README.md`](releases/README.md) 顶部「发版证据口径」。
+   - **可选自检（方案 1，不产生 commit）**：只在 `git status` **干净**时执行（有未提交改动先 commit/stash，
+     `git checkout --` 会覆盖工作区）：
+
+     ```bash
+     git status --porcelain                  # 必须先为空
+     git config core.autocrlf                # 期望 false 或 input
+     git ls-files --eol | awk '$0 ~ /w\/crlf/ {print $NF}' | while IFS= read -r f; do
+       git checkout -- "$f"                  # 只按 .gitattributes 重新落行尾，内容不变
+     done
+     git ls-files --eol | grep -c "w/crlf"   # 期望 0
+     git status --porcelain                  # 期望仍为空（无内容改动）
+     npm pack --dry-run | tail -3            # 此时本机尺寸才与 CI 同口径
+     ```
+
+   - **清零不是硬要求**：方案 1 是**环境操作、不持久**（CubeMX / 编辑器保存后 CRLF 可能再现），
+     用它冒充"已根治"反而制造错觉。**硬纪律是发版走 CI**，`w/crlf` 计数**如实记录、不声称清零**。
 
 ## 3. 报告与证据（`reports/`）
 

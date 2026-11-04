@@ -9,6 +9,15 @@
 > **发布后核证**才跑 `--network`（显式带官方 registry `https://registry.npmjs.org/`）：
 > 远端 `dist-tags.latest` 与目标版本不一致即判红。
 
+> **发版证据口径 · 只认 CI 的 LF pack（硬纪律，0.7.4 起）**
+> **包内容证据（files 数 / 体积 / tarball 清单）一律取自 CI 的 LF checkout**。
+> 本机 `npm pack` 会把**工作区行尾**打进 tarball：`.gitattributes` 要求 index 存 LF，而工作区可能有
+> 21 个文件仍是 CRLF（`git ls-files --eol | grep -c 'w/crlf'` 实测 = **21**），于是本机尺寸偏大
+> （0.7.3 实测 `138.1 kB` vs CI/registry `137.6 kB`）。
+> ⇒ **本机 `npm pack` 的尺寸只能作参考，不得写进发版正文或本表当作包体积证据**；
+> 唯一例外是先确认 `w/crlf` 计数为 0。陷阱与自检命令见 [`../README.md`](../README.md) **§2.1 第 5 条**
+> （**`git status` 干净 ≠ 工作区逐字节等于 index**）。
+
 ---
 
 ## 1. 版本 × 内容 × 三证
