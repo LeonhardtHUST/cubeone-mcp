@@ -21,11 +21,16 @@ of '.c/.h' files"）会把每个外设的 ``MX_<P>_Init`` 生成到**独立文�
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 import verify_generation as vg
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 #: ``main.c``：只有调用，没有定义（per-peripheral 布局的典型形态）。
 MAIN_C = """#include "main.h"
@@ -238,3 +243,40 @@ def test_origin_locator_maps_to_real_file_and_line(tmp_path: Path, couple_file: 
     assert label == "Core/Src/gpio.c"
     # GPIO_C 里 `void MX_GPIO_Init(void)` 在第 3 行
     assert line == 3, (label, line)
+
+
+# ---------------------------------------------------------------------------
+# W0-2 / A-14：CLI 层「工程根选错」负样本（2026-11-04）
+# ---------------------------------------------------------------------------
+def test_cli_rejects_project_root_without_sources(tmp_path: Path) -> None:
+    """给了 ``--project-root`` 但 ``Core/Src/*.c`` 为空 ⇒ rc=2、不落 JSON。
+
+    ⚠️ 本文件其余用例**直调** ``verify_documents(log_text=LOG)``，那是纯函数、
+    不走 ``main()``，所以 W0 的输入/形态校验对它们零影响 —— 正是 F-1
+    「形态校验绝不下移进 verify_documents()」要保护的场景。这一条特意走 CLI
+    验证入口层守卫。
+    """
+    root = tmp_path / "wrong-root"
+    (root / "Core" / "Src").mkdir(parents=True)
+    json_out = tmp_path / "report.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "verify_generation.py"),
+            "--log", str(FIXTURES / "log_clean.txt"),
+            "--main-c", str(FIXTURES / "main_g474_template.c"),
+            "--mxproject", str(FIXTURES / "mxproject_relative.txt"),
+            "--expect", "GPIO",
+            "--project-root", str(root),
+            "--json-out", str(json_out),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == vg.EXIT_INPUT_ERROR, result.stdout + result.stderr
+    assert "工程根可能选错" in result.stderr
+    assert not json_out.exists(), "rc=2 不得落 JSON 报告"

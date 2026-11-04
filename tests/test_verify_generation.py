@@ -25,6 +25,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -42,6 +43,20 @@ LOG_CLEAN = FIXTURES / "log_clean.txt"
 LOG_CANNOT_MAP = FIXTURES / "log_cannot_map_missing_s_prefix.txt"
 LOG_VP_RIF = FIXTURES / "log_vp_rif_cannot_map.txt"
 LOG_SYSCALLS = FIXTURES / "log_syscalls_overlay.txt"
+#: W0-3：真日志（形态成立）+ 2 行整行 KO，0 行 Cannot map。
+LOG_KO = FIXTURES / "log_ko.txt"
+#: W0-4 负样本：含裸词 STM32CubeMX / CubeMX / config / code，但形态类别数 0。
+README_MD = REPO_ROOT / "references" / "README.md"
+#: W0-4 正向回归：只认 CubeMX 原始 stdout 重定向日志（不含 *-stdout.log 编排输出）。
+REAL_CUBEMX_LOGS: tuple[Path, ...] = (
+    LOG_CLEAN,
+    REPO_ROOT / "docs" / "logs" / "phase4" / "02-first-generate.log",
+    REPO_ROOT / "docs" / "logs" / "phase4" / "04-first-generate-retry.log",
+    REPO_ROOT / "docs" / "logs" / "phase4" / "07-regen" / "cubemx-generate.log",
+    REPO_ROOT / "docs" / "logs" / "phase4" / "08-regen-SET.log",
+    REPO_ROOT / "docs" / "logs" / "phase4" / "09-final" / "cubemx-generate.log",
+    REPO_ROOT / "docs" / "logs" / "phase4" / "12-askformigrate-probe.log",
+)
 
 MAIN_G474 = FIXTURES / "main_g474_template.c"
 MAIN_MULTI = FIXTURES / "main_multi_periph.c"
@@ -123,6 +138,53 @@ def statuses(report: dict[str, object]) -> dict[str, str]:
     checks = report["checks"]
     assert isinstance(checks, list)
     return {str(item["id"]): str(item["status"]) for item in checks}
+
+
+def run_negative(
+    tmp_path: Path,
+    *,
+    log: Path = LOG_CLEAN,
+    extra: tuple[str, ...] = (),
+) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+    """W0 负样本统一入口：**只用 ``run_cli()`` 直跑**（F-3）。
+
+    带 ``--json-out`` / ``--report-md`` 是为了能断言「rc=2 时两者都不落盘」；
+    ``run_verify()`` 里的 ``assert json_out.is_file()`` 会先炸在断言上、掩盖真实
+    退出码，所以负样本绝不复用它。只有正向用例继续用 ``run_verify()``。
+    """
+    json_out = tmp_path / "report.json"
+    md_out = tmp_path / "report.md"
+    result = run_cli(
+        "--log", str(log),
+        "--main-c", str(MAIN_G474),
+        "--mxproject", str(MXP_RELATIVE),
+        "--expect", "GPIO",
+        "--json-out", str(json_out),
+        "--report-md", str(md_out),
+        *extra,
+    )
+    return result, json_out, md_out
+
+
+def assert_input_error(
+    result: subprocess.CompletedProcess[str],
+    json_out: Path,
+    md_out: Path,
+    *,
+    mention: str = "",
+) -> None:
+    """证据不成立 ⇒ rc=2、stderr 带 input-error、JSON / MD 都不落盘。"""
+    assert result.returncode == vg.EXIT_INPUT_ERROR, result.stdout + result.stderr
+    assert "[platform32][input-error]" in result.stderr, result.stderr
+    assert not json_out.exists(), "输入错误不得落 JSON 报告"
+    assert not md_out.exists(), "输入错误不得落 Markdown 报告"
+    if mention:
+        assert mention in result.stderr, result.stderr
+
+
+def evidence_args(*, log: Path, expect_pins: list[str] | None = None, ioc: str | None = None) -> argparse.Namespace:
+    """构造 :func:`verify_generation.validate_evidence_inputs` 用到的最小 Namespace。"""
+    return argparse.Namespace(log=str(log), expect_pins=expect_pins, ioc=ioc)
 
 
 # ---------------------------------------------------------------------------
@@ -352,10 +414,18 @@ def test_mxproject_relative_paths_pass() -> None:
 # 6b. CubeMX 脚本（`.mx`）里的绝对路径：三态判据，不是"有盘符就 fail"
 # ---------------------------------------------------------------------------
 def make_fake_project(root: Path, mx_body: str, *, script_name: str = "cubemx-init.mx") -> Path:
-    """在临时目录里造一个最小工程骨架 + 一份 .mx 脚本。"""
+    """在临时目录里造一个最小工程骨架 + 一份 .mx 脚本。
+
+    W0-2 起 ``--project-root`` 要求 ``<root>/Core/Src/*.c`` 非空，故补一份
+    ``Core/Src/main.c``（真实工程本来就有）。``_read_source_texts()`` 会跳过
+    ``main.c``（已由 ``--main-c`` 覆盖），因此本组 .mx 判据断言完全不受影响。
+    """
     scripts = root / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
     (scripts / script_name).write_text(mx_body, encoding="utf-8")
+    src = root / "Core" / "Src"
+    src.mkdir(parents=True, exist_ok=True)
+    (src / "main.c").write_text("int main(void) { return 0; }\n", encoding="utf-8")
     return root
 
 
@@ -424,7 +494,10 @@ def test_mx_script_comment_hit_is_marked_as_comment(tmp_path: Path) -> None:
 def test_mx_script_without_any_script_is_skip(tmp_path: Path) -> None:
     """传了 --project-root 但工程里没有 .mx → skip（本项不适用，不是 fail）。"""
     project = tmp_path / "no-scripts"
-    project.mkdir()
+    # W0-2：工程根要有 Core/Src/*.c 才过输入校验；这里只造 main.c，仍无 .mx 脚本。
+    src = project / "Core" / "Src"
+    src.mkdir(parents=True)
+    (src / "main.c").write_text("int main(void) { return 0; }\n", encoding="utf-8")
     _, report = run_verify(tmp_path, project_root=project)
 
     check = check_of(report, vg.CHECK_MX_SCRIPT_ABS_PATH)
@@ -583,15 +656,16 @@ def test_empty_expect_skips_peripheral_checks(tmp_path: Path) -> None:
     assert summary["checked_peripherals"] == []
 
 
-def test_empty_log_warns_not_passes(tmp_path: Path) -> None:
-    """空日志不能当成"没错误"——必须 warn 提示生成可能没跑。"""
+def test_empty_log_is_input_error(tmp_path: Path) -> None:
+    """W0-4 / A-4：空日志不能当成"没错误"（F-2 改断言）。
+
+    旧行为是 ``log_cannot_map=warn`` 且 rc=0 —— warn 不阻塞，等于没修。
+    现在统一在 ``main()`` 输入层退 2、不落 JSON/MD；负样本用 ``run_cli()`` 直跑（F-3）。
+    """
     empty_log = tmp_path / "empty.log"
     empty_log.write_text("", encoding="utf-8")
-    result, report = run_verify(tmp_path, log=empty_log, expect="GPIO")
-    assert result.returncode == vg.EXIT_PASS
-    cannot_map = check_of(report, vg.CHECK_LOG_CANNOT_MAP)
-    assert cannot_map["status"] == "warn"
-    assert "空" in str(cannot_map["detail"])
+    result, json_out, md_out = run_negative(tmp_path, log=empty_log)
+    assert_input_error(result, json_out, md_out, mention="为空")
 
 
 # ---------------------------------------------------------------------------
@@ -763,17 +837,25 @@ def test_pins_present_fails_when_port_clock_missing(tmp_path: Path) -> None:
     assert "__HAL_RCC_GPIOB_CLK_ENABLE()" in str(pins["detail"])
 
 
-def test_pins_present_skips_without_flag_or_ioc(tmp_path: Path) -> None:
-    """不传 `--expect-pins`、或传了但没给 `--ioc` → `skip`（向后兼容，零爆炸半径）。"""
+def test_pins_present_skips_without_flag(tmp_path: Path) -> None:
+    """F-2 拆分①：不传 ``--expect-pins`` ⇒ ``skip``（向后兼容，零爆炸半径）。"""
     _, report = run_verify(tmp_path, ioc=IOC_G474, expect="GPIO")
-    assert check_of(report, vg.CHECK_PINS_PRESENT)["status"] == "skip"
+    pins = check_of(report, vg.CHECK_PINS_PRESENT)
+    assert pins["status"] == "skip"
+    assert "--expect-pins" in str(pins["detail"])
 
-    _, report2 = run_verify(
-        tmp_path, expect="GPIO", extra=("--expect-pins", "PC13=GPIO_Output")
+
+def test_expect_pins_without_ioc_is_input_error(tmp_path: Path) -> None:
+    """F-2 拆分② / W0-1：给 ``--expect-pins`` 却没给 ``--ioc`` ⇒ rc=2、无 JSON。
+
+    旧行为是 ``pins_present=skip`` 且 verdict 仍 pass（A-11 假绿）；现在 ``main()``
+    输入层点名两个参数并统一退 2。负样本必须 ``run_cli()`` 直跑（F-3）。
+    """
+    result, json_out, md_out = run_negative(
+        tmp_path, extra=("--expect-pins", "PC13=GPIO_Output")
     )
-    pins2 = check_of(report2, vg.CHECK_PINS_PRESENT)
-    assert pins2["status"] == "skip"
-    assert "--ioc" in str(pins2["detail"])
+    assert_input_error(result, json_out, md_out, mention="--ioc")
+    assert "--expect-pins" in result.stderr
 
 
 def test_expect_pins_parsing() -> None:
@@ -824,9 +906,16 @@ REAL_CANNOT_MAP_BODY = (
 
 
 def write_cannot_map_log(tmp_path: Path) -> Path:
-    """写一份只含一条真实 ``Cannot map`` 的日志。"""
+    """写一份「合法 CubeMX 日志形态 + 一条真实 ``Cannot map``」的合成日志。
+
+    W0-4 起 ``--log`` 需命中 ≥ 2 类 CubeMX 特征（``validate_evidence_inputs``），
+    故补全 C1（引擎启动）与 C2（载入配置）两行日志头。本组用例测的是
+    「白名单对圆括号形态生效」，形态成立才轮得到判据层；不改判据语义。
+    """
     log = tmp_path / "cannot_map.log"
     log.write_text(
+        "[INFO] STM32CubeMX 6.18.1 (DB.6.0.181) started in headless mode\n"
+        "[INFO] LoadConfig: loading board.ioc\n"
         "2026-11-03 12:33:47,866 [INFO] ImportTextPane:234 - " + REAL_CANNOT_MAP_BODY + "\n",
         encoding="utf-8",
     )
@@ -878,3 +967,134 @@ def test_allow_signal_literal_cannot_bypass_guard(tmp_path: Path) -> None:
     check = check_of(report, vg.CHECK_LOG_CANNOT_MAP)
     assert check["status"] == "fail", check
     assert report["verdict"] == "fail", report["verdict"]
+
+
+# ---------------------------------------------------------------------------
+# 16. W0 · G1 四类假绿：CLI 负样本、形态层回归与刚性契约（2026-11-04）
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("mode", ["empty-dir", "no-c-files"])
+def test_w0_2_project_root_without_sources_is_input_error(tmp_path: Path, mode: str) -> None:
+    """W0-2 / A-14：工程根选错（空目录 / Core/Src 无 .c）⇒ rc=2、无 JSON。
+
+    ``_read_source_texts()`` 旧行为是静默退回单文件扫描，verdict 仍可能 pass；
+    现在输入层直接拦下，并提示「工程根可能选错」。
+    """
+    root = tmp_path / "wrong-root"
+    if mode == "empty-dir":
+        root.mkdir()
+    else:
+        (root / "Core" / "Src").mkdir(parents=True)
+    result, json_out, md_out = run_negative(
+        tmp_path, extra=("--project-root", str(root))
+    )
+    assert_input_error(result, json_out, md_out, mention="工程根可能选错")
+
+
+def test_w0_4_cli_rejects_references_readme(tmp_path: Path) -> None:
+    """W0-4：``references/README.md`` 含裸词 STM32CubeMX/CubeMX/config/code，仍须退 2。"""
+    result, json_out, md_out = run_negative(tmp_path, log=README_MD)
+    assert_input_error(result, json_out, md_out, mention="不像 CubeMX 生成日志")
+
+
+@pytest.mark.parametrize(
+    "label,body",
+    [
+        ("random", "hello world\njust some random text\n"),
+        ("single-line-fake", "[INFO] STM32CubeMX 6.18.1\n"),
+    ],
+)
+def test_w0_4_cli_rejects_non_log_texts(tmp_path: Path, label: str, body: str) -> None:
+    """W0-4：随机文本与「单行伪造」只命中 0/1 类 ⇒ 被 ≥2 阈值挡住。"""
+    log = tmp_path / f"{label}.log"
+    log.write_text(body, encoding="utf-8")
+    result, json_out, md_out = run_negative(tmp_path, log=log)
+    assert_input_error(result, json_out, md_out, mention="不像 CubeMX 生成日志")
+
+
+def test_w0_3_log_ko_fails_with_seven_checks(tmp_path: Path) -> None:
+    """W0-3：真日志 + 2 行整行 KO ⇒ 形态成立，走 rc=1 判 FAIL（复用 id，checks 恒 7）。"""
+    result, json_out, md_out = run_negative(tmp_path, log=LOG_KO)
+    assert result.returncode == vg.EXIT_FAIL, result.stdout + result.stderr
+    assert json_out.is_file() and md_out.is_file()  # 域内结论必须落盘
+    report = json.loads(json_out.read_text(encoding="utf-8"))
+    assert report["schema"] == "platform32.verify_generation/2"
+    assert report["verdict"] == "fail"
+    assert len(report["checks"]) == 7
+    assert [item["id"] for item in report["checks"]] == list(vg.CHECK_ORDER)
+    cannot_map = check_of(report, vg.CHECK_LOG_CANNOT_MAP)
+    assert cannot_map["status"] == "fail"
+    assert "KO" in str(cannot_map["detail"]) and "拒绝" in str(cannot_map["detail"])
+
+
+def test_w0_4_positive_regression_log_clean(tmp_path: Path) -> None:
+    """W0-4 正向：形态校验不得误伤 log_clean.txt ⇒ rc=0 / PASS / 7 项 / schema /2。"""
+    result, report = run_verify(tmp_path, expect="GPIO")
+    assert result.returncode == vg.EXIT_PASS, result.stdout + result.stderr
+    assert report["verdict"] == "pass"
+    assert report["schema"] == "platform32.verify_generation/2"
+    assert len(report["checks"]) == 7
+    assert [item["id"] for item in report["checks"]] == list(vg.CHECK_ORDER)
+    assert check_of(report, vg.CHECK_LOG_CANNOT_MAP)["status"] == "pass"
+
+
+@pytest.mark.parametrize("log_path", REAL_CUBEMX_LOGS, ids=lambda p: p.name)
+def test_w0_4_signature_layer_accepts_real_logs(log_path: Path) -> None:
+    """形态层：7 个真实 CubeMX 日志命中 ≥2 类 ⇒ ``validate_evidence_inputs()`` 返回 []。"""
+    assert log_path.is_file(), f"缺样本：{log_path}"
+    text = vg.read_text(log_path)
+    assert vg.validate_evidence_inputs(
+        args=evidence_args(log=log_path), log_text=text, project_root=None
+    ) == []
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["", "随机文本\nnot a cubemx log\n", "[INFO] STM32CubeMX 6.18.1\n"],
+)
+def test_w0_4_signature_layer_rejects_non_logs(tmp_path: Path, body: str) -> None:
+    """形态层：空 / 随机 / 单行伪造 ⇒ 返回非空错误文案。"""
+    log = tmp_path / "sample.log"
+    log.write_text(body, encoding="utf-8")
+    errors = vg.validate_evidence_inputs(
+        args=evidence_args(log=log), log_text=body, project_root=None
+    )
+    assert errors and any("为空" in e or "不像 CubeMX" in e for e in errors)
+
+
+def test_w0_4_signature_layer_rejects_references_readme() -> None:
+    """形态层：README 的裸词不算特征 ⇒ 返回非空。"""
+    text = vg.read_text(README_MD)
+    errors = vg.validate_evidence_inputs(
+        args=evidence_args(log=README_MD), log_text=text, project_root=None
+    )
+    assert errors and any("不像 CubeMX" in e for e in errors)
+
+
+@pytest.mark.parametrize(
+    "log_path", REAL_CUBEMX_LOGS[1:], ids=lambda p: f"{p.parent.name}-{p.name}"
+)
+def test_w0_4_real_logs_are_not_rejected_as_evidence(tmp_path: Path, log_path: Path) -> None:
+    """端到端：phase4 真实日志只断言「不退 2、stderr 无 input-error」。
+
+    它们缺配套同工程 main.c / .mxproject，不强求 verdict=PASS（避免制造假红）。
+    """
+    result, json_out, md_out = run_negative(tmp_path, log=log_path)
+    assert result.returncode != vg.EXIT_INPUT_ERROR, result.stderr
+    assert "input-error" not in result.stderr
+    assert json_out.is_file() and md_out.is_file()
+
+
+def test_w0_rigid_contract_is_unchanged() -> None:
+    """F-1：7 个 check id / CHECK_ORDER / schema /2 恒定，不得新增第 8 个。"""
+    assert vg.SCHEMA == "platform32.verify_generation/2"
+    assert len(vg.CHECK_ORDER) == 7
+    assert len(set(vg.CHECK_ORDER)) == 7
+    assert set(vg.CHECK_ORDER) == {
+        vg.CHECK_LOG_CANNOT_MAP,
+        vg.CHECK_MAIN_INIT_PRESENT,
+        vg.CHECK_MAIN_INIT_CALLED,
+        vg.CHECK_PINS_PRESENT,
+        vg.CHECK_MXPROJECT_ABS_PATH,
+        vg.CHECK_MX_SCRIPT_ABS_PATH,
+        vg.CHECK_SYSCALLS_PATH,
+    }

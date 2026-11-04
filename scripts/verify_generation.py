@@ -74,6 +74,7 @@ CLI 契约
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -163,6 +164,40 @@ _BARE_SIGNAL_RE = re.compile(r"cannot\s+map\s+(?:signal\s+)?([A-Za-z0-9_]+)", re
 #: 语法字面量，不是信号名。命中即视为"未解析"，绝不能拿去参与 ``--allow-signal`` 匹配：
 #: 否则 ``--allow-signal signal`` 会静默放行所有圆括号形态，等于一键关掉 D5 守卫（D29.6）。
 _SIGNAL_LITERALS = frozenset({"signal", "pin", "on"})
+
+#: W0-3：整行 ``KO``（CubeMX 脚本层拒绝生成）。形态与 ``scripts/regen.sh`` 的
+#: ``grep -cE '^[[:space:]]*KO[[:space:]]*$'`` 保持一致：大小写敏感、允许首尾空白。
+#: 命中后**复用** ``CHECK_LOG_CANNOT_MAP`` 判 ``fail``，不新增第 8 个 check id（F-1）。
+_KO_LINE_RE = re.compile(r"^\s*KO\s*$")
+
+#: W0-4：CubeMX 生成日志的「宽松形态」特征，5 类、类内 OR、类间不要求顺序/行数/前缀。
+#: 只统计**命中的不同类别数**，达到 :data:`MIN_SIGNATURE_CLASSES` 才放行。
+#: ⛔ 禁止用裸词 ``STM32CubeMX`` / ``CubeMX`` / ``config`` / ``code`` 作唯一特征：
+#: ``references/README.md:92/94`` 就含 ``STM32CubeMX 6.18.1`` / ``CubeMX 6.18.1``，
+#: 裸词会让它命中 ⇒ 假绿。下面全是结构化模式（带 ``[INFO]`` 前缀 / ``Starting`` /
+#: ``LoadConfig`` / ``config load`` / ``CodeGenerator`` / ``log4j``），README 一个都不含。
+#: 真实 log4j 日志没有 ``Generating code under`` / ``Code generation finished``，
+#: 所以 C3 里必须收 ``CodeGenerator`` / ``code generatio``（CubeMX 原始拼写，少了 n）。
+_LOG_SIGNATURE_CLASSES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "C1 引擎启动",
+        re.compile(r"\[INFO\]\s*STM32CubeMX|Starting\s+STM32CubeMX|\bMicroXplorer\b", re.IGNORECASE),
+    ),
+    ("C2 载入配置", re.compile(r"\bLoadConfig\b|\bconfig\s+load\b", re.IGNORECASE)),
+    (
+        "C3 代码生成动作",
+        re.compile(r"Generating code under|\bCodeGenerator\b|\bcode\s+generatio\b", re.IGNORECASE),
+    ),
+    (
+        "C4 生成完成",
+        re.compile(r"(?:Code|Project)\s+generation\s+finished|\bEnd\s+LoadConfig\(\)", re.IGNORECASE),
+    ),
+    ("C5 运行时环境", re.compile(r"\blog4j2?\b|AppUserModelID\s*:", re.IGNORECASE)),
+)
+#: 命中的不同类别数下限。取 2 而非 1：单行伪造 ``[INFO] STM32CubeMX 6.18.1`` 只命中
+#: C1（1 类）会被挡住；拿 ``.ioc``（首行 ``#MicroXplorer Configuration settings``）
+#: 当 ``--log`` 也只命中 C1，同样被挡住。实测正向样本 3~5 类，不会误伤。
+MIN_SIGNATURE_CLASSES = 2
 
 
 def _reject_literal(name: str | None) -> str | None:
@@ -594,12 +629,15 @@ def check_log_cannot_map(log_text: str, allow_signals: Sequence[str]) -> CheckRe
     allow = [item.strip() for item in allow_signals if item and item.strip()]
     allow_lower = [(item, item.lower()) for item in allow]
     hits: list[tuple[int, str]] = []
+    ko_hits: list[tuple[int, str]] = []
     optional_errors = 0
     for lineno, line in enumerate(log_text.splitlines(), 1):
         if _OPTIONAL_ERROR_RE.search(line):
             optional_errors += 1
         if _CANNOT_MAP_RE.search(line):
             hits.append((lineno, line.strip()))
+        if _KO_LINE_RE.match(line):
+            ko_hits.append((lineno, line.strip()))
 
     if not log_text.strip():
         return CheckResult(
@@ -607,6 +645,21 @@ def check_log_cannot_map(log_text: str, allow_signals: Sequence[str]) -> CheckRe
             STATUS_WARN,
             "生成日志为空，无法确认生成是否真的跑过；请确认 --log 指向本次生成的日志",
         )
+
+    # W0-3：整行 KO 是「生成确实失败」，属域内结论 —— 复用 log_cannot_map id 判 fail。
+    # 走 main() 时形态校验已放行（≥2 类特征），故这里给 rc=1 而不是 rc=2；
+    # 绝不新增第 8 个 check id，也不改 checks 数组长度（F-1）。
+    if ko_hits:
+        ko_samples = "；".join(
+            f"L{lineno}: {_truncate(line, 160)}" for lineno, line in ko_hits[:3]
+        )
+        ko_detail = (
+            f"生成脚本被 CubeMX 拒绝（命中 {len(ko_hits)} 行整行 'KO'）：{ko_samples}；"
+            "属生成阶段失败，须回滚并核对 .ioc / GUI 配置（D25：CubeMX 退出码恒为 0）"
+        )
+        if hits:
+            ko_detail += f"；另有 {len(hits)} 条 'Cannot map' 命中"
+        return CheckResult(CHECK_LOG_CANNOT_MAP, STATUS_FAIL, ko_detail)
 
     if not hits:
         detail = "生成日志无 'Cannot map' 命中"
@@ -1621,6 +1674,73 @@ def _harden_console_streams() -> None:
             pass
 
 
+def validate_evidence_inputs(
+    *,
+    args: argparse.Namespace,
+    log_text: str,
+    project_root: str | None,
+) -> list[str]:
+    """校验「生成证据是否成立」，返回输入级错误文案列表；空列表表示证据成立。
+
+    ⚠️ 只在 :func:`main`（CLI 入口）调用，**绝不下移进** :func:`verify_documents`：
+       · 保持 ``verify_documents()`` 的签名与行为不变（F-1 刚性契约）；
+       · 兼容直接调 ``verify_documents(log_text=...)`` 的既有用例
+         （``tests/test_verify_multifile.py`` 传的是合成 LOG，不含 CubeMX 特征类别），
+         下移会大面积误伤。
+    ⚠️ 本函数**绝不判 KO**：整行 KO 是域内「生成确实失败」，形态成立时放行到
+       :func:`check_log_cannot_map` 判 ``fail``（rc=1）；这里只处理「证据不成立」⇒ rc=2。
+
+    Args:
+        args: 已解析的命令行参数（读 ``expect_pins`` / ``ioc`` / ``log``）。
+        log_text: ``--log`` 读入的全文。
+        project_root: 已绝对化的 ``--project-root``；``None`` 表示未提供。
+
+    Returns:
+        输入级错误文案列表。调用方逐行打到 stderr 并 ``return EXIT_INPUT_ERROR``，
+        **不落 JSON / Markdown**（写盘发生在 verify_documents() 之后）。
+    """
+    errors: list[str] = []
+    log_path = os.path.abspath(args.log)
+
+    # W0-1 / A-11：给了 --expect-pins 却没给 --ioc ⇒ pins_present 静默 skip，
+    # verdict 仍可能 pass。两个参数必须同时给，或都不给。
+    raw_pins = args.expect_pins or []
+    if isinstance(raw_pins, str):
+        raw_pins = [raw_pins]
+    has_expect_pins = any(str(item).strip() for item in raw_pins)
+    if has_expect_pins and not args.ioc:
+        errors.append(
+            "--expect-pins 已给但未给 --ioc：引脚级检查无法进行；"
+            "请同时提供 --expect-pins 与 --ioc，或两者都不给"
+        )
+
+    # W0-2 / A-14：给了 --project-root 却扫不到 Core/Src/*.c ⇒
+    # _read_source_texts() 会静默退回单文件扫描，用户可能仍拿到 pass。
+    if project_root is not None:
+        source_pattern = os.path.join(project_root, "Core", "Src", "*.c")
+        if not glob.glob(source_pattern):
+            errors.append(
+                "--project-root 指向的目录下 Core/Src/*.c 为空，工程根可能选错："
+                f"{project_root}"
+            )
+
+    # W0-4a / A-4：空日志（旧行为只是 warn，不阻塞 ⇒ 假绿）。
+    if not log_text.strip():
+        errors.append(f"--log 指向的文件为空，不是 CubeMX 生成日志：{log_path}")
+    else:
+        # W0-4b / A-17②：宽松形态判据（类内 OR、不同类别命中数 ≥ 2），不是严格模板。
+        matched = [
+            name for name, pattern in _LOG_SIGNATURE_CLASSES if pattern.search(log_text)
+        ]
+        if len(matched) < MIN_SIGNATURE_CLASSES:
+            errors.append(
+                f"--log 不像 CubeMX 生成日志（命中 {len(matched)}/"
+                f"{len(_LOG_SIGNATURE_CLASSES)} 类特征），拒绝当作生成证据：{log_path}；"
+                "需要 CubeMX 原始 stdout 重定向文件"
+            )
+    return errors
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI 入口。
 
@@ -1674,6 +1794,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         ioc_text = read_text(args.ioc) if args.ioc else None
     except OSError as error:
         print(f"[platform32][input-error] 读取输入失败：{error}", file=sys.stderr)
+        return EXIT_INPUT_ERROR
+
+    # W0：证据不成立 ⇒ 统一退 2、不落 JSON/MD。校验只在 main() 这一层做，
+    # 绝不进入 verify_documents()（保持其签名与纯函数语义，F-1）。
+    input_errors = validate_evidence_inputs(
+        args=args, log_text=log_text, project_root=project_root
+    )
+    if input_errors:
+        for message in input_errors:
+            print(f"[platform32][input-error] {message}", file=sys.stderr)
         return EXIT_INPUT_ERROR
 
     report = verify_documents(

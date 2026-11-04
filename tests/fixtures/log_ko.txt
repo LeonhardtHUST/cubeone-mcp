@@ -1,0 +1,19 @@
+[INFO] STM32CubeMX 6.18.1 (DB.6.0.181) started in headless mode
+[INFO] Application started
+[INFO] LoadConfig: loading stm32-g474-template.ioc
+[INFO] ProjectManager: ProjectName=stm32-g474-template
+[INFO] ProjectManager: TargetToolchain=Makefile
+[INFO] MxCube.Version=6.18.1 MxDb.Version=DB.6.0.181
+[INFO] ImportTextPane:234 - (OptionalMessage_ERROR) Pin5 (VP_RIF_VS_RIF1) cannot be retrieved for this MCU
+[INFO] Generating code under D:\Projects\GitHub\testbeds\template-mcu-STM32G474-series
+[INFO] Copying CMSIS device files
+[INFO] Copying HAL driver files
+[INFO] Generate Main.c
+[INFO] Generate stm32g4xx_it.c
+[INFO] Generate stm32g4xx_hal_msp.c
+[INFO] Generate stm32g4xx_hal_conf.h
+[INFO] Code generation finished successfully
+[INFO] Project generation finished in 61 s
+[INFO] Updater plugin not ready yet
+KO
+KO

@@ -515,6 +515,40 @@ describe("组4 validateArgs 入口校验（R-B3）", () => {
     const emptyOk = validateArgs("ioc_field", { ioc, action: "set", key: "Mcu.Name", value: "" });
     assert.equal(emptyOk, null, `value="" 是合法写入值，应放行，实际：${JSON.stringify(emptyOk)}`);
   });
+
+  // W0-5 / A-8②：三个 schema 都写了 additionalProperties:false，旧实现却从不落地。
+  test("组4-6 未知键拒绝：projectRoot ⇒ 列出合法键名并提示应写 project_root", () => {
+    const err = validateArgs("verify_generation", { ...VERIFY_FULL, projectRoot: TMP });
+    assert.notEqual(err, null, "未知键必须被拒（否则静默传到 Python 变成文件不存在）");
+    const text = errorText(err);
+    assert.ok(text.includes("projectRoot"), `文案应点名未知键，实际：${text}`);
+    assert.ok(text.includes("project_root"), `文案应给出正确键名，实际：${text}`);
+    assert.ok(text.includes("inputSchema"), `文案应指向 inputSchema，实际：${text}`);
+    assert.equal(err.isError, true, "未知键必须是 isError=true 的可机读错误");
+
+    // 正确拼写仍放行，别把规则做成"一律拒绝额外键"的误伤
+    const ok = validateArgs("verify_generation", { ...VERIFY_FULL, project_root: TMP });
+    assert.equal(ok, null, `project_root 是合法键，应放行，实际：${JSON.stringify(ok)}`);
+  });
+
+  // W0-1 / A-11：CLI 侧对同一组合退 2，MCP 侧提前给可机读错误、避免无谓 spawn。
+  test("组4-7 expect_pins 与 ioc 联动：给了 pins 缺 ioc 被拒，补齐后放行", () => {
+    const err = validateArgs("verify_generation", {
+      ...VERIFY_FULL,
+      expect_pins: ["PC13=GPIO_Output"],
+    });
+    assert.notEqual(err, null, "expect_pins 有而 ioc 无必须被拒");
+    const text = errorText(err);
+    assert.ok(text.includes("expect_pins") && text.includes("ioc"), `文案应点名两个参数，实际：${text}`);
+    assert.equal(err.isError, true);
+
+    const ok = validateArgs("verify_generation", {
+      ...VERIFY_FULL,
+      expect_pins: ["PC13=GPIO_Output"],
+      ioc: path.join(TMP, "board.ioc"),
+    });
+    assert.equal(ok, null, `两者齐备应放行，实际：${JSON.stringify(ok)}`);
+  });
 });
 
 // ── 组5 · e2e 真实 stdio（1 例，不依赖 Python） ────────────────────
