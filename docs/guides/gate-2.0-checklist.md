@@ -19,14 +19,35 @@
 
 | 检查 | 命令 / 动作 | 期望 |
 |---|---|---|
-| ST-Link 被系统识别 | `pio device list` | 出现 `STMicroelectronics STLink` 相关端口；记下 `VID:PID` |
-| 探针型号与固件 | `pio system info` + `platformio.mcp doctor`（若已注册：`uvx platformio.mcp doctor`） | 输出里能看到探针序列号；**记下型号**（D6 约定 ST-Link + SWD，接板日确认是 ST-Link V2 / V3 / X-Pulse 哪一种） |
+| ST-Link 被系统识别 | PowerShell：`Get-CimInstance Win32_PnPEntity \| ? {$_.DeviceID -match "VID_0483"}` | 有 `STM32 STLink`（`VID:PID 0483:3748` = V2）。**`pio device list` 只列串口、不列调试器**，ST-Link V2 无 VCP，看不见它属正常 |
+| 探针型号与固件 | openocd 连一次（见 §1.1）或 `pio system info` | 输出里能看到 `STLINK V2J35S7` 一类固件号与 `Target voltage`；**记下型号** |
+| **工程引脚与实板是否对得上**（2026-11-04 实测新增） | 读板级头文件（X-Pulse：`Core/Inc/xpulse.h`）+ 板 README | **灯的引脚、有效电平、按键、串口都必须逐项对上**。X-Pulse：RGB = **PC0/PC1/PC2，共阳 3V3、低电平点亮**；**PC13 只引到排针、无 LED** |
 | 目标板 QSPI/供电档位 | 目视 | 板子标注的供电范围与探针 `3.3V` 输出一致；**不要用 5V 直连** |
 | 共地 | 目视 + 万用表通断 | 探针 GND 与目标板 GND **导通**；SWD 的 GND/SWDIO/SWCLK/NRST 四线到位 |
 | CubeMX 可用 | `"C:\ST\STM32CubeMX\jre\bin\java.exe" -version` | 有版本输出；本仓锁 **6.18.1**（D1） |
+| **没有 GUI 实例在跑** | `Get-CimInstance Win32_Process \| ? {$_.Name -like "*java*"}` | 输出为空。GUI 窗口会占共享 workspace，让排查多绕一圈 |
 
 > **探针型号为什么要单独记**：`upload_protocol = stlink` 对 V2/V3 都成立，但 X-Pulse 一类复合探针在
 > OpenOCD 下可能需要不同的 interface 配置。记下来写进当天的看板行，下次不用重新猜。
+
+> ⚠️ **"同 MCU" 不构成可烧理由**（2026-11-04 F4 现场教训）：C3 选的首烧目标 `NUEDC/G474_01_gpio`
+> 用 PC13/14/15 点灯，而实板 X-Pulse 的灯在 PC0/1/2。烧录成功、寄存器回读也对（`ODR` bit13=0），
+> **但人眼什么也看不到**——最容易被误判成"工具没生效"。先对引脚，再选工程。
+
+### 1.1 用 openocd 确认探针与目标（不烧录，5 秒）
+
+```bash
+OCD=~/.platformio/packages/tool-openocd/bin/openocd.exe
+S=~/.platformio/packages/tool-openocd/openocd/scripts
+"$OCD" -s "$S" -f interface/stlink.cfg -c "transport select swd" -f target/stm32g4x.cfg \
+  -c "init" -c "mdw 0xE0042000 1" -c "shutdown"
+```
+
+期望：`STLINK V2J…`、`Target voltage: 3.2…`、`Cortex-M4`、`Examination succeed`、
+`0xe0042000: 20036469`（`DEV_ID 0x469` = G47x/G48x）。
+
+- 报 `Debug adapter doesn't support 'hla_swd' transport` → 用 `-c "transport select swd"`（**不要**用 `hla_swd`）。
+- 报 `Error: open failed` 且设备列表里没有 `VID_0483` → **探针物理掉线**（拔线/接触），不是软件问题。
 
 ---
 
@@ -55,12 +76,35 @@ pio run -d <副本>          # 若报 NotPlatformIOProjectError → 该工程没
 从同 MCU 的模板派生 `platformio.ini` + `boards/`，并把工程自有 `BSP/Inc`、`BSP/Src` 纳入
 （`main.c` 里 `#include "bsp.h"`，不纳入必报 `bsp.h: No such file or directory`）。
 
+### 2.2.1 超时给够（2026-11-04 F5 实测）
+
+| 工程形态 | 单次生成实测 | 建议 `--timeout` |
+|---|---|---|
+| 精简工程（只有 GPIO + 少量驱动） | **62 s**（C3 的 NUEDC 副本） | 默认 300 s 够 |
+| **带全量 `Drivers/` 的模板工程** | **≈2.5 min**（日志 `Time for Copy HAL[0] : 7686mS`） | **480 s** |
+
+- 还要加上 CubeMX **启动阶段**的 CubeFinder 联网查询（网络抖动时明显变慢）——本次就在 300 s 上翻过车，
+  但脚本**没有误判成迁移挂死**，而是明确写"不能归因"并自动回滚（见 `phase2-bringup-2026-11-04.md` §4 F6）。
+- 提速小技巧：先单独跑一次 `config load`（2 s 就能回 `OK`），第二次启动明显更快。
+
 ### 2.3 生成前的基线
 
 ```bash
 python scripts/ioc_backup.py --project <副本>                    # .ioc.bak + .bak.sha256
 cp -r <副本>/Core /tmp/Core-before-$(date +%H%M)                 # 生成前快照，用于 diff
 ```
+
+### 2.4 改引脚：`set pin` 必须跟 `project generate`
+
+```text
+config load <name>.ioc
+set pin PC2 GPIO_Output      ← 回显 OK，但此刻 .ioc 还没变（值只在内存里）
+project generate             ← 写回 .ioc 的时机在这里
+exit
+```
+
+**单独 `set pin` + `exit` 不会改 `.ioc`**（2026-11-04 实测：回显 `OK`，`grep PC2` 仍为 0）。
+新增引脚插在 `Mcu.Pin1`、原 1–4 顺移、`Mcu.PinsNb +1`——**不要断言固定下标**（D24.3）。
 
 ---
 
