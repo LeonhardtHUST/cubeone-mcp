@@ -43,6 +43,14 @@
 | 0.7.2 | 18 | — | 未记大小（发版时未回填本表，此处只补 files 数） |
 | 0.7.3 | **20** | **137.6 kB** | 新增 `docs/guides/gate-2.0-checklist.md` 与 `docs/guides/testbeds-board-map.md`（W4-3：接板日必备的两本此前**不在包里**） |
 
+> 📏 **包体积双口径（v0.7.3，A① 澄清）**：上表 `137.6 kB` 是 **CI 的 LF pack**，也就是 registry 上
+> 真正发布的那个 tarball；`docs/releases/2026-11-04-v0.7.3.md` 里写的 `138.1 kB` 是**发版当时本机
+> `npm pack` 的 CRLF pack**（工作区有 21 个文件 `w/crlf`、index 是 LF，所以 `git status` 仍显示干净——
+> 见 [`../README.md`](../README.md) §2.1 第 5 条）。**两者内容一致**：去掉 CR 之后，包内文件与
+> registry tarball **逐字节相等**，差异只有行尾字节与由此产生的体积差。
+> **不追改已发布正文**：改它会破坏「Release 正文与入库文件逐字一致」这条证据（D35 §35.6 人工核第 2 项），
+> 所以该口径只在本表与 **0.7.4 及后续正文**里澄清。
+
 ## 3. 怎么追加一行（发版后必做）
 
 按 [`../DECISIONS.md`](../DECISIONS.md) **D35** 的 9 步流水线，在第 7 步"看板回填"时**顺手**把本页加一行：
