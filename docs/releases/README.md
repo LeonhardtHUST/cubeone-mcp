@@ -23,6 +23,7 @@
 | **v0.7.0** | 2026-11-03 | **BREAKING**：路径白名单默认 fail-closed（未设 `CUBEONE_ALLOWED_ROOTS` = 拒绝所有路径参数）+ `realpath` 防 junction 绕出 + `.ioc` 还原原子化与完整性摘要 | ✅ `v0.7.0`（`64a9a01`） | ✅ | ✅ `0.7.0` | [`2026-11-03-v0.7.0.md`](2026-11-03-v0.7.0.md) |
 | **v0.7.1** | 2026-11-04 | **无行为变更**：注册指南修正并随包下发（补 0.7.0 默认拒绝 + 新增「注册后自检」）；带出 M3 的 `ioc_field` **1.1.0**（get 区分多行歧义/键不存在） | ✅ `v0.7.1`（`5ecc0b7`） | ✅ | ✅ `0.7.1`（18 files / 99.0 kB，含两本指南） | [`2026-11-04-v0.7.1.md`](2026-11-04-v0.7.1.md) |
 | **v0.7.2** | 2026-11-04 | **补丁版，无新增能力**：两处**用户可见缺陷**修复——① CLI 在 cp1252/cp936 控制台打印 `→` 抛 `UnicodeEncodeError` 退出 1（改为按输出目标分流：非 TTY 强制 UTF-8 / TTY 保留编码 + `backslashreplace`）；② 核验器对 `ProjectManager.CoupleFile=true` 工程**假失败**（`--project-root` 下改扫 `Core/Src/*.c`，行号换算回原文件；无 project-root 时降 warn + `notes`）。同批工程化：Windows CI / lock 入库 + `npm ci` / 覆盖率底线 36 / `check_release.py` / D35 SOP / 贡献者文档 | [`v0.7.2`](https://github.com/LeonhardtHUST/cubeone-mcp/releases/tag/v0.7.2) | [`v0.7.2`](https://github.com/LeonhardtHUST/cubeone-mcp/releases/tag/v0.7.2) | `0.7.2`（latest） | [`2026-11-04-v0.7.2.md`](2026-11-04-v0.7.2.md) |
+| **v0.7.3** | 2026-11-04 | **补丁版，无新增能力，但有一处 BREAKING behavior**：审定整改 W0–W6（10 个 commit）——① **堵 G1 四类假绿**（漏 `--ioc` / 错 `--project-root` / 日志含整行 `KO` / 任意文本或空文件当 `--log`）：证据不成立统一 **rc=2 且不落 `--json-out`/`--report-md`**，整行 `KO` 复用 `log_cannot_map` 判 **fail（rc=1）**；② `.ioc` **双层拒绝换行注入**（MCP `validateArgs` + `ioc_field` `_reject_newlines`，rc=2 且一字节不动）+ `capability_warning` 机读字段；③ `regen.sh` **退出码归一 / 缺参不死循环 / dry-run 不写盘**；④ 发布门禁**分级**（`--network` 才判红，发布前不卡死）+ `publish.yml` tag 一致性与幂等补发路径；⑤ 操作面与状态真源归位、N 处随包可达性补齐。**判据/契约零改动**：仍 7 项 / schema `/2`，无第 8 个 check id | [`v0.7.3`](https://github.com/LeonhardtHUST/cubeone-mcp/releases/tag/v0.7.3) | [`v0.7.3`](https://github.com/LeonhardtHUST/cubeone-mcp/releases/tag/v0.7.3) | `0.7.3`（latest，20 files / 137.6 kB，Trusted Publisher + provenance） | [`2026-11-04-v0.7.3.md`](2026-11-04-v0.7.3.md) |
 
 > **`0.6.0` 那一行三个 ❌ 是事实，不是漏记**：当时 npm 化是计划外的（D33 §33.1 已把它追溯认定为正式交付物形态），
 > tag 与 Release 都没做，`0.6.1` 才补上正规流程。**不要把 0.6.0 读成"发过但忘了记账"**——它是"发了但没有收口"，
@@ -39,6 +40,8 @@
 | 0.6.2 | 17 | 82.1 kB | `files` 只带 `bin/ lib/ scripts/*.py SKILL.md references/` |
 | 0.7.0 | 17 | — | 同上（**包里那本指南讲的是两个外部 server，与本包无关**——交付缺口，见 0.7.1） |
 | 0.7.1 | **18** | **99.0 kB** | 新增 `docs/guides/npm-publish-and-codebuddy.md`（本包真正的注册指南），`mcp-registration.md` 同时保留作双通道背景 |
+| 0.7.2 | 18 | — | 未记大小（发版时未回填本表，此处只补 files 数） |
+| 0.7.3 | **20** | **137.6 kB** | 新增 `docs/guides/gate-2.0-checklist.md` 与 `docs/guides/testbeds-board-map.md`（W4-3：接板日必备的两本此前**不在包里**） |
 
 ## 3. 怎么追加一行（发版后必做）
 
