@@ -482,9 +482,13 @@ def current_package_version() -> str | None:
 
     Returns:
         版本号字符串；读不到或没有 ``version`` 字段时返回 ``None``（由调用方跳过判据）。
+
+    ``errors="replace"``（B-5）：`package.json` 若被 GBK/混合字节写过，抛
+    ``UnicodeDecodeError`` 只会让判据③ 带着 traceback 崩掉；这里读成带替换字符的文本，
+    取不到版本号就走「跳过并打印 note」的既有路径，**不猜、不静默**。
     """
     try:
-        text = (REPO_ROOT / "package.json").read_text(encoding="utf-8")
+        text = (REPO_ROOT / "package.json").read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
     match = re.search(r'"version"\s*:\s*"([^"]+)"', text)
@@ -502,6 +506,8 @@ def git_tags() -> tuple[list[str], str | None]:
             ["git", "-C", str(REPO_ROOT), "tag", "-l"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
             check=False,
         )
@@ -592,12 +598,36 @@ def render_counts(counts: dict[str, dict[str, int]]) -> str:
     return "\n".join(parts)
 
 
+def _harden_console_streams() -> None:
+    """按输出目标加固 stdout/stderr，杜绝"控制台编码不够就崩"（B-5）。
+
+    与 `scripts/verify_generation.py` / `scripts/ioc_backup.py` / `scripts/ioc_field.py` /
+    `tools/check_release.py` 同款分流（**每个脚本各持一份，不引入共享模块**）：
+
+    - **管道 / 重定向（非 TTY）**：强制 UTF-8 —— 输出要被 CI 日志与下游脚本消费；
+    - **交互式控制台（TTY）**：保留控制台自身编码，只把 errors 换成 ``backslashreplace``
+      （英文 Windows 的 cp1252 打印 ``✓`` / ``✗`` / 中文不再抛 ``UnicodeEncodeError``）。
+
+    ⚠️ TTY 那一支没有自动回归：改动后请**手动**在中文 Windows 控制台跑一次；
+    管道那一支由 ``tests/test_tools_encoding.py`` 覆盖。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if stream.isatty():
+                stream.reconfigure(errors="backslashreplace")
+            else:
+                stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI 入口。
 
     Returns:
         退出码：``0`` 全部判据通过；``1`` 任一判据失败（或发现解析错误）。
     """
+    _harden_console_streams()
     parser = argparse.ArgumentParser(
         prog="check_taskboard.py",
         description="校验 docs/TASKBOARD.md 的快照一致性、证据路径存在性与发布一致性",
@@ -620,7 +650,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"[check_taskboard][error] 看板不存在：{board_path}", file=sys.stderr)
         return 1
 
-    board_text = board_path.read_text(encoding="utf-8")
+    # ⚠️ `errors="replace"`（B-5）是有意的：看板是**人写的文档**，一个坏字节不该让
+    # 「快照与任务表是否一致」这个问题失去答案。替换字符会让解析找不到表/状态而**判红**，
+    # 比抛 `UnicodeDecodeError` 更接近真相（文件确实读不出那一段）。
+    board_text = board_path.read_text(encoding="utf-8", errors="replace")
 
     # ── 判据 1：快照一致性 ──────────────────────────────────────────
     print("\n== 1) §4 快照 ↔ 任务表 ==")

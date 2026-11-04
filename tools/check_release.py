@@ -45,6 +45,9 @@ frontmatter = README 表里那两处，**必须同值同步**（D33 §33.2）。
 - **只读**：本脚本不改任何文件，也不执行任何写操作（不 add / 不 commit / 不打 tag）。
 - **不猜**：读不到版本号就报错并指名是哪一处，不做"取第一个数字"这类猜测——
   猜对了没人知道，猜错了会给出一个看起来通过的假结论。
+- **编码不毁结论**（B-5，0.7.4）：读文档一律 `errors="replace"`（坏字节由替换字符顶替，
+  判据照样出结论）；子进程输出显式 `encoding="utf-8", errors="replace"`；控制台按输出目标
+  分流（管道强制 UTF-8、TTY 保留编码 + `backslashreplace`），见 :func:`_harden_console_streams`。
 """
 
 from __future__ import annotations
@@ -92,8 +95,19 @@ class Finding:
 
 
 def read_text(path: Path) -> str:
-    """按 UTF-8 读文本；失败时抛 ``OSError``（由调用方转成 FAIL）。"""
-    return path.read_text(encoding="utf-8")
+    """按 UTF-8 读文本；解码不出的字节**替换**而不是抛异常。
+
+    为什么是 ``errors="replace"``（B-5 / 0.7.4）：门禁脚本的输入里有**人写的文档**
+    （`SKILL.md` / `README.md`）。它们在中文 Windows 上可能是 GBK/cp936 保存的，
+    也可能是编辑器留下的混合字节。此时抛 ``UnicodeDecodeError`` 只会得到一条
+    「编码坏了」的 traceback——**而真正要回答的问题是「版本号到底同不同值」**，
+    文档里某个字节读不出来不该让整道门禁失去结论。用替换字符读完再判，
+    判据仍能给出结论，无法判定的部分会被显式写进 FAIL 明细（不猜）。
+
+    Raises:
+        OSError: 文件读不到（由调用方转成 FAIL）。
+    """
+    return path.read_text(encoding="utf-8", errors="replace")
 
 
 def run_git(root: Path, args: Sequence[str]) -> tuple[int, str]:
@@ -111,6 +125,8 @@ def run_git(root: Path, args: Sequence[str]) -> tuple[int, str]:
             ["git", "-C", str(root), *args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
             check=False,
         )
@@ -295,6 +311,8 @@ def npm_dist_tags(root: Path, timeout: float = 20.0) -> tuple[dict[str, str] | N
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             cwd=str(root),
             check=False,
@@ -500,12 +518,41 @@ def check(
     return findings, extras
 
 
+def _harden_console_streams() -> None:
+    """按输出目标加固 stdout/stderr，杜绝"控制台编码不够就崩"（B-5）。
+
+    与 `scripts/verify_generation.py` / `scripts/ioc_field.py` / `scripts/ioc_backup.py`
+    同款分流（**四个脚本各持一份，不引入共享模块**——这几个文件必须能单独拷走就用）：
+
+    - **管道 / 重定向（非 TTY）**：强制 UTF-8。门禁输出会被 CI 日志、`$(...)`、下游脚本消费，
+      UTF-8 是唯一不产生歧义的编码。
+    - **交互式控制台（TTY）**：保留控制台自身编码（中文 Windows = cp936，中文正常），
+      只把错误处理器换成 ``backslashreplace``——该编码表示不了的字符转义而不抛
+      ``UnicodeEncodeError``。
+
+    本脚本的汇报文本里有 ``✗`` / ``✓`` / ``—`` / 中文：英文 Windows 控制台（cp1252）
+    打印这些字符会直接崩，**而它恰恰是发版前必跑的四条命令之一**。
+
+    ⚠️ TTY 那一支没有自动回归：改动本函数后请**手动**在中文 Windows 控制台各跑一次。
+    管道那一支由 ``tests/test_tools_encoding.py`` 覆盖。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if stream.isatty():
+                stream.reconfigure(errors="backslashreplace")
+            else:
+                stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI 入口。
 
     Returns:
         退出码：``0`` 全部判据通过；``1`` 存在不一致或无法判定。
     """
+    _harden_console_streams()
     parser = argparse.ArgumentParser(
         prog="check_release.py",
         description="校验版本轴（tag / package.json / SKILL.md / README）与发布正文是否收口",

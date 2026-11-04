@@ -42,6 +42,21 @@ import { writeFileSync, appendFileSync, mkdirSync, readdirSync, existsSync } fro
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// ── 编码与管道（B-5 / 0.7.4）───────────────────────────────────────────────
+// 本文件所有落盘都是显式 "utf8"（`writeStepSummary()` 的 appendFileSync、末尾的 writeFileSync）。
+// Node 对 stdout/stderr 也一律写 **UTF-8 字节**、**不按控制台代码页转码**，所以 Python 侧那个
+// `UnicodeEncodeError` 的失败模式在这里不存在：cp1252 / cp936 控制台上最坏是**显示**乱码，
+// 进程不会崩，日志文件里的字节仍是 UTF-8（`tests/test_tools_encoding.py` 用 `LANG=C` +
+// `PYTHONIOENCODING=cp1252` 跑本脚本断言这一点）。
+// 真正会崩的是**管道被下游提前关闭**（如 `node tools/npm_mcp_handshake.mjs | head -5`）：
+// EPIPE 会变成未捕获异常 ⇒ 冒烟以"崩溃"结束，而不是给出 PASS/FAIL —— 那比失败更误导。
+// 所以这里只吞 EPIPE；其它写错误也不往外抛（结论已在 logLines 里，落盘路径会再试一次）。
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on("error", (error) => {
+    if (error?.code !== "EPIPE") return;
+  });
+}
+
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const BIN = path.join(ROOT, "bin", "cubeone-mcp.mjs");
 
