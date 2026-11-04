@@ -1831,8 +1831,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_INPUT_ERROR
 
     print(render_console(report))
-    if args.json_out:
-        print(f"[platform32] JSON 报告：{os.path.abspath(args.json_out)}")
+    # W4-2：不再回显 --json-out 的绝对路径。MCP 通道传入的是 runPython() 用完即删的
+    # 临时目录，回显出去必然是失效路径；CLI 直调时调用方本来就知道自己传了什么路径。
+    # 结论一律看 render_console() / 读结构化 JSON，不靠这行路径。
     if args.report_md:
         print(f"[platform32] Markdown 报告：{os.path.abspath(args.report_md)}")
 

@@ -62,6 +62,12 @@ STM32 开发里有一种很难发现的失败：
 工具清单、退出码判据、发布与注册细节见 [`docs/guides/npm-publish-and-codebuddy.md`](docs/guides/npm-publish-and-codebuddy.md)。
 能力边界对 MCP 通道同样适用：**非 GPIO 外设的增改依旧没有工具能力**，核验器仍是唯一安全网。
 
+> 📦 **MCP 通道的证据形态（W4-1）**：`verify_generation` 的结构化结论在 `structuredContent`
+> （`verdict` / `checks` / `summary.notes`）；`--json-out` 指向系统临时目录、读完即删，
+> **MCP 调用不生成 `verify.json`**。需要落盘证据时显式传 `report_md` 写 Markdown 报告；
+> 只有 CLI 直调（`python scripts/verify_generation.py --json-out …`）才会生成 `verify.json`。
+> 随包清单：`SKILL.md` + `references/` + 四本 `docs/guides/*` 指南；**其余 `docs/` 仅仓库可见**。
+
 ### 安全默认值（0.7.0 起）：`CUBEONE_ALLOWED_ROOTS` 未设置 = **拒绝所有路径参数**
 
 > **BREAKING（0.7.0）**：默认值从"未设 = 不校验"翻转为 **fail-closed**。升级后如果没配白名单，

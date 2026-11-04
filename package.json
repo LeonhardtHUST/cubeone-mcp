@@ -31,6 +31,8 @@
     "scripts/regen.sh",
     "docs/guides/mcp-registration.md",
     "docs/guides/npm-publish-and-codebuddy.md",
+    "docs/guides/gate-2.0-checklist.md",
+    "docs/guides/testbeds-board-map.md",
     "SKILL.md",
     "references/"
   ],

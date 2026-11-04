@@ -20,6 +20,14 @@ compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证�
 > `ioc_field` 脚本轴 **1.1.0**：get 区分「多行歧义」与「键不存在」）。**Phase 2 首板 L5 已达成（2026-11-04）**：
 > 烧录 / 寄存器回读 / 目视一致见 `docs/reports/phase2-bringup-2026-11-04.md`；串口段与 `pio device monitor` 仍未实测。
 
+> 📦 **随包可达性（W4-3 / D-4 裁决）**：npm 包里只有 `SKILL.md`、`references/`、两本注册指南
+> （`docs/guides/mcp-registration.md`、`docs/guides/npm-publish-and-codebuddy.md`）**与两本接板指南**
+> （`docs/guides/gate-2.0-checklist.md`、`docs/guides/testbeds-board-map.md`）——后两本已进
+> `package.json` 的 `files`，接板日必备。**其余 `docs/` 全部「仅仓库可见」**（clone 仓库才看得到）：
+> `docs/reports/*`（含 L5 真源 `docs/reports/phase2-bringup-2026-11-04.md`）、`docs/releases/*`、
+> `docs/DECISIONS.md`、`docs/TASKBOARD.md`、`docs/README.md`、`docs/logs/*`、`docs/evaluations/*` 等。
+> 按本文件去找这些文件时若不在包内，请回仓库取；**不要把它们当成随包死链去"修"**。
+
 ## 0. 硬前提
 
 ### 0.0 第零层：能力边界（先读，否则后面全白读）
@@ -111,6 +119,9 @@ python scripts/verify_generation.py --log <原始日志> --main-c "<工程>\Core
     --mxproject "<工程>\.mxproject" --project-root "<工程>" --expect GPIO \
     --allow-signal VP_RIF_VS_RIF1 --json-out <证据目录>\verify.json
 ```
+
+> 📝 上面是 **CLI 直调**：`--json-out` 会真的落一份 `verify.json`。**MCP 通道不生成
+> `verify.json`**（证据是 `structuredContent`，见 §0.1 与 §2 第 5 步）；两条通道别混。
 
 Phase 2 烧录命令 `pio run -d <工程> -t upload` **已实测（2026-11-04，CLI 通道）**：
 `Verified OK` + 寄存器回读 + 目视一致，见 `docs/reports/phase2-bringup-2026-11-04.md`；
@@ -321,7 +332,16 @@ MCP `cubemx_generate` / CLI §0.4。**stdout/stderr 必须重定向到文件**�
 
 ### 第 5 步 · **生成核验（G1，硬关卡）**
 
-调用见 §1.3，判据见 §1.4。要点：
+调用见 §1.3，判据见 §1.4。**先分清证据落点（W4-1）**：
+
+- **CLI 直调**（`scripts/verify_generation.py --json-out <路径>`）→ 落 `verify.json`（+ 可选 `--report-md`）。
+  提交模板里「见 verify.json 的 summary.notes」指的是这一通道。
+- **MCP 通道**（`verify_generation` 工具）→ **证据 = `structuredContent`**（`verdict` / `checks` /
+  `summary.notes`）；`--json-out` 由封装层指向系统临时目录、读完即删，**不产生 `verify.json`**，
+  返回文本里也不会给一个可打开的 JSON 路径。需要落盘证据就显式传 `report_md`（写 Markdown 报告，
+  路径仍受白名单校验）。⛔ 不要在 MCP 调用后去找 `verify.json`，也不要把 MCP 返回文本当日志再喂给 `--log`。
+
+要点：
 
 - **`--expect` 写本次期望存在的每个外设**（漏写 = 漏检，多写 = 假失败），以第 3 步的**意图**为准。
 - **`1` 或 `verdict: fail` → 立即从第 2 步的 `ioc_backup` 备份回滚**（`ioc_backup.py --restore`）；**不许**"先构建看看能不能过"——静默丢弃的外设**能构建成功**。

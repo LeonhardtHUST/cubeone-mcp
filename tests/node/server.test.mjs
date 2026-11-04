@@ -34,6 +34,7 @@ import {
   buildArgs,
   validateArgs,
   applyCapabilityWarning,
+  spawnFailureDetail,
   policy,
   allowedRoots,
   requireRootsEnabled,
@@ -193,6 +194,23 @@ describe("组1 isExecFailure 退出码矩阵（R-B1）", () => {
     // 代价远高于收益。若将来收窄成显式工具名，本用例的期望要反转为 true。
     const res = { status: 1, stdout: "", stderr: "[some_future_tool][not-found] 目标不存在\n" };
     assert.equal(isExecFailure(res, null), false);
+  });
+
+  // W4-4 / A-8①：spawn error 按 code 分派，ETIMEDOUT 与 ENOENT 不能合并成同一句"无法启动 Python"。
+  test("组1-13 ETIMEDOUT / ENOENT / EACCES 各自给出可操作的处置文案", () => {
+    const timedOut = spawnFailureDetail({ error: { code: "ETIMEDOUT", message: "spawnSync python ETIMEDOUT" } });
+    const notFound = spawnFailureDetail({ error: { code: "ENOENT", message: "spawn python ENOENT" } });
+    const denied = spawnFailureDetail({ error: { code: "EACCES", message: "spawn python EACCES" } });
+    const other = spawnFailureDetail({ error: { message: "boom" } });
+
+    assert.equal(timedOut.code, "ETIMEDOUT");
+    assert.ok(/超时|120 s/.test(timedOut.reason + timedOut.action), "超时分支必须点明超时");
+    assert.ok(/CUBEONE_PYTHON/.test(notFound.action), "ENOENT 应指向解释器配置");
+    assert.notEqual(timedOut.action, notFound.action, "两类失败处置不得合并");
+    assert.notEqual(denied.action, notFound.action);
+    assert.equal(other.code, "boom", "无 code 时退回 message，不丢诊断");
+    // 任何 spawn error 都仍按执行层失败处理（白名单制不变）。
+    assert.equal(isExecFailure({ error: { code: "ETIMEDOUT" }, status: null }, null), true);
   });
 });
 
