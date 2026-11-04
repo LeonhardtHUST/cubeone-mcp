@@ -211,8 +211,12 @@ def test_clean_log_without_ko_proceeds_to_verify(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # 2. AskForMigrate：只读、不改、条件告警
 # ---------------------------------------------------------------------------
-def test_ask_for_migrate_true_is_silent_when_version_matches(tmp_path: Path) -> None:
-    """稳态：``=true`` 且版本一致 → 不告警、不拦、**不改文件**。"""
+def test_ask_for_migrate_true_is_info_only_when_version_matches(tmp_path: Path) -> None:
+    """稳态：``=true`` 且版本一致 → **不出 warn**（只有一行 info）、不拦、**不改文件**。
+
+    为什么不是"完全不提"：版本戳比的是**锁定基线常量**，不是对用户机器的探测；
+    用户装的 CubeMX 可能高于基线，此时同样会挂。所以这一档降级为 info 而不是静默。
+    """
     project = make_project(tmp_path, migrate="true", version="6.18.1")
     before = (project / "fake-board.ioc").read_bytes()
 
@@ -220,12 +224,17 @@ def test_ask_for_migrate_true_is_silent_when_version_matches(tmp_path: Path) -> 
     combined = result.stdout + result.stderr
 
     assert result.returncode == 0, combined
-    assert "AskForMigrate" not in combined
+    warn_lines = [
+        ln for ln in combined.splitlines()
+        if ln.startswith("[regen][warn]") and "AskForMigrate" in ln
+    ]
+    assert warn_lines == [], f"版本戳一致时不该出 warn：{warn_lines}"
+    assert "AskForMigrate=true（生成后的稳态）" in combined  # info 仍在，不静默
     assert (project / "fake-board.ioc").read_bytes() == before  # 一个字节都没动
 
 
-def test_ask_for_migrate_true_warns_only_when_version_is_older(tmp_path: Path) -> None:
-    """``=true`` + 旧版本戳 → 一条 warn（含"无实测卡死证据"），仍不拦不改。"""
+def test_ask_for_migrate_true_warns_when_version_is_older(tmp_path: Path) -> None:
+    """``=true`` + 旧版本戳 → 出 warn（带修法），仍不拦不改。"""
     project = make_project(tmp_path, migrate="true", version="6.17.0")
     before = (project / "fake-board.ioc").read_bytes()
 
@@ -233,8 +242,8 @@ def test_ask_for_migrate_true_warns_only_when_version_is_older(tmp_path: Path) -
     combined = result.stdout + result.stderr
 
     assert result.returncode == 0, combined
-    assert "AskForMigrate=true" in combined
-    assert "无实测卡死证据" in combined
+    assert "AskForMigrate=true 且版本戳" in combined
+    assert "set ProjectManager.AskForMigrate false" in combined  # 可直接复制的修法
     assert (project / "fake-board.ioc").read_bytes() == before
 
 

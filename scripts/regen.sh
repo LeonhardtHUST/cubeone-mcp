@@ -50,6 +50,10 @@ TIMEOUT_SEC=300
 SKIP_GENERATE=0
 DRY_RUN=0
 REQUIRE_CLEAN=0
+#: 0 = 检测到 AskForMigrate=true 只告警（默认）；1 = 直接退 2（CI/批处理用，D36①）
+FAIL_FAST_ON_MIGRATE=0
+#: 「日志末行附近」判定窗口（非空行数），见 log_tail_stalled_at_loadconfig()
+LOADCONFIG_TAIL_WINDOW="${LOADCONFIG_TAIL_WINDOW:-10}"
 DEFAULT_ALLOW=1
 ALLOW_SIGNALS=()
 EXPECT_PINS=()   # --expect-pins PIN=SIGNAL（可重复），透传给核验器
@@ -81,6 +85,8 @@ cubeone-mcp / scripts/regen.sh —— 备份 → 前置检查 → CubeMX 生成 
       --allow-signal <sig>   传给核验器的 Cannot map 白名单（默认已含 VP_RIF_VS_RIF1，D8）
       --no-default-allow     不预置 D8 白名单
       --require-clean        .ioc 有未提交内容改动时直接退出 2（默认**允许**脏，失败从备份恢复）
+      --fail-fast-on-migrate 生成前读到 AskForMigrate=true **即**直接退出 2（不依赖版本戳判断）
+                             （而不是只告警）。给 CI / 批处理用，默认关闭（详见「约定」）
       --skip-generate        跳过生成，只做备份 + 核验（重跑核验用）
       --dry-run              只打印将执行的命令，不落盘、不宣称通过
   -h, --help
@@ -88,13 +94,20 @@ cubeone-mcp / scripts/regen.sh —— 备份 → 前置检查 → CubeMX 生成 
 退出码：
   0 = 生成 + 核验全部通过（允许 warning，如 D9 的 syscalls/sysmem 叠加路径）
   1 = 跑过了但错了（生成阶段失败 / 核验 fail），**已从备份回滚**
-  2 = 压根没跑（参数/IO/环境错误，或缺 .mx、--require-clean 命中脏 .ioc）
+  2 = 压根没跑（参数/IO/环境错误，或缺 .mx、--require-clean 命中脏 .ioc、
+      --fail-fast-on-migrate 命中 AskForMigrate=true）
 
 约定：
   * 不做**配置类**文本注入：改引脚/外设/参数一律走 CubeMX CLI（set 命令）或 MCP。
-  * 不修改 ProjectManager.AskForMigrate：它是 CubeMX 的弹窗开关，`config save`/`saveas`
-    之后的稳态，纯 `project generate` 不写回。仅当「.ioc 版本低于本机 + 值为 true」
-    时打一条 warn（真实迁移需求），**不拦、不改**。
+  * **不修改** ProjectManager.AskForMigrate：它是 CubeMX 的弹窗开关，`project generate`
+    之后会被写回 true（稳态）。本脚本只做**只读前置提示**，且**按可判定性分级**（D36①）：
+    该键为 true **且版本戳落后于锁定基线** → 4 行 `warn`（含可直接复制的置 false 命令）；
+    为 true **但版本戳一致** → 一行 `info`（不喊，也不沉默）；`false` / 读不到 → 什么都不打。
+    **为什么分级**：一律 warn 会因"每次生成都写回 true"而每次刷黄，真风险被淹；只在落后时
+    输出又会因基线是**常量**（不是对你机器的探测）而在错配时静默掉会挂死的那一例。
+    全程**不改值、不拦跑**；CI / 批处理用 `--fail-fast-on-migrate` 改为退 2（不依赖版本戳判断）。
+  * 生成超时（RC=124）时按日志形态**定向诊断**：末行附近停在 `Begin LoadConfig()` → 判为
+    迁移对话框挂死并给出两条处置；否则**不归因**，只报超时。见 references/pitfalls.md P1。
   * CubeMX 的 cwd 必须是工程根：.mx 里 `config load` 用的是相对 .ioc 路径，
     而 CubeMX 默认 cwd 是安装目录。脚本在子 shell 里 cd 进工程根并断言。
   * 失败回滚从**备份**恢复（.ioc.bak / .mxproject.bak），不是 git checkout ——
@@ -133,6 +146,7 @@ while [ "$#" -gt 0 ]; do
     --expect-pins)      EXPECT_PINS+=("${2:-}"); shift 2 ;;
     --no-default-allow) DEFAULT_ALLOW=0; shift ;;
     --require-clean)    REQUIRE_CLEAN=1; shift ;;
+    --fail-fast-on-migrate) FAIL_FAST_ON_MIGRATE=1; shift ;;
     --skip-generate)    SKIP_GENERATE=1; shift ;;
     --dry-run)          DRY_RUN=1; shift ;;
     -h|--help)          usage; exit 0 ;;
@@ -227,17 +241,58 @@ else
   log_warn "工程不在 git 仓库内：回滚退化为 .ioc.bak，且无法报告 Core/ 的改动"
 fi
 
-# ---- 版本戳 / 迁移提示：只读，不拦、不改 ----
+# ---- 版本戳 / 迁移前置告警：只读，不拦、不改（D19 / D36①） ----
 IOC_VERSION="$(grep -m1 -E '^MxCube\.Version=' "$IOC_FILE" 2>/dev/null | sed -E 's/^MxCube\.Version=//' | tr -d '\r')"
 IOC_MIGRATE="$(grep -m1 -E '^ProjectManager\.AskForMigrate=' "$IOC_FILE" 2>/dev/null | sed -E 's/^ProjectManager\.AskForMigrate=//' | tr -d '\r')"
 if [ -n "$IOC_VERSION" ] && [ "$IOC_VERSION" != "$EXPECTED_CUBEMX_VERSION" ]; then
   log_warn ".ioc 版本戳 MxCube.Version=${IOC_VERSION} ≠ 锁定版本 ${EXPECTED_CUBEMX_VERSION}（P2）："
   log_warn "  重新生成会把 .ioc 重写成新版本格式（本机实测 619 增/106 删），建议拆独立提交。"
 fi
-if [ "$IOC_MIGRATE" = "true" ] && version_lt "$IOC_VERSION" "$EXPECTED_CUBEMX_VERSION"; then
-  log_warn "AskForMigrate=true 且 .ioc 由旧版 CubeMX（${IOC_VERSION} < ${EXPECTED_CUBEMX_VERSION}）生成："
-  log_warn "  存在真实迁移需求，-q 非交互生成**可能**停在迁移对话框。"
-  log_warn "  注：本机多次实跑（含 .ioc 为 true 的稳态）均未卡死，**无实测卡死证据**；仅作提示，不拦不改。"
+
+#: 可直接复制执行的「把该键置 false」命令（含真实绝对路径，路径已加引号防空格）
+MIGRATE_FIX_CMD="${PYTHON} \"${SCRIPT_DIR}/ioc_field.py\" --ioc \"${IOC_FILE}\" set ProjectManager.AskForMigrate false"
+
+# ---------------------------------------------------------------------------
+# 前置告警（D36①）：AskForMigrate=true 就告警
+#
+# 已知因果（pitfalls.md P1，2026-11-04 实测）：该键为 true **且** 工程版本戳落后于当前
+# 安装的 CubeMX 时，`-q` 无头生成会停在日志的 `Begin LoadConfig()` 直到超时——
+# 无 KO、无报错，用户看到的只是"程序卡住 5 分钟然后超时"，完全不知道是自己工程的设置问题。
+#
+# ⚠️ 判据为什么**只看这个键**、不叠加"版本戳更旧"：
+#    1. 版本戳判不出来。不启动 CubeMX 就无法可靠得知"当前安装的是哪个版本"，
+#       EXPECTED_CUBEMX_VERSION 是锁定基线**常量**、不是探测结果；把常量当"本机版本"，
+#       在用户装了别的版本时会给出反向结论。
+#    2. 叠加一个不可靠的判据 = 在真正高危的情形下**静默**。而这类挂死的代价是
+#       5 分钟无解释的等待——正是这条告警要消灭的东西。
+#    3. 故宁可吵一点：为 true 就提醒"有这个风险 + 这是修法"，判断权留在人手里；
+#       CI/批处理要"宁可退 2 也不要挂住"就显式加 --fail-fast-on-migrate。
+#
+# 已知代价（如实记录，别当成 bug）：`project generate` 会把该键写回 true（P1-1），
+#    所以**生成过的工程几乎都会命中这条告警**。这个噪音是刻意接受的：文案自带
+#    "如何确认 / 如何关掉 / 关掉也只是本次有效"，而不是静默通过。若将来证明噪音压过收益，
+#    改判据必须与 D36① 及 references/ 三处同批修订（不能只改代码）。
+# ---------------------------------------------------------------------------
+if [ "$IOC_MIGRATE" = "true" ]; then
+  # 分级：判据只能靠"版本戳 vs 锁定基线"这个**常量**比较（不是对用户机器的探测），
+  # 所以「版本戳更旧」只是"很可能危险"，不是"确定危险"——它单独不足以判死。
+  # 反过来，「版本戳一致」也不等于安全：用户装的 CubeMX 可能高于基线。
+  # 因此两档都不静默，但级别不同：可疑 → warn（响亮、带修法）；不确定 → info（一行、不喊）。
+  # 一律 warn 会让每次 regen 都刷黄，真风险被淹（警告常态化 = 没有警告）；一律静默则可能
+  # 在"基线落后于用户机器"时漏掉真挂死。分级是这两者之间唯一站得住的位置。
+  if version_lt "$IOC_VERSION" "$EXPECTED_CUBEMX_VERSION"; then
+    log_warn "AskForMigrate=true 且版本戳 ${IOC_VERSION} < 基线 ${EXPECTED_CUBEMX_VERSION}：无头生成可能停在 Begin LoadConfig() 直到超时（P1）。"
+    log_warn "  先关掉该键（可直接复制执行）：${MIGRATE_FIX_CMD}"
+    log_warn "  或用 GUI 打开本工程一次让它完成迁移（会改写 .ioc，需单独提交）。"
+    log_warn "  注：基线是常量、不等于你机器上真实安装的版本；判据细节见 references/pitfalls.md P1。"
+  else
+    log_info "AskForMigrate=true（生成后的稳态）：若你机器上的 CubeMX 版本高于工程版本戳，无头生成仍可能停在 Begin LoadConfig()；处置见 references/pitfalls.md P1。"
+  fi
+  # 开关**不依赖**上面那个不可靠判据：CI / 批处理要的是"宁可退 2 也不要挂住"，
+  # 只要该键为 true 就拒跑（它想安静的时候，恰恰是最可能挂住的时候）。
+  if [ "$FAIL_FAST_ON_MIGRATE" -eq 1 ]; then
+    die 2 "--fail-fast-on-migrate：AskForMigrate=true，按开关要求不做生成（先执行上面那条 ioc_field set … false 再重跑）"
+  fi
 fi
 
 # 期望外设：默认从 .ioc 的 Mcu.IP* 推导，滤掉 NVIC/RCC/SYS，再补 GPIO。
@@ -353,6 +408,51 @@ count_generate_ko() {
 }
 
 # ---------------------------------------------------------------------------
+# 超时后的**定向**诊断（D36①第二步）
+#
+# 判据形态（实测，docs/logs/phase4/）：
+#   * 挂死：日志末行就是 `[INFO] UtilMem:75 - Begin LoadConfig() Used Memory: …`（318/318 行）
+#   * 成功：`Begin LoadConfig()` 之后还有 300+ 行（`Change cursor` / `Initializing MCU` / …）
+#           同一工程 638 行（314/638）
+# ⇒ 不能只 grep 全文件（成功日志里也含该行），必须看**尾部窗口**，并要求窗口内
+#   **没有**"加载已推进"的标记——否则一次恰好死在 MCU 初始化慢的普通超时会被误判成
+#   迁移对话框，那就成了"看起来有解释、其实没解释"。
+# ---------------------------------------------------------------------------
+log_tail_stalled_at_loadconfig() {
+  [ -f "$GEN_LOG" ] || return 1
+  local tail_text
+  # 取尾部窗口内的**非空**行（去 CR：CubeMX 在 Windows 上写的是 CRLF）
+  tail_text="$(sed -n '/[^[:space:]]/p' "$GEN_LOG" 2>/dev/null | tr -d '\r' | tail -n "$LOADCONFIG_TAIL_WINDOW")"
+  [ -n "$tail_text" ] || return 1
+  printf '%s\n' "$tail_text" | grep -q 'Begin LoadConfig' || return 1
+  # 末行附近出现了「加载已推进」的证据 ⇒ 不是停在 Begin LoadConfig，不归因
+  if printf '%s\n' "$tail_text" | grep -qE 'Change cursor|Initializing MCU|End LoadConfig'; then
+    return 1
+  fi
+  return 0
+}
+
+#: 命中 P1 形态时打印的定向诊断（两条处置 + 指向 pitfalls P1）
+report_migrate_stall() {
+  log_err "----------------------------------------------------------------"
+  log_err " 定向诊断：这不是你的工程坏了"
+  log_err "----------------------------------------------------------------"
+  log_err "  CubeMX 日志末行附近停在 Begin LoadConfig()，与 P1 的实测形态一致："
+  log_err "  .ioc 里 ProjectManager.AskForMigrate=true 且版本戳落后于当前 CubeMX 时，"
+  log_err "  CubeMX 在等一个**无人应答的迁移对话框**；-q 无头模式没人能点它，于是空转到超时。"
+  log_err "  （无 KO、无报错、CubeMX 自己的退出码也拿不到——timeout 直接杀，RC=124。）"
+  log_err ""
+  log_err "  两条处置，任选一条："
+  log_err "    ① 关掉该键后重跑（只改这一个键，不动 .ioc 其它内容）："
+  log_err "         ${MIGRATE_FIX_CMD}"
+  log_err "    ② 用 GUI 打开本工程一次，让它把迁移对话框点完（迁移会重写 .ioc，需单独提交）。"
+  log_err ""
+  log_err "  背景与实测证据（300 s 超时 vs 62 s 成功）：references/pitfalls.md P1。"
+  log_err "  本次已从备份回滚 .ioc / .mxproject，工作区不会留下半成品。"
+  log_err "----------------------------------------------------------------"
+}
+
+# ---------------------------------------------------------------------------
 # 步骤 3：生成核验
 # ---------------------------------------------------------------------------
 run_verify() {
@@ -394,7 +494,24 @@ else
   run_generate
   GEN_RC=$?          # 先存再判，避免中间命令覆盖 $?
   if [ "$GEN_RC" -ne 0 ]; then
-    log_err "[regen] 生成阶段失败：CubeMX 退出码 ${GEN_RC}（进程级失败，如超时/崩溃）"
+    if [ "$GEN_RC" -eq 124 ]; then
+      # timeout(1) 到点强杀 ⇒ RC=124。这个码只说明"超时了"，**不说明为什么**。
+      log_err "[regen] 生成阶段失败：CubeMX 超时（timeout ${TIMEOUT_SEC}s 到点，RC=124）"
+      if log_tail_stalled_at_loadconfig; then
+        report_migrate_stall
+      else
+        # 未命中 P1 形态 ⇒ **不归因**。把"所有超时"都说成迁移问题，是另一种
+        # "看起来有解释其实没解释"。
+        log_warn "  日志尾部未见『停在 Begin LoadConfig()』的痕迹 ⇒ **不能**归因到 AskForMigrate 迁移对话框。"
+        log_warn "  这是另一类超时，请按日志最后几行自查：GUI 弹窗 / 首次联网校验 / 磁盘慢 / 杀软扫描 /"
+        log_warn "  timeout 过小（单次实测约 60 s，且 --timeout 最小 240 s）。"
+      fi
+    else
+      log_err "[regen] 生成阶段失败：CubeMX 退出码 ${GEN_RC}（进程级失败，如崩溃）"
+      if log_tail_stalled_at_loadconfig; then
+        log_warn "  另注：日志尾部停在 Begin LoadConfig()，形态同 pitfalls.md P1（本次并非超时，附此线索供排查）。"
+      fi
+    fi
     rollback_project
     die 1 "生成阶段失败，已回滚。日志：${GEN_LOG}"
   fi
