@@ -1591,21 +1591,32 @@ def _write_text(path: str, content: str) -> None:
 
 
 def _harden_console_streams() -> None:
-    """把 stdout/stderr 的编码错误处理器改成 ``backslashreplace``。
+    """按输出目标加固 stdout/stderr，杜绝"控制台编码不够就崩"。
 
-    为什么需要（2026-11-04，Windows CI 首跑抓到）：Windows 英文环境的控制台编码是 **cp1252**，
-    而本脚本的汇报文本里用到了 ``→`` / ``·`` / ``—`` / 中文，打印时抛 ``UnicodeEncodeError``，
-    脚本**直接以 1 退出**——CLI 通道（不经 MCP、直接 ``python scripts/verify_generation.py``）
-    因此必崩；MCP 通道只是因为封装层注入了 ``PYTHONIOENCODING=utf-8`` 才幸免。
+    为什么需要（2026-11-04，Windows CI 两次抓到，两版修法）：
+    - **第一次**：Windows 英文环境控制台编码是 **cp1252**，而本脚本的汇报文本里满是 ``→`` /
+      ``·`` / ``—`` / 中文，打印即抛 ``UnicodeEncodeError``，脚本直接以 1 退出。
+    - **第二次**：只把 errors 换成 backslashreplace 是**半对**。管道（非 TTY）的编码若也被污染成
+      cp1252，中文会整体退化成 ``\\u7f3a`` 这类转义：**不崩，但读不了**——而下游要的恰恰是中文原文。
 
-    **只换错误处理器、不换编码**：UTF-8 终端下行为不变；cp936/cp1252 下不可编码字符退化成
-    ``\\u2192`` 这类转义序列，输出仍可读、退出码仍正确。改文案治不了根（下次加新符号又犯）。
+    所以按目标分流（**管道要可解析，控制台要可阅读**；两者要求不同编码，不能一条规则通吃）：
+    - **管道 / 重定向**（非 TTY）：**强制 UTF-8**。机器消费的路径，UTF-8 是唯一不产生歧义的编码；
+      封装层本来就按 UTF-8 解码，写别的编码反而会乱码。
+    - **交互式控制台**（TTY）：**保留控制台自身编码**（中文 Windows = cp936，中文正常），只把
+      错误处理器换成 backslashreplace —— 该编码表示不了的字符（如 cp1252 遇到 ``→``）转义成
+      ``\\u2192``，而不是抛 ``UnicodeEncodeError`` 崩掉。
+
+    ⚠️ **TTY 那一支没有自动回归**：改动本函数后请**手动**在中文 Windows 控制台（cp936）与
+    英文/ASCII 语言环境各跑一次。管道那一支由 ``tests/test_console_encoding.py`` 覆盖。
 
     三个脚本各自持有一份（这三个文件必须能单独拷走就用，不引入共享模块）。
     """
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(errors="backslashreplace")
+            if stream.isatty():
+                stream.reconfigure(errors="backslashreplace")
+            else:
+                stream.reconfigure(encoding="utf-8", errors="backslashreplace")
         except (AttributeError, ValueError):
             pass
 
