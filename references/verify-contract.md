@@ -133,12 +133,28 @@ python scripts/verify_generation.py \
 - 期望外设一个都没找到 → `fail`。
 - `--expect ""` → `skip`。
 
+> **⚠️ 判据语义（2026-11-04 修正，F1）**：本项、4.3、4.4 的"源文本"**不再只看 `--main-c` 一个文件**。
+> 给了 `--project-root` 时会扫描 `<project_root>/Core/Src/*.c`（含 `main.c`）并拼接判断，
+> 报出的定义位置形如 `定义 Core/Src/gpio.c:L42`（**换算回原文件的行号**，不是拼接文本里的行号）。
+>
+> **为什么改**：CubeMX 的 `ProjectManager.CoupleFile=true`（"Generate peripheral initialization as a
+> pair of '.c/.h' files"）把每个外设的 `MX_<P>_Init` 生成到**独立文件**，`main.c` 里只剩调用。
+> 旧实现因此把"定义在 `gpio.c` 里"判成"外设被静默丢弃"——**假失败**（真实案例见
+> `docs/reports/s4-dryrun-g474_01_gpio.md` §2.3）。假失败比漏报更伤人：配置完全正确却被判红。
+>
+> 没给 `--project-root` 时的兜底：若 `--ioc` 显示 `CoupleFile=true`，这两项（4.2 与 4.4）由 `fail` **降为
+> `warn`**，并在 `summary.notes` 里点名"只扫了 main.c、结论可能误判、补 `--project-root` 即可消除"。
+> **仅这一种情形降级**——`CoupleFile=false`、或给了 `--project-root`、或根本读不到该键时，**维持严格判 `fail`**。
+> 降级不是"废掉检查"：修的是**扫描范围**，不是**判据强度**。
+
 ### 4.3 `main_init_called`（`blocking: true`）
 
 - 每个 `MX_*_Init(` 都要在 `main()` 体内**被调用**；被注释掉的调用不算（先剥 C 注释再比）。
 - 两种 `skip`：`--expect ""`；或"一个定义都没找到"（同一根因只在 4.2 报 fail，避免双计）。
   detail 会写"另有 N 个外设无定义、未参与本项：TIM4"——**这行是重要线索**。
 - `main.c` 里找不到 `int main(void)` 函数体 → `fail`。
+- **定义可以来自别的文件，调用必须在 `main.c` 的 `main()` 里**：per-peripheral 布局下
+  `MX_GPIO_Init` 定义在 `gpio.c`、调用在 `main.c`，本项照样 pass（扫描范围见 §4.2 的语义说明）。
 
 ### 4.4 `pins_present`（`blocking: true`，**默认 `skip`**）
 
@@ -149,8 +165,10 @@ python scripts/verify_generation.py \
 判定（任一不满足即 `fail`）：
 
 1. `.ioc` 里存在 `<PIN>.Signal`，且取值与期望**大小写不敏感**一致；
-2. 该引脚所属端口的时钟使能出现在 `main.c`（`__HAL_RCC_GPIOx_CLK_ENABLE()`）——
+2. 该引脚所属端口的时钟使能出现在**扫描到的源码**里（`__HAL_RCC_GPIOx_CLK_ENABLE()`）——
    这一条才让"引脚真的进了生成物"可验证，而不只是"`.ioc` 里写了个键"。
+   "扫描到的源码"见 §4.2 的语义说明：给了 `--project-root` 时是 `Core/Src/*.c`（含 `main.c`），
+   因为 per-peripheral 布局下 `__HAL_RCC_GPIOC_CLK_ENABLE()` 就在 `gpio.c` 里。
 
 两种 `skip`（detail 会写明原因）：
 

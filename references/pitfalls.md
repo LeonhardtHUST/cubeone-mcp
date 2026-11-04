@@ -15,18 +15,33 @@
 
 ## P 系列（本项目实跑，优先级最高）
 
-### P1 · `AskForMigrate` 的真相（三元结构，别读成"不构成风险"）
+### P1 · `AskForMigrate` 的真相（**2026-11-04 实测推翻旧结论**，别按旧版处置）
 
-1. **已确定**：`config save`/`saveas` 会整体重写 `.ioc` 并把 `AskForMigrate` 写成 `true`；
-   **纯 `project generate` 不改写 `.ioc`、不改变该值**——`regen.sh` 默认路径实测前后
-   sha256 逐字节相同（D19）。
-2. **未验证**：`true` 状态下 `-q` 是否会阻塞 —— **至今零证据**（`true` 的两个样本之后再没被
-   `-q` 加载过），既无正证也无反证。**零证据 ≠ 无风险。**
-3. **处置**：**不拦、不改、不注入**。若生成长时间无输出，先查 `MxCube.Version` 是否低于
-   本机版本（**排障建议，不是因果结论**）。
+> **旧判断（已被推翻，留档）**：曾认为"`config save`/`saveas` 会把它写成 `true`，而**纯
+> `project generate` 不改写 `.ioc`、也不改变该值**；`true` 状态下 `-q` 是否阻塞零证据"。
+> **这两句在 2026-11-04 的 C3.1 预演里都被实测否定。** 保留旧判断是为了让"当时为什么没拦"
+> 这件事可追溯，不是让你照着做。
+
+1. **`project generate` 会写回 `true`**（✅ 实测）：把一个工程的该键置 `false`，跑一次
+   `-q` + `project generate`（版本戳已与本机一致、无需迁移），再读回——**`true`**。
+   证据：`docs/logs/phase4/12-askformigrate-probe.log`；改写前后的 `.ioc` 逐字节可查。
+   ⇒ **"生成不会动这个键"是错的**；任何"设一次就永久有效"的假设都不成立，**每次生成前都要重新确认**。
+2. **`true` + 版本戳更旧 ⇒ `-q` 会挂死**（✅ 实测）：`.ioc` 为 `MxCube.Version=6.18.0`、
+   本机 6.18.1、该键为 `true` 时，`java -jar STM32CubeMX.exe -q script.mx` **300 s 超时**，
+   日志停在 `Begin LoadConfig()`（无 KO、无报错、CPU 空转等一个没人点的模态框）。
+   证据：`docs/logs/phase4/02-first-generate.log`（`RC=124`）。
+   同一工程把该键置 `false` 后，**同一脚本 62 s 成功**（`04-first-generate-retry.log`）。
+   ⇒ 无 GUI 环境（CI / agent / 批处理）遇到旧版本戳的 `.ioc`，**必须先关这个开关**。
+3. **处置（仍然"不拦、不改、不注入"，但理由变了）**：`regen.sh` 不替用户改这个值——
+   因为它是**用户工程的既有设置**，脚本擅自改会把"我明明关了它"变成不可解释的行为。
+   代价是：**执行者必须自己确认为 `false`**（接板清单 `docs/guides/gate-2.0-checklist.md` §2.1 已列为必做）。
+   若生成长时间无输出：**先看 `MxCube.Version` 是否低于本机**（这次是因果结论，不再只是排障建议）。
 
 > **行为约束（操作纪律）**：`regen.sh` 不修改该值；生成后它为 `true` 属正常，
-> **不要在提交前手工复位**。详见 `regen-exit-codes.md` §4。
+> **不要在提交前手工复位**（那会让下次生成又踩一次，且掩盖了真实状态）。详见 `regen-exit-codes.md` §4。
+>
+> **待办（已记账，未实施）**：是否让 `regen.sh` 在"版本戳更旧 + 该键为 true"时**直接退出 2 并给出
+> 明确指引**（而不是静默挂 300 s），属行为变更，需要单独批准。
 
 ### P2 · 只改一个 GPIO，`.ioc` 却是 619/106 整文件重写
 
@@ -59,7 +74,7 @@
 | **D4** | 信号名"看起来对"但配置失败 | 少了 `S_` 前缀：PA0 上 TIM2 通道 1 应写 `S_TIM2_CH1_ETR`，写 `TIM2_CH1_ETR` 会失败 | 以 `C:\ST\STM32CubeMX\db\mcu\<型号>.xml` 为准，先查库再写 |
 | **D5** | **生成返回成功，外设却没了** | 日志有 `Cannot map signal`；`project generate` 仍返回成功 | 这就是"静默丢弃"，走 G1（`verify-contract.md` §4.1） |
 | **D6** | 新克隆仓库 `Drivers/` 只有 `.gitkeep` | 这是**预期**的：HAL/CMSIS/启动文件/链接脚本由 PlatformIO framework 提供 | 不要试图提交 `Drivers/`；注意 git 无法 re-include 被排除目录下的文件 |
-| **D7** | 无头生成卡在 `Begin LoadConfig()` 不动 | ⚠️ 与 P1 是同一件事的不同说法 | **以 P1 三元为准**，不要单独按本条的措辞处置 |
+| **D7** | 无头生成卡在 `Begin LoadConfig()` 不动 | ⚠️ 与 P1 是同一件事的不同说法 | **以 P1 的实测结论为准**（2026-11-04 已推翻旧判断），不要单独按本条的措辞处置 |
 | **D8** | G474 日志总有 `Pin5 (VP_RIF_VS_RIF1) cannot be retrieved for this MCU` | CubeMX 6.18.1 的 G4 数据库噪音，即使只配 NVIC/RCC/SYS 也会出现；**不是** `Cannot map` | **忽略**，不要为它删外设。直接调核验器时显式 `--allow-signal VP_RIF_VS_RIF1`（`regen.sh` 已预置） |
 | **D9** | 日志报 `FileNotFoundException: <工程目录>\D:\...\syscalls.c`，这两个文件不更新 | 叠加路径问题（CubeMX 已知缺陷），其余文件正常 | 核验器已降为 `warn`、**不判失败**；要更新就从 `STM32Cube_FW_G4_*` 的模板目录复制 |
 

@@ -264,7 +264,7 @@ MCP `cubemx_generate` / CLI §0.4。**stdout/stderr 必须重定向到文件**�
 
 **行为约束**：`regen.sh` **不修改** `.ioc` 中 `ProjectManager.AskForMigrate` 的值；生成后它为 `true`
 属 CubeMX `saveas` 的正常结果，**不要在提交前手工复位**。（`-q` 是否被它阻塞至今零证据；
-生成长时间无输出时先查 `MxCube.Version` 是否低于本机版本——排障建议，非因果结论。见 `references/pitfalls.md` P1。）
+生成长时间无输出时先查 `MxCube.Version` 是否低于本机版本——**这条现在是因果结论**（2026-11-04 实测：旧版本戳 + `AskForMigrate=true` 会让 `-q` 挂死 300 s，日志停在 `Begin LoadConfig()`）。见 `references/pitfalls.md` P1。）
 
 ### 第 5 步 · **生成核验（G1，硬关卡）**
 
@@ -350,7 +350,7 @@ pio run
 
 | # | 症状 → 处置 |
 |---|---|
-| P1 | `AskForMigrate`：`saveas` 写回 `true`、纯 generate 不改；**不拦不改不注入**，`-q` 是否阻塞零证据 |
+| P1 | `AskForMigrate`：`project generate` **也会写回 `true`**（旧判断「不改」已被 2026-11-04 实测推翻）；版本戳更旧 + 该键为 `true` 时 `-q` **挂死 300 s**；仍然**不拦不改不注入**，所以执行者必须自己先置 `false` |
 | P2 | 只改 1 个 GPIO 却 619/106 重写 → 版本戳不匹配，拆 `chore(ioc):` |
 | P3 | Flash/RAM 对不上 → PIO size 不计 stack/heap，以链接器/bin 为准 |
 | P4 | `.mxproject` 干净但换机跑不了 → `.mx` 写死绝对路径（指向本工程是合规） |
@@ -365,6 +365,29 @@ H-5 `Error_Handler` 后无诊断 ｜ **H-6 新增外设没落进生成物且日�
 ⚠️ 无硬件，本节不做任何能力宣称。T2.1–T2.6 挂起至 GATE-2.0（D7）。待接板后补：`flash_standalone` /
 `pio run -t upload` 的 reset/run 语义、`pio_monitor_capture` 的波特率与超时、无 VCP 时改外接 USB-TTL 方案、
 探针/串口异常的错误分类、L5 证据留存形式。
+
+### 6.1 Phase 2 实测状态（**占位骨架，无硬件不填能力宣称**）
+
+| 段 | 状态 | 前置 | 填这一格需要什么证据 |
+|---|---|---|---|
+| 探针识别 / doctor | **未实测（无硬件）** | GATE-2.0 | `pio device list` + `doctor` 输出（含探针型号与序列号） |
+| 烧录（reset/run 语义） | **未实测（无硬件）** | GATE-2.1 安全确认 | 烧录日志 + 现象描述（哪个 LED/引脚变了） |
+| 串口捕获（波特率/超时） | **未实测（无硬件）** | 目标工程启用 USART（见 6.2） | boot log 原文 + 波特率 + 超时参数 |
+| 无 VCP 时的外接 USB-TTL | **未实测（无硬件）** | — | 接线说明 + 抓到的字节流 |
+| 探针/串口异常分类 | **未实测（无硬件）** | 上面三项至少各跑通一次 | 每一类的错误文案原文 + 判定依据 |
+
+> **接板日怎么走**：照 `docs/guides/gate-2.0-checklist.md` 从上往下执行——它已经包含 C3.1 预演暴露的三个前置项
+> （`AskForMigrate` 必须先关、Keil 工程要先补 `platformio.ini`、生成物 diff 必须逐条解释）。
+> 填完本表再改状态；**在那之前本节一律按"无能力"对待**（§0.0 的四层优先级里，能力层是第 0 层）。
+
+### 6.2 一个已知的接板坑（C3.1 预演实测，接板前先解决）
+
+- **串口段可能要换工程**：预演用的 `NUEDC_2027/G474/G474_01_gpio` **没有启用任何 USART**（`Mcu.IP*` 只有
+  NVIC/RCC/SYS/TIM17），所以"串口验证"必须换带 USART 的工程，或先给该工程加外设——
+  而**非 GPIO 外设的增改没有工具能力**（§0.0），只能手改 `.ioc`/走 GUI 并强制过 G1。
+- **首次生成会挂死**：`.ioc` 版本戳低于本机 CubeMX 且 `ProjectManager.AskForMigrate=true` 时，无 GUI 的 `-q`
+  生成会弹模态框并挂住直到超时（实测 300 s）。且该键**会被 `project generate` 写回 `true`**，
+  每次拿旧工程生成前都要重新确认。详见 `references/pitfalls.md` P1 与接板清单 §2.1。
 
 ## 7. 参考与依赖
 
