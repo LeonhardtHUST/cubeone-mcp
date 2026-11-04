@@ -79,14 +79,25 @@ bash scripts/regen.sh <工程目录> [-e GPIO,TIM4] [-o <证据目录>] [--requi
 ## 4. `AskForMigrate` 的行为约束（操作纪律，不是建议）
 
 > **`regen.sh` 不修改** `.ioc` 中 `ProjectManager.AskForMigrate` 的值。
-> 生成后该值可能为 `true`，属 CubeMX `saveas` 的正常结果，**不要在提交前手工复位**。
+> 生成后该值**可能**为 `true`（CubeMX 会写回，见下），**不要在提交前手工复位**——
+> 手工复位会让"下次生成到底会不会挂"变成无法追溯的状态。
 
-补充两条事实（判据来源，详见 `docs/DECISIONS.md` D19）：
+补充两条事实（**2026-11-04 实测更新**，详见 `references/pitfalls.md` P1）：
 
-- `config save`/`saveas` 会整体重写 `.ioc` 并把该值写成 `true`；**纯 `project generate` 不改写
-  `.ioc`**（`regen.sh` 默认路径实测前后 sha256 逐字节相同）。
-- `true` 状态下 `-q` 是否阻塞**至今零证据**。**零证据 ≠ 无风险**，但也**不构成拦的理由**。
-  若生成长时间无输出，先查 `MxCube.Version` 是否低于本机版本（**排障建议，不是因果结论**）。
+- `config save`/`saveas` 会整体重写 `.ioc` 并把该值写成 `true`；**`project generate` 也会把它
+  写回 `true`** —— 旧结论"纯 generate 不改写 `.ioc`"**已作废**（实测：置 `false` → 生成一次 →
+  读回 `true`；证据 `docs/logs/phase4/12-askformigrate-probe.log`）。
+  ⚠️ 生成路径**还可能**因版本迁移改写 `.ioc`（本次实测只动了 2 行版本戳：`6.18.0→6.18.1` /
+  `DB.6.0.180→DB.6.0.181`），所以"生成前后 sha256 相同"不能当通用前提。
+- `true` + **版本戳低于本机** ⇒ `-q` 生成**会挂死**（实测 300 s 超时，日志停在
+  `Begin LoadConfig()`，无 KO、无报错、等一个没人点的模态框；证据
+  `docs/logs/phase4/02-first-generate.log`）。把该键置 `false` 后同一脚本 62 s 成功
+  （`04-first-generate-retry.log`）。⇒ 拿旧工程生成前**必须先确认它为 `false`**
+  （`docs/guides/gate-2.0-checklist.md` §2.1）。
+
+> **为什么不干脆让 `regen.sh` 自动改它**：那是用户工程的既有设置，脚本擅自改会让"我明明关了它"
+> 变成不可解释的行为。**待批准项**：是否在"版本戳更旧 + 该键 true"时直接退 `2` 并给出指引
+> （而不是静默挂 300 s）——属行为变更，需单独批准。
 
 ## 5. 脏工作区语义（1.2.0 起反转）
 
