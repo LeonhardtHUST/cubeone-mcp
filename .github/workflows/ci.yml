@@ -300,7 +300,8 @@ jobs:
           exit "${bad}"
 
       # 版本轴 / 发布收口校验（C2.3）——**故意不挂 CI**，只在此处留一句说明，免得下一个人以为漏了。
-      #   `tools/check_release.py` 的判据①要求"最新 tag == package.json == SKILL.md == README 两处"，
+      #   `tools/check_release.py` 的判据①要求"最新 tag == package.json == package-lock.json 根两处
+      #   == SKILL.md frontmatter == README 两处"，**共五处同值**（自 0.7.4 起，见 D35 §35.7），
       #   而本仓的正常状态是**长期存在未发版改动**（改了代码但还没打 tag）——那种状态下判据①
       #   本来就会红。若挂进 CI，每次 push 都会红，红灯随即失去信息量（本项目最反对的形态）。
       #   正确用法：**发布前手动跑**，作为 GATE-3.1 证据包的一项。SOP 见 docs/DECISIONS.md D35。
