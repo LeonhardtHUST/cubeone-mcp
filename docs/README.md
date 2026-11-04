@@ -43,6 +43,8 @@
 | [`reports/t0-regen-sh-review.md`](reports/t0-regen-sh-review.md) | 想审 `regen.sh` 的判据设计（查 KO vs 查退出码） |
 | [`reports/t0-skill-v11-checklist.md`](reports/t0-skill-v11-checklist.md) / [`t0-v11-independent-check.md`](reports/t0-v11-independent-check.md) | 想知道 SKILL 与核验器 v1.1 的对照检查清单与第三方复核结论 |
 | [`reports/s4-dryrun-g474_01_gpio.md`](reports/s4-dryrun-g474_01_gpio.md) | 想知道**无板能做的前四段**（改配置→生成→核验→构建）在真实 NUEDC 工程上的结果（Phase 2 接板前的预演） |
+| [`reports/phase2-bringup-2026-11-04.md`](reports/phase2-bringup-2026-11-04.md) | **接板首日 L5 证据**：X-Pulse 板级引脚、F4/F5/F6 三个现场坑、烧录 + 寄存器回读 + 目视双判据 |
+| [`reports/audit-2026-11-04-agent-engineer.md`](reports/audit-2026-11-04-agent-engineer.md) | **全量审定报告（agent 工程师视角）**：MCP 架构 / agent 效率 / 功能性 / 测试·CI·发布 / 文档一致性，P0–P2 分级发现与逐条证据 |
 
 > 原始日志在 [`logs/`](logs/)（**被 `.gitignore` 局部忽略，只在做实验的机器上存在**）：
 > `phase0/`–`phase4/` 下是 CI 上拿不到的命令输出。报告里引用日志路径时，**不要指望别人 clone 后能看到**。
