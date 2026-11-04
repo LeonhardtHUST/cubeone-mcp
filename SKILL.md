@@ -266,8 +266,10 @@ MCP `cubemx_generate` / CLI §0.4。**stdout/stderr 必须重定向到文件**�
 
 **行为约束**：`regen.sh` **不修改** `.ioc` 中 `ProjectManager.AskForMigrate` 的值；生成后它为 `true`
 属 CubeMX 的正常结果（`saveas` 与 `project generate` 都会写回），**不要在提交前手工复位**。
-**但生成前会读它**：读到 `true` 就打一条醒目 warn（附可直接复制的置 `false` 命令），
-`--dry-run` 下也照样打；需要"宁可退 `2` 也不要挂住"的场景（CI / 批处理）加 `--fail-fast-on-migrate`。
+**但生成前会读它**，并**按可判定性分两级**（D36①）：`true` + **版本戳落后基线** → 4 行 `[regen][warn]`（附可直接复制的置 `false` 命令）；`true` + **版本戳一致** → 一行 `info`
+（不喊也不沉默：基线是**常量**、不代表你机器上的版本）；`false`/读不到 → 什么都不打。
+上面两档在 `--dry-run` 下也照样输出。需要"宁可退 `2` 也不要挂住"的场景（CI / 批处理）加
+`--fail-fast-on-migrate`（**只看该键**，不叠加版本戳判断）。
 生成长时间无输出时先查 `MxCube.Version` 是否低于本机版本——**这条是因果结论**（2026-11-04 实测：
 旧版本戳 + `AskForMigrate=true` 会让 `-q` 挂死 300 s，日志停在 `Begin LoadConfig()`；
 置 `false` 后同一脚本 62 s 成功）。超时后 `regen.sh` 还会按日志形态给**定向诊断**：
@@ -358,7 +360,7 @@ pio run
 
 | # | 症状 → 处置 |
 |---|---|
-| P1 | `AskForMigrate`：`project generate` **也会写回 `true`**（旧判断「不改」已被 2026-11-04 实测推翻）；版本戳更旧 + 该键为 `true` 时 `-q` **挂死 300 s**（置 `false` 后 62 s 成功）。`regen.sh` **不改值、默认不拦**，但**生成前会告警**（`--fail-fast-on-migrate` 可把告警变退 `2`），超时后按日志形态定向诊断。执行者仍必须自己先确认它是 `false` |
+| P1 | `AskForMigrate`：`project generate` **也会写回 `true`**（旧判断「不改」已被 2026-11-04 实测推翻）；版本戳更旧 + 该键为 `true` 时 `-q` **挂死 300 s**（置 `false` 后 62 s 成功）。`regen.sh` **不改值、默认不拦**，但**生成前分级提示**（落后→`warn` / 一致→一行 `info` / `false`→静默；`--fail-fast-on-migrate` 只要该键为 true 即退 `2`），超时后按日志形态定向诊断。执行者仍必须自己先确认它是 `false` |
 | P2 | 只改 1 个 GPIO 却 619/106 重写 → 版本戳不匹配，拆 `chore(ioc):` |
 | P3 | Flash/RAM 对不上 → PIO size 不计 stack/heap，以链接器/bin 为准 |
 | P4 | `.mxproject` 干净但换机跑不了 → `.mx` 写死绝对路径（指向本工程是合规） |
@@ -395,8 +397,10 @@ H-5 `Error_Handler` 后无诊断 ｜ **H-6 新增外设没落进生成物且日�
   而**非 GPIO 外设的增改没有工具能力**（§0.0），只能手改 `.ioc`/走 GUI 并强制过 G1。
 - **首次生成会挂死**：`.ioc` 版本戳低于本机 CubeMX 且 `ProjectManager.AskForMigrate=true` 时，无 GUI 的 `-q`
   生成会弹模态框并挂住直到超时（实测 300 s；置 `false` 后 62 s 成功）。且该键**会被 `project generate`
-  写回 `true`**，每次拿旧工程生成前都要重新确认。`regen.sh` 会在生成前就此打告警（`--fail-fast-on-migrate`
-  可直接退 `2`），超时后按日志形态定向诊断。详见 `references/pitfalls.md` P1 与接板清单 §2.1。
+  写回 `true`**，每次拿旧工程生成前都要重新确认。`regen.sh` 会在生成前**分级提示**
+  （版本戳落后→`warn`；一致→一行 `info`，因为基线是常量、不代表你机器上的版本），
+  `--fail-fast-on-migrate` 只要该键为 `true` 即退 `2`，超时后按日志形态定向诊断。
+  详见 `references/pitfalls.md` P1 与接板清单 §2.1。
 
 ## 7. 参考与依赖
 
