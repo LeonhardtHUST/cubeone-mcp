@@ -1,0 +1,83 @@
+# 文档索引（docs/）
+
+> 一页索引。**不确定看哪一页时先看这里**——本目录下每个文件都在下表有一行"什么时候看"。
+> 顶层面向使用者的文档在仓库根：[`README.md`](../README.md)（定位与能力边界）、
+> [`SKILL.md`](../SKILL.md)（Agent 操作面）、[`CONTRIBUTING.md`](../CONTRIBUTING.md)（怎么改、怎么测）。
+
+---
+
+## 1. 状态真源（**只有两页是"真源"，其余都是解释**）
+
+| 文档 | 什么时候看 |
+|---|---|
+| [`TASKBOARD.md`](TASKBOARD.md) | **唯一状态真源**：任务表 + GATE 关卡 + §4 快照 + 角色登记 + §5 变更记录。改它之后必须跑 `python tools/check_taskboard.py`（rc=0） |
+| [`DECISIONS.md`](DECISIONS.md) | **唯一决策真源**：D1–D35。想知道"为什么这样设计、哪些旧结论被推翻"看这里；发版流程见 **D35**，版本轴治理见 **D33**，治理元规则见 **D34** |
+
+> 两页的分工：**看板说"做到哪一步了"，决策说"为什么这么定"**。
+> 两者冲突时以决策为准并修看板——看板是执行快照，决策是规则。
+
+## 2. 计划（三个时间点的判断快照，**不回改**）
+
+| 文档 | 什么时候看 |
+|---|---|
+| [`2026-11-03-agent-team-plan.md`](2026-11-03-agent-team-plan.md) | 想知道最初的 Phase 0–3 排班、角色表、GATE 设计（原始蓝图） |
+| [`2026-11-03-execution-research.md`](2026-11-03-execution-research.md) | 想知道开工前的调研结论（工具选型、CubeMX 能力探测） |
+| [`2026-11-03-remediation-plan.md`](2026-11-03-remediation-plan.md) | 想知道 M0–M3 整改批次要解决什么（审定发现①–⑤与 R-A/R-B/R-C/R-D/R-E 编号出处） |
+| [`2026-11-04-engineering-completeness-plan.md`](2026-11-04-engineering-completeness-plan.md) | 想知道 C0–C4 完备批次（7 项审核发现、门禁/机械化/硬件预演/可维护性） |
+
+> 为什么计划不回改：已交付的计划是**某个时间点的判断快照**，改写它会让"当时怎么想的"消失（D32/D34 §34.2(5)）。
+> 需要更正就追加勘误链接，不要动原文。
+
+## 3. 报告与证据（`reports/`）
+
+| 文档 | 什么时候看 |
+|---|---|
+| [`reports/t1.2-verifier-contract.md`](reports/t1.2-verifier-contract.md) | **要消费 `verify.json` 或自己实现核验器时**——7 个 check id 的完整契约、保证边界、`/1→/2` 迁移 |
+| [`reports/t1.6-s1-report.md`](reports/t1.6-s1-report.md) | 想知道一次**完整成功链路**长什么样（改配置 → 生成 → 核验 → 构建，含 Flash/RAM 数字） |
+| [`reports/t1.6-s1-runbook.md`](reports/t1.6-s1-runbook.md) / [`-prep.md`](reports/t1.6-s1-prep.md) / [`-baseline.md`](reports/t1.6-s1-baseline.md) / [`-dryrun.md`](reports/t1.6-s1-dryrun.md) | 要**复现 S1 场景**时按 runbook → prep → baseline → dryrun 顺序读 |
+| [`reports/t1.7-s2-audit-stm32-digital-clock.md`](reports/t1.7-s2-audit-stm32-digital-clock.md) | 想做**只读审计**（不动盘，产出引脚表/时钟树/构建结果）时的范例 |
+| [`reports/t1.8-s3-report.md`](reports/t1.8-s3-report.md) | 想知道**核验器能抓什么、抓不到什么**（故意写坏 `.ioc` 的正反对照） |
+| [`reports/t1.8-s3-prep.md`](reports/t1.8-s3-prep.md) | S3 负路径实验的准备记录（构造坏样本的方法） |
+| [`reports/t0-cubemx-configure-signature.md`](reports/t0-cubemx-configure-signature.md) | 要调 `cubemx_configure` 的 `commands` 透传时——源码级签名与坑 |
+| [`reports/t0-askformigrate-evidence.md`](reports/t0-askformigrate-evidence.md) | 遇到 `.ioc` 生成后 `AskForMigrate` 被写成 `true` 时（P1 陷阱的证据） |
+| [`reports/t0-regen-sh-review.md`](reports/t0-regen-sh-review.md) | 想审 `regen.sh` 的判据设计（查 KO vs 查退出码） |
+| [`reports/t0-skill-v11-checklist.md`](reports/t0-skill-v11-checklist.md) / [`t0-v11-independent-check.md`](reports/t0-v11-independent-check.md) | 想知道 SKILL 与核验器 v1.1 的对照检查清单与第三方复核结论 |
+| [`reports/s4-dryrun-g474_01_gpio.md`](reports/s4-dryrun-g474_01_gpio.md) | 想知道**无板能做的前四段**（改配置→生成→核验→构建）在真实 NUEDC 工程上的结果（Phase 2 接板前的预演） |
+
+> 原始日志在 [`logs/`](logs/)（**被 `.gitignore` 局部忽略，只在做实验的机器上存在**）：
+> `phase0/`–`phase4/` 下是 CI 上拿不到的命令输出。报告里引用日志路径时，**不要指望别人 clone 后能看到**。
+
+## 4. 发布台账（`releases/`）
+
+| 文档 | 什么时候看 |
+|---|---|
+| [`releases/README.md`](releases/README.md) | **版本 × 内容 × 三证对照表**（tag / Release 正文 / npm），查"某个版本改了什么、证据齐不齐" |
+| [`releases/2026-11-04-v0.7.1.md`](releases/2026-11-04-v0.7.1.md) | 当前版本（文档与脚本修正，无行为变更） |
+| [`releases/2026-11-03-v0.7.0.md`](releases/2026-11-03-v0.7.0.md) | **BREAKING**：路径白名单默认翻转（未设 `CUBEONE_ALLOWED_ROOTS` = 拒绝所有路径参数） |
+| [`releases/2026-11-03-v0.6.2.md`](releases/2026-11-03-v0.6.2.md) | M1 接缝修复批次（退出码白名单 / 入参校验 / 编码 / Node 单测基建） |
+| [`releases/2026-11-03-v0.6.1-backfill.md`](releases/2026-11-03-v0.6.1-backfill.md) | 首个 npm / MCP 工具通道版本；**正文为事后补发**（见 D33 §33.4） |
+
+## 5. 指南（`guides/`）
+
+| 文档 | 什么时候看 |
+|---|---|
+| [`guides/npm-publish-and-codebuddy.md`](guides/npm-publish-and-codebuddy.md) | **要注册本包（`npx cubeone-mcp`）或配 `CUBEONE_*` 时看这本**——含 0.7.0 BREAKING 迁移、env 表、**注册后自检**、发布流程与 9 个反直觉坑 |
+| [`guides/mcp-registration.md`](guides/mcp-registration.md) | 要把 **`vscode-cube-mcp` / `platformio.mcp` 两个外部 server** 接进客户端时看这本（与本包注册是两件事） |
+| [`guides/gate-2.0-checklist.md`](guides/gate-2.0-checklist.md) | **接板日**（GATE-2.0）当天的执行清单：探针/供电/共地/安全确认/COM 口/首烧目标/串口预期 |
+
+## 6. 其它
+
+| 路径 | 什么时候看 |
+|---|---|
+| [`evaluations/2026-11-03-t3.4-closure.md`](evaluations/2026-11-03-t3.4-closure.md) | 想知道 T3.4 三项评估为什么"推迟/不做"（**关闭结论**，不是待办） |
+| [`backups/`](backups/) | `mcp.json` 改前备份（`*.redacted.json` 为脱敏版）。⚠️ **含明文凭据的那份不得外传**，脱敏红线见 `guides/mcp-registration.md` §6 |
+
+---
+
+## 不知道该看哪页时
+
+1. 要**用**这个工具 → 根目录 [`README.md`](../README.md) 的「能力边界」+ [`SKILL.md`](../SKILL.md)
+2. 要**改**这个工具 → [`CONTRIBUTING.md`](../CONTRIBUTING.md)（三层测试 + 提交规范 + 单写者原则）
+3. 要**判断进度** → [`TASKBOARD.md`](TASKBOARD.md) §4 快照
+4. 要**判断历史决策** → [`DECISIONS.md`](DECISIONS.md) 目录（D1–D35）
+5. 要**判断某个结论可不可信** → 看该结论标注的 L 等级（README「验证等级」），以及 `reports/` 里对应报告的"已知限制"

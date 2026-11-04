@@ -2,6 +2,10 @@
 
 让 AI Agent 安全地驱动 **STM32CubeMX** 改 `.ioc` 配置、生成代码，并判断「改的东西到底有没有真的进生成物」。
 
+> **想改这个仓库？** 先看 [`CONTRIBUTING.md`](CONTRIBUTING.md)（三层测试怎么跑 / 提交规范 / 单写者原则 / 依赖边界）；
+> **不确定该看哪页文档？** 看 [`docs/README.md`](docs/README.md)（一页索引）。
+> 只想**用**它的话，读下面的能力边界 + [`SKILL.md`](SKILL.md) 就够了。
+
 ## 它解决什么问题
 
 STM32 开发里有一种很难发现的失败：
@@ -241,6 +245,8 @@ python -m pytest tests/ -q --basetemp="$TEMP/pytest-run-$(date +%s)"
 
 | 文档 | 什么时候看 |
 |---|---|
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 要改这个仓库时：三层测试、提交规范、单写者原则、依赖边界 |
+| [`docs/README.md`](docs/README.md) | **不确定看哪页时先看这里**（计划 / 决策 / 看板 / 报告 / 发布台账 / 指南 一页索引） |
 | [`SKILL.md`](SKILL.md) | 让 Agent 按标准流程作业时的操作面（含八步流程、提交模板） |
 | [`references/capability-boundary.md`](references/capability-boundary.md) | 想搞清楚「为什么不能配串口」、四层能力/权限模型 |
 | [`references/verify-contract.md`](references/verify-contract.md) | 要消费 `verify.json`，或自己实现一个核验器 |
