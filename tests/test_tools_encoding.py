@@ -42,6 +42,16 @@ CHECK_RELEASE = TOOLS / "check_release.py"
 CHECK_TASKBOARD = TOOLS / "check_taskboard.py"
 HANDSHAKE = TOOLS / "npm_mcp_handshake.mjs"
 
+#: `node` 可执行（部分环境没有）。
+NODE = shutil.which("node")
+#: MCP SDK 是否已安装。**`npm_mcp_handshake.mjs` 一开头就 `import @modelcontextprotocol/sdk`**，
+#: ESM 的静态 import 在**模块体执行前**求值 ⇒ 没装依赖时连参数校验都到不了，进程直接以
+#: `ERR_MODULE_NOT_FOUND` 退 1。
+#: ⚠️ CI 的 **pytest job 不跑 `npm ci`**（只有 node job 跑），所以那条 Node 用例在 CI 上
+#: **验证对象不可达**——按本仓惯例：**显式 SKIP 并说明原因**，而不是让它变成一条忽红忽绿的
+#: 假失败（0.7.4 P3 首次推送就踩了这个：本机 154 passed，CI 三个 pytest/windows job 全红）。
+SDK_INSTALLED = (REPO_ROOT / "node_modules" / "@modelcontextprotocol" / "sdk").is_dir()
+
 #: 版本轴五处同值时的目标版本（取自 `package.json`，不写死数字 —— 发版换版本不会让本文件变红）。
 CURRENT_VERSION = json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8"))["version"]
 
@@ -269,15 +279,25 @@ def test_harden_console_streams_picks_branch_by_tty(monkeypatch: pytest.MonkeyPa
 # ── 3) Node 侧非 UTF-8 环境不崩 ─────────────────────────────────────────────
 
 
-@pytest.mark.skipif(shutil.which("node") is None, reason="本机没有 node，跳过 Node 侧编码用例")
+@pytest.mark.skipif(
+    NODE is None or not SDK_INSTALLED,
+    reason=(
+        "缺 node 或未安装 MCP SDK（CI 的 pytest job 不跑 npm ci ⇒ 验证对象不可达；"
+        "本仓惯例是显式 SKIP 并说明原因，不是让它假红）"
+    ),
+)
 def test_handshake_reports_readable_error_in_non_utf8_env() -> None:
     """``LANG=C`` + ``PYTHONIOENCODING=cp1252`` 下，未知参数仍给可读中文与稳定 rc=2。
 
     这一项刻意走**参数校验**路径（不拉 MCP server）：它只回答"Node 在非 UTF-8 环境下
     还能不能正常吐中文"。Node 写的是 UTF-8 字节、不按控制台代码页转码，所以这里
     **解码后必须没有替换字符**（有 ⇒ 说明字节确实被转码污染了）。
+
+    ⚠️ 前置条件是 **SDK 已安装**：本文件以静态 `import` 引入 SDK，ESM 的 import 在模块体
+    之前求值，没装依赖时进程退 1（`ERR_MODULE_NOT_FOUND`）而**不是**退 2 ⇒ 断言会变成
+    一条与本用例意图无关的假失败。故用 ``skipif`` 把"验证对象不可达"显式说出来。
     """
-    proc = _run([shutil.which("node") or "node", str(HANDSHAKE), "--not-a-flag"], env=_hostile_env())
+    proc = _run([NODE or "node", str(HANDSHAKE), "--not-a-flag"], env=_hostile_env())
 
     _assert_no_traceback(proc)
     assert proc.returncode == 2, proc.returncode
