@@ -1,7 +1,7 @@
 ---
 name: cubeone-mcp
 description: "STM32 生成核验与 .ioc 键级工具包：本包 MCP 只暴露 3 个工具（verify_generation / ioc_backup / ioc_field），用于「生成后核验（G1 硬关卡）」「备份/还原 .ioc」「单键读写 .ioc」，并附完整操作流程文档。**能力边界（先读）：只能可靠代做普通 GPIO 级改动（新增引脚/改模式/改上下拉）；UART/SPI/TIM/ADC 等非 GPIO 外设的增改没有工具能力，必须手改 .ioc 或走 GUI，并强制过 G1。** 触发词收敛为：「生成完帮我核一遍」「有没有被静默丢弃的外设」「改一下这个 ioc / 加一个 GPIO」「备份/还原 .ioc」「读/改 .ioc 某个键」。⚠️ 以下不属本包工具能力，命中时按 SKILL.md 的 CLI 等价通道与流程文档处理，不要期望 MCP 工具直接完成：「pio 构建 / Flash-RAM 尺寸」「烧进去看看 / 烧录」「串口有输出吗 / 串口捕获」「加一路串口/SPI/定时器（非 GPIO 外设增改）」。只读审计不写盘；写操作前必须备份 .ioc，生成后必须跑核验器并如实声明验证等级；不碰 testbeds/ 之外的模板原仓。"
-version: 0.7.4
+version: 0.8.0
 agent_created: true
 license: MIT
 compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证）；CubeMX 6.18.1（路径见 §0.2）；PlatformIO Core 6.x；MCP 可选，未注册用 §0.4
@@ -12,11 +12,14 @@ compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证�
 > **本文件是操作面，不是手册。** 逐条细则在 `references/`：`capability-boundary.md`（能力边界）·
 > `verify-contract.md`（核验器契约）· `regen-exit-codes.md`（`regen.sh`）· `diff-evidence.md`（取证判据）·
 > `pitfalls.md`（陷阱全文）。证据可信度：**✅** 本机实测 ｜ **📄** 引自模板仓/官方文档 ｜ **⚠️** 未实测。
-> 状态：v0.7.4 —— **收尾补丁版：无 BREAKING、无新增能力**——0.7.3 包体积双口径澄清、发版证据**只认 CI 的 LF pack**
-> （CRLF 纪律）、`tools/*` 编码加固（统一 UTF-8 + 控制台/管道分流）、版本轴扩到**五处**（含 `package-lock.json`
-> 根两处，见 `docs/DECISIONS.md` **D35 §35.7**）；核验器仍 **1.2.0**（7 项 / schema `/2`），工具清单 / 能力边界 /
-> `CUBEONE_*` 语义全部不变。详见 `docs/releases/2026-11-04-v0.7.4.md`。
-> **0.7.3 = 审定整改 W0–W6 的补丁版**：**无新增能力，但有一处 BREAKING behavior**——证据不成立时
+> 状态：v0.8.0 —— **契约增强 minor：MCP 输出侧升级，输入契约与判据零改动**——三工具补 **`outputSchema`**
+> （新增可选字段）、`structuredContent` 加 **64 KiB 上限**（超限头尾保留 + `_meta` 告警，未超限不注入）、
+> `tail()` 改**头尾保留**（首行 `verdict` 不再被截掉）、`ioc_field` / `ioc_backup` 加**并发文件锁**
+> （`.cubeone-lock`，超时 rc=2）。核验器仍 **1.2.0**（7 项 / schema `/2`），`inputSchema` 的
+> required / enum / additionalProperties **一字未改**。详见 `docs/releases/2026-11-05-v0.8.0.md`。
+> **0.7.4 = 收尾补丁版（无 BREAKING、无新增能力）**：0.7.3 包体积双口径澄清、发版证据**只认 CI 的 LF pack**
+> （CRLF 纪律）、`tools/*` 编码加固、版本轴扩到**五处**（含 `package-lock.json` 根两处，见 `docs/DECISIONS.md`
+> **D35 §35.7**）。**0.7.3 = 审定整改 W0–W6 的补丁版**：**无新增能力，但有一处 BREAKING behavior**——证据不成立时
 > `verify_generation.py` 由「静默放过」改判**退出码 2 且不落 `--json-out` / `--report-md`**；`ioc_field` 双层拒绝含
 > 换行符的 key / value（退出码 2），见 `docs/releases/2026-11-04-v0.7.3.md`。**0.7.2 = 0.7.1 的缺陷修复与工程化批次**：
 > **无新增能力**，但核验器有一处**判据语义变更**（`ProjectManager.CoupleFile=true` 的工程改扫 `--project-root` 下

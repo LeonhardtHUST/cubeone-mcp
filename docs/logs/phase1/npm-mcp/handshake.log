@@ -4,8 +4,8 @@
 # log=D:\Projects\GitHub\cubeone-mcp\docs\logs\phase1\regen-success\cubemx-generate.log
 # verify-materials=ok
 
-[PASS] T1 握手 — server=cubeone-mcp v0.7.4
-[PASS] T2 tools/list — ioc_backup, ioc_field, verify_generation
+[PASS] T1 握手 — server=cubeone-mcp v0.8.0
+[PASS] T2 tools/list — ioc_backup, ioc_field, verify_generation（outputSchema 3/3）
 [PASS] T3 resources/list — 7 个资源
 [PASS] T3b 读 SKILL.md — text/markdown
 [PASS] T4 ioc_field get — value=6.18.1
