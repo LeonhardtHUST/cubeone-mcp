@@ -319,3 +319,66 @@ def test_lock_timeout_zero_tries_once(tmp_path: Path, timeout_value: str) -> Non
 
     assert result.returncode == 2, result.stdout + result.stderr
     assert elapsed < 3.0, f"--lock-timeout 0 不该等待，实际 {elapsed:.2f}s"
+
+
+# ── F-2（0.8.1 / A2）：回收陈旧锁后允许**立即**重试一次 ──────────────────────
+
+
+def test_stale_lock_with_zero_timeout_succeeds_first_try(tmp_path: Path) -> None:
+    """陈旧锁 + `--lock-timeout 0` ⇒ **第一次就 rc=0**（旧行为是 rc=2、要跑第二次才成功）。
+
+    旧实现先 `_reclaim_stale_lock()` 再判 deadline，于是 `timeout=0` 时"刚把死锁收掉"立刻按
+    超时失败，还附一句「另一进程正在改同一工程」——与我们刚刚判明的"持有者已死"自相矛盾。
+    现在回收成功即 `continue`，不看 deadline。
+    """
+    project = _make_project(tmp_path)
+    ioc = project / "fake-board.ioc"
+    lock_path = project / LOCK_FILENAME
+    lock_path.write_text('{"pid": 999999, "tool": "ghost"}', encoding="utf-8")
+    old = time.time() - 400
+    os.utime(lock_path, (old, old))
+
+    result = _run(
+        IOC_FIELD, "--ioc", str(ioc), "--lock-timeout", "0",
+        "--", "set", "ProjectManager.AskForMigrate", "true",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "changed" in result.stdout, result.stdout
+    assert "[ioc_field][lock-timeout]" not in result.stderr, "不该再报锁超时"
+    assert "ProjectManager.AskForMigrate=true" in ioc.read_text(encoding="utf-8")
+    assert not lock_path.exists(), "正常路径结束后不该留下锁文件"
+
+
+def test_stale_lock_with_zero_timeout_backup_succeeds_first_try(tmp_path: Path) -> None:
+    """同一条修正对 `ioc_backup` 生效（两个脚本各持一份锁实现，必须都改）。"""
+    project = _make_project(tmp_path)
+    lock_path = project / LOCK_FILENAME
+    lock_path.write_text('{"pid": 999999, "tool": "ghost"}', encoding="utf-8")
+    old = time.time() - 400
+    os.utime(lock_path, (old, old))
+
+    result = _run(IOC_BACKUP, "--project", str(project), "--lock-timeout", "0")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert list(project.glob("*.ioc.bak")), "备份应真的生成"
+    assert not lock_path.exists()
+
+
+def test_fresh_lock_with_zero_timeout_still_times_out(tmp_path: Path) -> None:
+    """反向对照：锁**很新**时 `--lock-timeout 0` 仍必须 rc=2（这条修正不得放过活锁）。
+
+    没有这一条，"回收后重试"很容易被写成"无脑重试"，那就等于把互斥关掉了。
+    """
+    project = _make_project(tmp_path)
+    ioc = project / "fake-board.ioc"
+    (project / LOCK_FILENAME).write_text('{"pid": 1, "tool": "live"}', encoding="utf-8")
+
+    result = _run(
+        IOC_FIELD, "--ioc", str(ioc), "--lock-timeout", "0",
+        "--", "set", "ProjectManager.AskForMigrate", "true",
+    )
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "[ioc_field][lock-timeout]" in result.stderr
+    assert (project / LOCK_FILENAME).exists(), "活锁必须留着"

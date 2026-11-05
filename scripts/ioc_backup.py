@@ -89,25 +89,30 @@ class LockTimeout(RuntimeError):
         self.timeout = timeout
 
 
-def _reclaim_stale_lock(lock_path: str) -> None:
+def _reclaim_stale_lock(lock_path: str) -> bool:
     """锁文件 mtime 超过 ``LOCK_STALE_SECONDS`` 时回收它。
 
     用 ``os.replace`` 先改名到 ``.stale.<ts>`` 再删：两个进程同时判定"陈旧"时，
     **只有 rename 成功的那一个**会去删，另一个拿到 ``FileNotFoundError`` 静默放过。
     直接 ``unlink`` 会让两边都以为"我回收了"，且可能与真正持有者互相踩。
+
+    Returns:
+        ``True`` = 本次**确实回收了**一把陈旧锁（调用方应立刻重试，不要先看 deadline）；
+        ``False`` = 没回收（锁很新 / 已被别人回收 / 持有者刚释放）。
     """
     try:
         if time.time() - os.path.getmtime(lock_path) <= LOCK_STALE_SECONDS:
-            return
+            return False
     except OSError:
-        return
+        return False
     stale_path = f"{lock_path}.stale.{int(time.time())}"
     try:
         os.replace(lock_path, stale_path)
     except OSError:
-        return  # 别人先回收了 / 持有者刚释放：都不是错误
+        return False  # 别人先回收了 / 持有者刚释放：都不是错误
     with contextlib.suppress(OSError):
         os.unlink(stale_path)
+    return True
 
 
 @contextlib.contextmanager
@@ -134,7 +139,13 @@ def acquire_ioc_lock(
         try:
             fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
         except FileExistsError:
-            _reclaim_stale_lock(lock_path)
+            # F-2（0.8.1 A2）：**回收成功就无条件再试一次**，先别看 deadline。
+            # 否则 `--lock-timeout 0` 会死在"刚判明持有者已死（回收了）→ 立刻按超时报错，
+            # 还告诉用户『另一进程正在改同一工程』"——与我们刚得到的结论自相矛盾。
+            # 重试一次是安全的：陈旧锁已被移走，下一轮大概率直接 O_EXCL 成功；
+            # 若此刻真有人抢到，会再次进这里，而那时 mtime 是新的 ⇒ 回收返回 False ⇒ 走 deadline。
+            if _reclaim_stale_lock(lock_path):
+                continue
             if time.monotonic() >= deadline:
                 raise LockTimeout(lock_path, max(timeout, 0.0)) from None
             time.sleep(LOCK_POLL_INTERVAL)
