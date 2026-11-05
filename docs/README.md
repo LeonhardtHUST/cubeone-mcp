@@ -143,7 +143,8 @@
 | 文档 | 什么时候看 |
 |---|---|
 | [`releases/README.md`](releases/README.md) | **版本 × 内容 × 四证对照表**（tag / Release 正文 / npm / 看板回填），查"某个版本改了什么、证据齐不齐" |
-| [`releases/2026-11-05-v0.8.0.md`](releases/2026-11-05-v0.8.0.md) | **当前版本（v0.8.0）**：契约增强 minor——`outputSchema`（新增可选字段）/ `structuredContent` 64 KiB 上限（超限头尾保留 + `_meta`，未超限不注入）/ `tail()` 头尾保留 / `.cubeone-lock` 并发锁。**输入契约与 7 项判据零改动** |
+| [`releases/2026-11-05-v0.8.1.md`](releases/2026-11-05-v0.8.1.md) | **当前版本（v0.8.1）**：收尾补丁——0.8.0 Release 正文**行尾修正**（body 与 blob 现逐字节相等）/ 陈旧锁回收后**立即重试** / `_meta` 声明三工具对齐 / 正文纪律落地。**无 BREAKING、无新增能力**，`inputSchema` 与 7 项判据零改动 |
+| [`releases/2026-11-05-v0.8.0.md`](releases/2026-11-05-v0.8.0.md) | 历史版本（0.8.0）：契约增强 minor——`outputSchema`（新增可选字段）/ `structuredContent` 64 KiB 上限（超限头尾保留 + `_meta`，未超限不注入）/ `tail()` 头尾保留 / `.cubeone-lock` 并发锁。**输入契约与 7 项判据零改动** |
 | [`releases/2026-11-04-v0.7.4.md`](releases/2026-11-04-v0.7.4.md) | 历史版本（0.7.4）：收尾补丁版——0.7.3 包体积双口径澄清、发版证据只认 CI LF pack（CRLF 纪律）、`tools/*` 编码加固、版本轴扩到**五处** |
 | [`releases/2026-11-04-v0.7.3.md`](releases/2026-11-04-v0.7.3.md) | 历史版本（0.7.3）：审定整改 W0–W6 的补丁版——堵 G1 四类假绿（证据不成立统一 rc=2 且不落报告）、`.ioc` 双层拒绝换行注入、`regen.sh` 退出码归一；**一处 BREAKING behavior**，判据零改动 |
 | [`releases/2026-11-04-v0.7.2.md`](releases/2026-11-04-v0.7.2.md) | 历史版本（0.7.2）：两处用户可见缺陷修复 + 判据语义变更（`Core/Src/*.c` 多文件扫描）；四证齐全，版本轴同值（口径见 `DECISIONS.md` **D35 §35.7**，现为五处） |
