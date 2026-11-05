@@ -415,3 +415,78 @@ def test_npm_dist_tags_returns_none_after_two_timeouts(monkeypatch: pytest.Monke
     assert tags is None
     assert len(calls) == 2
     assert "超时" in message and "2/2" in message, message
+
+
+# ── ③ 空输出必须走重试并归因到"输出为空"（0.8.0 Q2b / F-1）──────────────────
+
+
+def _make_silent_npm_stub(dest: Path, counter: Path) -> Path:
+    """造一个**成功退出但零输出**的 npm 桩，返回其完整路径。
+
+    每次被调用往 ``counter`` 追加一行（用来断言"确实重试了"）。零输出是关键：
+    真实世界里 npm 在 half-open 连接 / 被信号打断时会**什么都没打印就退 0**，
+    旧实现 `json.loads(stdout or "{}")` 把这种情况当成"合法空对象"。
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        stub = dest / "npm-silent.cmd"
+        stub.write_text(
+            "@echo off\r\n"
+            f'echo .>> "{counter}"\r\n'
+            "exit /b 0\r\n",
+            encoding="utf-8",
+        )
+        return stub
+    stub = dest / "npm-silent"
+    stub.write_text(
+        f"#!/bin/sh\necho . >> '{counter.as_posix()}'\nexit 0\n",
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    return stub
+
+
+def test_network_silent_npm_output_is_red_and_retried(tmp_path: Path) -> None:
+    """`--network` + npm **零输出** ⇒ rc≠0、文案含「输出为空」、且**确实重试了一次**。
+
+    修复前：空输出被 `json.loads(stdout or "{}")` 当成 `{}` ⇒ 不重试、rc=0，并通过
+    「远端 latest=None ≠ 目标 0.7.4」把责任推给 registry —— 归因完全是错的。
+    """
+    repo = _make_repo_copy(tmp_path / "repo-silent")
+    counter = tmp_path / "npm-calls.txt"
+    stub = _make_silent_npm_stub(tmp_path / "bin-silent", counter)
+
+    proc = _run_check_with_npm_stub(repo, network=True, stub=stub)
+
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "[FAIL] npm dist-tags" in proc.stdout, proc.stdout
+    assert "输出为空" in proc.stdout, proc.stdout
+    assert "latest=None" not in proc.stdout, "空输出不该被归因成「registry 返回奇怪 dist-tags」"
+    calls = [line for line in counter.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(calls) == 2, f"空输出必须走一次重试（共 2 次），实际 {len(calls)} 次"
+
+
+def test_npm_dist_tags_retries_when_first_output_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """第一次「零输出但退出 0」、第二次正常 ⇒ 返回 dist-tags（rc 不红），并说明第 2 次才成功。"""
+    module = _load_module()
+    calls: list[tuple] = []
+
+    class _Result:
+        def __init__(self, returncode: int, stdout: str) -> None:
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(*args, **kwargs):
+        calls.append(args)
+        if len(calls) == 1:
+            return _Result(0, "")  # 成功退出但什么也没输出
+        return _Result(0, '{"latest": "0.8.0"}')
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    tags, note = module.npm_dist_tags(REPO_ROOT)
+
+    assert tags == {"latest": "0.8.0"}
+    assert len(calls) == 2, f"应重试一次，实际 {len(calls)} 次"
+    assert "第 2 次" in note

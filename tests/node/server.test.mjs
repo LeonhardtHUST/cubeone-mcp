@@ -951,6 +951,18 @@ describe("组8 tail 头尾保留（0.8.0 / Q4）", () => {
     assert.ok(out.startsWith(head));
     assert.ok(out.length <= 1000 + 64, `总长应接近 1000，实际 ${out.length}`);
   });
+
+  test("组8-4 headChars > n 时上界仍成立（F-3 回归，0.8.0 Q2b）", () => {
+    // 旧实现 `s.slice(-(n - headChars))` 在 headChars > n 时参数变正数，
+    // 变成"从第 N 位到末尾" ⇒ 输出 20167 字符，`n` 这个上界形同虚设。
+    const stdout = `${"H".repeat(50)}${"x".repeat(20000)}`;
+
+    const out = tail(stdout, 100, 2000);
+
+    assert.ok(out.length <= 164, `总长必须受 n=100 约束（允许标记语 ±64），实际 ${out.length}`);
+    assert.ok(out.includes("…(截断 "), "仍要有截断标记");
+    assert.ok(out.startsWith("H".repeat(50)), "头部预算被夹到 n 后仍应保留开头");
+  });
 });
 
 // ── 组9 · structuredContent 64 KiB 上限（0.8.0 / Q4）─────────────────

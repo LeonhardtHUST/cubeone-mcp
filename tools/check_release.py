@@ -406,8 +406,17 @@ def npm_dist_tags(
             tail_line = stderr[-1] if stderr else f"退出码 {completed.returncode}"
             last_message = f"npm view 失败：{tail_line}（第 {attempt}/{total} 次）"
             continue
+        # F-1（0.8.0 Q2b）：**空输出 ≠ `{}`**。
+        # 旧写法 `json.loads(completed.stdout or "{}")` 把"npm 什么都没输出"当成合法空对象，
+        # 于是：① 不重试就直接返回成功；② 下游把 `latest=None` 报成「registry 返回奇怪
+        # dist-tags」——**归因错了**。空输出发生在传输/进程层面，第一处置是**重试**，
+        # 两次都空才算失败，并且文案必须说"输出为空"。
+        stdout_text = (completed.stdout or "").strip()
+        if not stdout_text:
+            last_message = f"npm view 输出为空（第 {attempt}/{total} 次）"
+            continue
         try:
-            payload = json.loads(completed.stdout or "{}")
+            payload = json.loads(stdout_text)
         except json.JSONDecodeError:
             last_message = f"npm view 输出不是合法 JSON（第 {attempt}/{total} 次）"
             continue
