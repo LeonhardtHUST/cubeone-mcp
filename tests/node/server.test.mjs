@@ -1102,6 +1102,31 @@ describe("组10 outputSchema 契约（0.8.0 / Q5）", () => {
     assert.equal(field.inputSchema.additionalProperties, false);
   });
 
+  test("组10-5 三工具 `_meta` 的字段声明一致（0.8.1 / A3 回归）", () => {
+    // F-4 的原症状：`verify_generation` 把 `_meta` 展开成五个字段，另两个工具只写
+    // `{ type: "object" }`。粒度不一致本身不影响客户端（`_meta` 可选、都没加
+    // `additionalProperties:false`），但它意味着"同一份契约有三种写法"，很容易在
+    // 下一次改 `_meta` 时只改一处。这条断言把三者绑在一起。
+    const expected = ["limit_bytes", "original_bytes", "policy", "truncated", "truncated_fields"];
+
+    for (const def of TOOL_DEFS) {
+      const meta = def.outputSchema.properties._meta;
+      assert.ok(meta, `${def.name} 的 outputSchema 缺 _meta 声明`);
+      assert.equal(meta.type, "object", `${def.name} 的 _meta.type`);
+      assert.deepEqual(
+        Object.keys(meta.properties).sort(),
+        expected,
+        `${def.name} 的 _meta 字段集合与 verify_generation 不一致`,
+      );
+      // 仍然是可选字段、仍然不封闭
+      assert.ok(
+        !(def.outputSchema.required || []).includes("_meta"),
+        `${def.name} 不该把 _meta 放进 required（未截断时根本不注入）`,
+      );
+      assert.notEqual(meta.additionalProperties, false, `${def.name} 的 _meta 不该加 additionalProperties:false`);
+    }
+  });
+
   test("组10-4 tools/list 对外暴露的 def 含 outputSchema 且可 JSON 序列化（旧客户端忽略不报错）", () => {
     // 与 `ListToolsRequestSchema` 的过滤逻辑一致：只脱掉内部元数据字段。
     const publicDefs = TOOL_DEFS.map(({ pathArgs, writeActions, ...rest }) => rest);
