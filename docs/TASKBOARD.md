@@ -47,9 +47,10 @@
 
 - **已实测**：探针识别（ST-Link V2）、烧录（`Verified OK`）、寄存器回读、目视现象（红灯亮、绿蓝灭）
   ⇒ Phase 2 的 T2.1 / T2.3 置 `已完成`，GATE-2.0 / 2.1 置「已通过」。
-- **仍未实测、如实保留 `挂起`**：T2.2（FW_H7 / H723 构建）、T2.4（串口段与 `pio device monitor`，
-  本工程**未启用任何 USART**）、T2.5（S4 全链的串口段未闭合）、T2.6（负路径硬件版）。
-  GATE-2.2 因此只记「部分收口」。
+- **仍未实测、如实保留 `挂起`**：T2.4（串口段与 `pio device monitor`，本工程**未启用任何 USART**）、
+  T2.5（S4 全链的串口段未闭合）、T2.6（负路径硬件版）。
+  GATE-2.2 仍只记「部分收口」——**T2.2 已于 2026-11-05 完成**（FW_H7 无头装好、H723 `pio run` SUCCESS，L3），
+  但它只证明**构建链**可用：未烧录、未运行，板级证据仍归 T2.3 / T2.5。
 - **GATE-2.1 安全确认规则保留**：每次烧录前仍须显式确认目标板不在驱动执行器/继电器；
   不再以旧状态词为前提，也不因 L5 已达成就跳过。
 - 上述分段口径由 W2 批次写进 `SKILL.md` §6 与根 `README.md`，操作面与真源一致；
@@ -120,7 +121,7 @@
 | 任务ID | 任务 | Owner | 依赖 | 状态 | L 等级 | 证据链接 |
 |---|---|---|---|---|---|---|
 | T2.1 | 启用 `stm32-stlink`（改前备份）；doctor 实测探针；确认 X Pulse 探针类型（D6） | env-agent | GATE-2.0 | **已完成**（已实测 2026-11-04） | L5 | `docs/reports/phase2-bringup-2026-11-04.md` §1：`STLINK V2J35S7 (API v2)` / `0483:3748` / 目标电压 3.2387 V / `DPIDR 0x2ba01477` / `IDCODE 0x20036469`（DEV_ID 0x469）；GATE-2.0 接板条件已满足 |
-| T2.2 | 安装 FW_H7（优先 `swmgr install` 无头）；H723 testbed 跑通 `pio run` | env-agent | T1.5 | 挂起 | L3 | **未实测，如实保留**：FW_H7 安装与 H723 构建均无证据；接板日与 T2.5 同批处理 |
+| T2.2 | 安装 FW_H7（优先 `swmgr install` 无头）；H723 testbed 跑通 `pio run` | env-agent | T1.5 | 已完成 | L3 | **构建链可用（无板实测）**：`framework-stm32cubeh7@1.13.0`（110 MB）由 PlatformIO registry **无头装好**（无需 ST 账号 / 图形界面）；`pio run` **SUCCESS**（冷构建 35.75 s、增量 6.09 s），RAM **1584 B / 320 KB（0.48%）**、FLASH **5952 B / 1 MB（0.57%）**、`firmware.bin` **5952 B**，`-Werror` 下无告警。**首次构建曾失败**（`error: 'CSI_VALUE' undeclared`）：根因是 `testbeds/template-mcu-STM32H723-series/Core/Inc/stm32h7xx_hal_conf.h` 停在旧模板（只有 `HSI_VALUE`），与 `.ioc` 声明的 FW_H7 V1.13.0 不同步；已按 FW 模板逐字补齐 `CSI_VALUE` / `EXTERNAL_CLOCK_VALUE`，并记入模板「已知陷阱 D7」防复发。⚠️ **本项只证明构建链可用，未做烧录 / 运行**（板级证据仍归 T2.3 / T2.5）。修复提交在**模板原仓** `template-mcu-STM32H723-series` 的 `b8cbca9`（外层仓的 `testbeds/` 是 `.gitignore` 掉的克隆靶场，不入库） |
 | T2.3 | 烧录基线：G474 testbed 产物 → `flash_standalone`（reset=hard, run=true）→ 观察 LED/复位 | hil-agent | T2.1 | **已完成**（已实测 2026-11-04） | **L5** | `docs/reports/phase2-bringup-2026-11-04.md` §2/§4：烧录 `Verified OK` + `Resetting Target`、寄存器回读（`MODER 0xF7FFFFDF` / `ODR 0x00000000` bit2=0 / PC 在 Flash）、目视**红灯亮、绿蓝灭**，两条独立判据互证；复现命令见报告 §6 |
 | T2.4 | 串口链路：确认 UART→USB 通道与 COM 口；`pio_monitor_capture` 抓 boot log；SKILL.md 增补"串口验证" | hil-agent + skill-author | T2.3 | 挂起 | L5 | **未实测，如实保留**：`docs/reports/phase2-bringup-2026-11-04.md` §5 明写本工程**未启用任何 USART**（`Mcu.IP*` 只有 NVIC/RCC/SYS/TIM17）；`pio device monitor` / `pio_monitor_capture` 的波特率与超时、无 VCP 外接 USB-TTL 均无证据。要做须手改 `.ioc` 配 USART（非 GPIO，超出工具能力）+ 强制过 G1 |
 | T2.5 | **HIL 场景 S4**：`NUEDC_2027/G474/G474_01_gpio`～`G474_03_uart` 选一个跑全链（改配置→生成→核验→构建→烧录→串口） | scenario-tester + hil-agent | T1.3、T2.3、T2.4 | 挂起 | L5 | **前五段已由 R2 行实测**（`docs/reports/phase2-bringup-2026-11-04.md`：改配置 → 生成 → G1 PASS → 构建 → 烧录 → 寄存器回读 → 目视）；**串口段（T2.4）仍未实测**，全链未闭合 ⇒ 依赖未满足，如实保留挂起 |
@@ -211,17 +212,17 @@
 |---|---|---|---|---|---|---|---|
 | Phase 0 | 5 | **5**（T0.1–T0.5） | 0 | 0 | 0 | 0 | 0 |
 | Phase 1 | 9 | **9**（T1.1–T1.9） | 0 | 0 | 0 | 0 | 0 |
-| Phase 2 | 6 | **2**（T2.1、T2.3） | 0 | **4**（T2.2、T2.4–T2.6） | 0 | 0 | 0 |
+| Phase 2 | 6 | **3**（T2.1、T2.2、T2.3） | 0 | **3**（T2.4–T2.6） | 0 | 0 | 0 |
 | Phase 3 | 5 | **3**（T3.1、T3.2、T3.5） | 0 | 0 | **1**（T3.3） | **1**（T3.4） | 0 |
-| ‹Phase 0–3 小计› | **25** | **19** | **0** | **4** | **1** | **1** | **0** |
+| ‹Phase 0–3 小计› | **25** | **20** | **0** | **3** | **1** | **1** | **0** |
 | M1 修复批次 | 15 | **15**（M1、M2、M3、C0、C1、C2、C3、C4、R0.7.2、R1、R2、W0–W6、R0.7.4、R0.8.0、R0.8.1） | 0 | 0 | 0 | 0 | 0 |
-| **合计** | **40** | **34** | **0** | **4** | **1** | **1** | **0** |
+| **合计** | **40** | **35** | **0** | **3** | **1** | **1** | **0** |
 
 > 校验口径（**与表格逐格一致，W3 批次人工复核**）：Phase 0–3 内
 > `已完成 19 + 挂起 4 + 待开始 1 + 已关闭 1 = 25`；再加批次表的
 > `已完成 15（M1/M2/M3/C0–C4/R0.7.2/R1/R2/W0–W6/R0.7.4/R0.8.0/R0.8.1）= 15` ⇒ **40**。
-> 合计行、小计行均由脚本自算比对；散文的 **40** 与表格「合计 40 / 已完成 34」同值
-> （已完成 34 = 小计 19 + 批次 15；挂起 4 = 小计 4 + 批次 0）。
+> 合计行、小计行均由脚本自算比对；散文的 **40** 与表格「合计 40 / 已完成 35」同值
+> （已完成 35 = 小计 20 + 批次 15；挂起 3 = 小计 3 + 批次 0）。
 > **两段分开统计**是为了不让整改批次污染原计划的 25 条口径（`T0.5` 的"25 条任务"、§0 各处引用都按 Phase 0–3 计数）。
 > M1 已于 0.6.2 收口、M2 已于 0.7.0 收口、C0 已于 0.7.1 收口（均三证齐全）；M3 不发版，内容随 **0.7.1**（C0）带出。
 > C1–C4 已于 **2026-11-04 00:51** 收口（CI run `41749893723` 七 job 全绿，含新增 `windows` job——
@@ -294,3 +295,4 @@ GitHub remote：`D5 = 是`，仓址 `https://github.com/LeonhardtHUST/cubeone-mc
 | 2026-11-04 | **v0.7.4 收尾补丁发版（P1–P5）**：批次表追加 `R0.7.4` 一行、§4 快照批次 `12→13` / 合计 `37→38` / 已完成 `31→32`（散文同步）；台账 §1 加 `v0.7.4` 行、§2 加包内容行（**体积只标 CI LF 口径**，本机 `138.7 kB` 明确不作证据）；`docs/README.md` 索引补 `releases/2026-11-04-v0.7.4.md` 行。**四证（2026-11-04）**：tag `v0.7.4` → GitHub Release（正文入库 `docs/releases/2026-11-04-v0.7.4.md`，**先入库再发 Release**）→ npm `cubeone-mcp@0.7.4`（OIDC + provenance）→ 本行回填。**本版无 BREAKING、无新增能力**：工具清单 / 能力边界 / `CUBEONE_*` 语义 / 核验器 `1.2.0`（7 项 / schema `/2`）全部不变，无第 8 个 check id。**四件事**：① 0.7.3 包体积**双口径**澄清（`138.1 kB` 本机 CRLF vs `137.6 kB` CI LF，去 CR 后逐字节相等，**不追改已发布正文**）；② **CRLF 硬纪律**——发版证据只认 CI 的 LF pack（陷阱：`git status` 干净 ≠ 工作区逐字节等于 index）；③ `tools/*` **编码加固**（读 `errors="replace"`、子进程显式 UTF-8、控制台/管道分流、`.mjs` EPIPE 守卫）；④ 判据① 扩到 **`package-lock.json` 根两处 = 五处机器可验**（D35 §35.7，§35.2 step0 原文不改）。**如实记录两条前序失败**：(a) P3/P4 首次提交时同一文件两批改动被裹进 P4，**未推送前** `reset --mixed` 重建历史（现 P3 51 行 / P4 97 行，各自独立）；(b) 首次推送 CI 红（run `41852779388`），三个 job 只因 `test_handshake_reports_readable_error_in_non_utf8_env`——CI 的 pytest job 不跑 `npm ci`，`.mjs` 的静态 import 在参数校验前求值 ⇒ `ERR_MODULE_NOT_FOUND` 退 1；改为显式 `skipif`（"验证对象不可达"），**未放宽断言**；修复后 run `41853365368` 七 job 全绿（**该 run 属修复 commit `5c70bc9`**；发版 commit `0ac1ccd` 的 CI 是 `41855794312`，回填 commit `8f7d819` 的是 `41856132865`，三者均 7/7 绿） | software-engineer |
 | 2026-11-05 | **v0.8.0 契约增强 minor 发版（Q0–Q3）**：批次表追加 `R0.8.0` 一行、§4 快照批次 `13→14` / 合计 `38→39` / 已完成 `32→33`（散文同步）；台账 §1 加 `v0.8.0` 行、§2 加包内容行（**体积只标 CI LF 口径**）；`docs/README.md` 索引把 v0.8.0 列为当前版本。**四证（2026-11-05）**：tag `v0.8.0` → GitHub Release（正文入库 `docs/releases/2026-11-05-v0.8.0.md`）→ npm `cubeone-mcp@0.8.0`（OIDC + provenance）→ 本行回填。**四项交付**：Q0 `--network` 核证 npm 失败判红 + `CUBEONE_NPM` 可覆盖（`--network` 下查不到 ≠ 没问题；发布前门禁不查 npm）；Q1 三工具 `outputSchema` + `structuredContent` 64 KiB 上限（未超限**不注入** `_meta`）+ `tail()` 头尾保留；Q2 `.cubeone-lock` 并发锁（`--lock-timeout` 默认 10s、超时 rc=2、只读不加锁、Windows `CREATE_NEW`）；Q2b 两处小修。**契约零改动**：`scripts/verify_generation.py` 零 diff、`inputSchema` 零删除行。**如实记录**：发版前 QA 抓到两处缺陷（`tail()` 上界在 `headChars>n` 时失效、npm 空输出被当成 `{}` 而不重试并误归因），均先修后发，未带病发版 | software-engineer |
 | 2026-11-05 | **v0.8.1 收尾补丁发版（A1–A4）**：批次表追加 `R0.8.1` 一行、§4 快照批次 `14→15` / 合计 `39→40` / 已完成 `33→34`（散文同步）；台账 §1 加 `v0.8.1` 行、§2 加包内容行（体积只标 CI LF 口径）；`docs/README.md` 索引把 v0.8.1 列为当前版本。**四证（2026-11-05）**：tag `v0.8.1` → GitHub Release（**body 用 `git show HEAD:` 的 LF 内容发**，新纪律首次执行）→ npm `0.8.1`（OIDC + provenance）→ 本行回填。**四件事**：A1 0.8.0 body 行尾修正（**字节级核验通过**：13734 B / CR=0 / 与 blob 逐字节相等 / 字节差 −182、内容零变化）；A2 陈旧锁回收后立即重试（`--lock-timeout 0` 不再自相矛盾，**新鲜锁仍 rc=2**）；A3 `_meta` 三工具声明对齐；A4 正文纪律落地。**契约零改动**：`scripts/verify_generation.py` 零 diff、`inputSchema` 零删除行。 | software-engineer |
+| 2026-11-05 | **T2.2 收口（FW_H7 + H723 构建，L3）**：Phase 2 已完成 `2→3`、挂起 `4→3`，小计已完成 `19→20`，合计已完成 `34→35`（合计任务数不变，仍 40）。**真实证据**：`framework-stm32cubeh7@1.13.0` 无头安装（110 MB，PlatformIO registry，无需 ST 账号）；`pio run` **SUCCESS**，RAM `1584 B/320 KB (0.48%)`、FLASH `5952 B/1 MB (0.57%)`、`firmware.bin` `5952 B`，`-Werror` 无告警。**首次构建失败如实记录**：`'CSI_VALUE' undeclared` —— hal_conf 停在旧模板、与 `.ioc` 声明的 FW_H7 1.13.0 不同步；修复提交在**模板原仓** `template-mcu-STM32H723-series` 的 `b8cbca9`。⚠️ 只证构建链，未烧录/运行；GATE-2.2 仍记部分收口。 | software-engineer |

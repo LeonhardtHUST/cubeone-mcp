@@ -104,6 +104,17 @@
    - ⇒ 附带的**新纪律**已写进 [`releases/README.md`](releases/README.md) 的「发版证据口径」：
      `--notes-file` 必须指向 `git show HEAD:<path>` 导出的 **LF** blob（或先把工作区文件重检出为 LF），
      判据是"与 **HEAD blob** 逐字一致"，不是"与工作区文件一致"。
+8. **`testbeds/template-mcu-STM32G474-series` 缺 board 定义（2026-11-05 T2.2 勘察时发现，**暂不修、只登记**）**：
+   该模板 `platformio.ini` 写 `board = genericSTM32G474VE` + `boards_dir = boards`，但**目录下没有 `boards/`**；
+   而 `genericSTM32G474VE` 并不是 `ststm32@20.0.0` 的内置 board（内置只有 `nucleo_g474re` / `weact_g474ceu6`）
+   ⇒ `pio run` 在这里**必然**报 `UnknownBoard`，与代码无关。
+   - **与 R2 的实际接板工程不是同一个**：R2（`docs/reports/phase2-bringup-2026-11-04.md`）用的是
+     `testbeds/xpulse-min`，它**自带** `boards/genericSTM32G474VE.json`；`testbeds/nuedc/G474_01_gpio` 也自带。
+     所以 **R2 的 L5 结论不受影响**，本项只是"拿 G474 模板当新工程起点"的人会撞上。
+   - **影响面**：T2.4 / T2.5 若要用该模板，需先补 `boards/genericSTM32G474VE.json`（可从 `xpulse-min` 复制）
+     或把 `board` 改成平台内置 id。
+   - **为什么现在不修**：`testbeds/` 是 `.gitignore` 掉的**克隆靶场**（`.gitignore:9`，注释写明"原仓改动必须发生在原仓自己"），
+     修它要落到模板原仓 `template-mcu-STM32G474-series` 并重新分发；本轮只做 T2.2，不扩范围。**待主理人/用户安排**。
 
 ## 3. 报告与证据（`reports/`）
 
