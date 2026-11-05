@@ -229,3 +229,31 @@ def test_restore_without_sidecar_warns_but_restores(fake_project: Path) -> None:
     assert result.returncode == ib.EXIT_OK, result.stdout + result.stderr
     assert "缺少完整性摘要" in result.stdout, f"必须在 stdout 告警（stderr 会被判成失败），实际：{result.stdout}"
     assert ioc.read_text(encoding="utf-8") == FAKE_IOC
+
+
+# ── 0.8.0 / Q3：并发锁（写操作加锁、只读不加锁、用完不留痕）─────────────────
+
+
+def test_backup_creates_and_releases_lock(tmp_path: Path) -> None:
+    """备份结束（无论成败）锁文件都必须被释放——否则下一次调用一上手就抢不到锁。"""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "board.ioc").write_text("MxCube.Version=6.18.1\n", encoding="utf-8")
+
+    result = ib.main(["--project", str(project)])
+
+    assert result == ib.EXIT_OK, result
+    assert list(project.glob("*.ioc.bak"))
+    assert not (project / ib.LOCK_FILENAME).exists(), "锁文件残留会让后续调用直接超时"
+
+
+def test_list_does_not_create_lock(tmp_path: Path) -> None:
+    """`--list` 只读 ⇒ 不加锁、不建锁文件。"""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "board.ioc").write_text("MxCube.Version=6.18.1\n", encoding="utf-8")
+
+    result = ib.main(["--project", str(project), "--list"])
+
+    assert result == ib.EXIT_OK, result
+    assert not (project / ib.LOCK_FILENAME).exists()

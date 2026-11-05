@@ -234,3 +234,29 @@ def test_signal_write_is_not_blocked_by_capability_boundary(tmp_path: Path) -> N
     assert "PA9.Signal=GPIO_Input" not in after
     summary = iof.set_value(path, "PA9.Signal", "USART1_TX")
     assert summary["changed"] is False
+
+
+# ── 0.8.0 / Q3：并发锁不该在正常路径上留下痕迹 ───────────────────────────────
+
+
+def test_set_leaves_no_lock_file_behind(tmp_path: Path) -> None:
+    """正常写盘结束后**不留锁文件**：锁是"用完即弃"的，残留会毒化下一次调用。"""
+    ioc = tmp_path / "board.ioc"
+    ioc.write_text("ProjectManager.AskForMigrate=false\n", encoding="utf-8", newline="\n")
+
+    result = iof.main(["--ioc", str(ioc), "--", "set", "ProjectManager.AskForMigrate", "true"])
+
+    assert result == iof.EXIT_OK
+    assert not (tmp_path / iof.LOCK_FILENAME).exists()
+    assert "ProjectManager.AskForMigrate=true" in ioc.read_text(encoding="utf-8")
+
+
+def test_get_does_not_create_lock_file(tmp_path: Path) -> None:
+    """`get` 是只读 ⇒ **连锁文件都不碰**（只读命令不该在工程目录里留下任何东西）。"""
+    ioc = tmp_path / "board.ioc"
+    ioc.write_text("ProjectManager.AskForMigrate=false\n", encoding="utf-8", newline="\n")
+
+    result = iof.main(["--ioc", str(ioc), "--", "get", "ProjectManager.AskForMigrate"])
+
+    assert result == iof.EXIT_OK
+    assert not (tmp_path / iof.LOCK_FILENAME).exists()

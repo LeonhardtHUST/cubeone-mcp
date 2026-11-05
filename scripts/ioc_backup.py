@@ -46,12 +46,16 @@ git 之外的**第二道保险**：工程还没进版本库、或者 ``.ioc`` �
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
 import shutil
+import socket
 import sys
 import tempfile
+import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -64,6 +68,98 @@ SCHEMA = "platform32.ioc_backup/1"
 EXIT_OK = 0
 EXIT_NOT_FOUND = 1
 EXIT_INPUT_ERROR = 2
+
+# ── 并发写锁（0.8.0 / Q3）────────────────────────────────────────────
+# 与 `scripts/ioc_field.py` 里那份**同款、各持一份**（本仓惯例：这几个脚本必须能单独拷走就用，
+# 不引入共享模块）。两个工具对**同一工程目录**用**同一个锁文件** ⇒ 天然互斥。
+# `--list` 是只读，**不加锁**（不写盘的命令不该被别人的写操作排队挡住）。
+LOCK_FILENAME = ".cubeone-lock"
+LOCK_STALE_SECONDS = 300.0  # 持锁进程崩溃后，锁超过 5 分钟视为陈旧
+LOCK_POLL_INTERVAL = 0.1
+LOCK_DEFAULT_TIMEOUT = 10.0
+TOOL_NAME = "ioc_backup"
+
+
+class LockTimeout(RuntimeError):
+    """在超时预算内没能拿到锁（→ 退 2：属"环境/输入错误"，不是"域内结论"）。"""
+
+    def __init__(self, lock_path: str, timeout: float) -> None:
+        super().__init__(f"无法在 {timeout:g}s 内获取锁：{lock_path}")
+        self.lock_path = lock_path
+        self.timeout = timeout
+
+
+def _reclaim_stale_lock(lock_path: str) -> None:
+    """锁文件 mtime 超过 ``LOCK_STALE_SECONDS`` 时回收它。
+
+    用 ``os.replace`` 先改名到 ``.stale.<ts>`` 再删：两个进程同时判定"陈旧"时，
+    **只有 rename 成功的那一个**会去删，另一个拿到 ``FileNotFoundError`` 静默放过。
+    直接 ``unlink`` 会让两边都以为"我回收了"，且可能与真正持有者互相踩。
+    """
+    try:
+        if time.time() - os.path.getmtime(lock_path) <= LOCK_STALE_SECONDS:
+            return
+    except OSError:
+        return
+    stale_path = f"{lock_path}.stale.{int(time.time())}"
+    try:
+        os.replace(lock_path, stale_path)
+    except OSError:
+        return  # 别人先回收了 / 持有者刚释放：都不是错误
+    with contextlib.suppress(OSError):
+        os.unlink(stale_path)
+
+
+@contextlib.contextmanager
+def acquire_ioc_lock(
+    lock_dir: str | os.PathLike[str],
+    timeout: float = LOCK_DEFAULT_TIMEOUT,
+) -> Iterator[str]:
+    """对工程目录加排他锁（锁文件 ``<dir>/.cubeone-lock``）。
+
+    Args:
+        lock_dir: 锁文件所在目录（``--project`` 目录）。
+        timeout: 最长等待秒数；``0`` 表示只尝试一次、立即超时。
+
+    Yields:
+        锁文件路径。
+
+    Raises:
+        LockTimeout: 超时仍拿不到锁。
+        OSError: 锁文件无法创建（权限 / 目录不存在），由调用方按输入错误处理。
+    """
+    lock_path = os.path.join(os.fspath(lock_dir), LOCK_FILENAME)
+    deadline = time.monotonic() + max(timeout, 0.0)
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except FileExistsError:
+            _reclaim_stale_lock(lock_path)
+            if time.monotonic() >= deadline:
+                raise LockTimeout(lock_path, max(timeout, 0.0)) from None
+            time.sleep(LOCK_POLL_INTERVAL)
+            continue
+        try:
+            os.write(
+                fd,
+                json.dumps(
+                    {
+                        "pid": os.getpid(),
+                        "host": socket.gethostname(),
+                        "tool": TOOL_NAME,
+                        "ts": time.time(),
+                    },
+                    ensure_ascii=False,
+                ).encode("utf-8"),
+            )
+        finally:
+            os.close(fd)
+        break
+    try:
+        yield lock_path
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(lock_path)
 
 #: 备份后缀（模板惯例，见 ``template-mcu-*/AGENTS.md`` 与 ``.gitignore``）。
 BACKUP_SUFFIX = ".bak"
@@ -351,12 +447,23 @@ def build_parser() -> argparse.ArgumentParser:
             "退出码：0=成功 1=未找到 .ioc（或还原时缺 .bak） 2=参数/IO 错误\n"
             "      注意：2 也可能表示**还原前的备份完整性校验失败**（.bak 的 sha256 与\n"
             "      <name>.ioc.bak.sha256 不一致，疑似篡改或部分写入；此时 .ioc 未被改动）\n"
+            "      2 还可能是**并发锁超时**（`[ioc_backup][lock-timeout]`：另一进程正在改同一工程）\n"
             "示例：python scripts/ioc_backup.py --project firmware --json-out backup.json"
         ),
     )
     parser.add_argument("--project", required=True, help="工程根目录（含 .ioc 的目录）")
     parser.add_argument("--restore", action="store_true", help="从 .ioc.bak 还原 .ioc")
     parser.add_argument("--list", action="store_true", dest="list_only", help="只列出 .ioc，不写盘")
+    parser.add_argument(
+        "--lock-timeout",
+        type=float,
+        default=LOCK_DEFAULT_TIMEOUT,
+        dest="lock_timeout",
+        help=(
+            "获取并发写锁的最长等待秒数（默认 10；0=不等待、只尝试一次）。"
+            "锁超时退 2；--list 只读、不加锁"
+        ),
+    )
     parser.add_argument("--json-out", default=None, dest="json_out", help="结构化 JSON 输出路径")
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__} (schema {SCHEMA})"
@@ -441,7 +548,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"{ioc_path}\t{ioc_path.stat().st_size} bytes")
         elif args.restore:
             action = "restore"
-            records = restore_project(project_dir)
+            # 0.8.0 / Q3：还原是写操作 ⇒ 加锁；`--list` 只读不加锁。
+            with acquire_ioc_lock(project_dir, args.lock_timeout):
+                records = restore_project(project_dir)
             if not records:
                 print(
                     "[ioc_backup][not-found] 没有任何 .ioc.bak 可还原；"
@@ -453,12 +562,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"restored {record.ioc} ← {record.backup} ({record.bytes} bytes)")
         else:
             action = "backup"
-            records = backup_project(project_dir)
+            with acquire_ioc_lock(project_dir, args.lock_timeout):
+                records = backup_project(project_dir)
             for record in records:
                 print(
                     f"backed up {record.ioc} → {record.backup} "
                     f"({record.bytes} bytes, sha256={record.sha256[:12]}…)"
                 )
+    except LockTimeout as error:
+        # rc=2 与"输入错误"同码：都是"没跑成"，不是"跑完的结论是失败"。
+        print(
+            f"[ioc_backup][lock-timeout] 无法在 {error.timeout:g}s 内获取锁：{error.lock_path}"
+            "（另一进程正在改同一工程？用 --lock-timeout 调大等待）",
+            file=sys.stderr,
+        )
+        return EXIT_INPUT_ERROR
     except BackupIntegrityError as error:
         # 必须在 OSError 之前：这不是"IO 出错"，而是"备份不可信"——处置完全不同
         # （重新备份 / 找回正确快照 vs. 查权限和磁盘）。.ioc 此时一个字节都没动。

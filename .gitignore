@@ -80,3 +80,9 @@ htmlcov/
 # Phase 2/S4 预演的原始日志（C3，2026-11-04）：与 phase0–3 同约定，只留本地；
 # 入库的是 docs/reports/ 下的分析报告。
 docs/logs/phase4/
+
+# 并发写锁（0.8.0 / Q3）：`ioc_field` / `ioc_backup` 在工程目录里建的 `.cubeone-lock`，
+# 以及陈旧回收时改名出来的 `.cubeone-lock.stale.<ts>`。两者都是**运行时产物**，
+# 谁都不该 commit —— 尤其锁文件，提交它等于让下一次调用"一上手就抢不到锁"。
+.cubeone-lock
+.cubeone-lock.stale.*

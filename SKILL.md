@@ -91,6 +91,15 @@ compatibility: Python 3.11+（CI 仅覆盖 3.11 / 3.13，更早版本未验证�
 `checks[].id` 的 `enum` 只是把 F-1 契约显式化。执行失败 / 输入错误时只有文本 + `isError`，
 **可能没有** `structuredContent`。
 
+⚠️ **并发写锁**（0.8.0 起）：`ioc_field` 真写盘（`set` 且非 `--dry-run`）与 `ioc_backup` 的
+`backup` / `restore`，会先对**工程目录**加排他锁 `.cubeone-lock`（`os.open(O_CREAT|O_EXCL)`，
+Win32 上等价 `CreateFileW(CREATE_NEW)`，**不依赖 `fcntl`**；同一套代码跨平台）。
+拿不到锁就等 `--lock-timeout`（**默认 10s**，CLI 可调；MCP 侧不新增参数、用默认值），
+超时 ⇒ **rc=2 + `isError`**、stderr `[<tool>][lock-timeout]`、`.ioc` **一个字节都不动**。
+`--list` / `get` / `--dry-run` 是只读，**不加锁**；锁文件存活超 300s 视为陈旧、自动回收。
+⚠️ 本锁只覆盖这两个脚本的**进程级**互斥；`regen.sh` 的**跨步骤**并发仍不在范围内
+（两个 `regen.sh` 同时跑同一工程仍可能互踩——v0.7.3 已知限制保留，别把这条锁当万能钥匙）。
+
 ### 0.2 CubeMX / PlatformIO 定位（两通道共用）
 
 CubeMX = `C:\ST\STM32CubeMX\STM32CubeMX.exe`（📄 不在 `C:\Program Files\…`），JRE 同目录
@@ -173,7 +182,7 @@ Phase 2 烧录命令 `pio run -d <工程> -t upload` **已实测（2026-11-04，
 |---|---|
 | **生成核验（G1 硬关卡）** | `scripts/verify_generation.py` —— 契约见 `references/verify-contract.md` |
 | 备份 → 生成 → 核验 → 失败回滚 | `scripts/regen.sh <工程> [-e …] [-o …] [--require-clean] [--fail-fast-on-migrate]` —— 见 `references/regen-exit-codes.md`。**包内可用**，但编排 CubeMX 生成需本机存在 CubeMX/JRE（路径可用 `ST_CUBEMX_JRE`/`ST_CUBEMX_EXE` 覆盖） |
-| `.ioc` 字段读写 / 备份还原 | `scripts/ioc_field.py`、`ioc_backup.py --project <工程根> [--restore\|--list]`。备份会同时落 `<name>.ioc.bak.sha256` 旁路摘要；`--restore` 先校验摘要再原子替换（不一致 → 拒还原、退出码 2、`.ioc` 不动；无摘要的旧备份 → 警告后照常还原）。**不要手删/手改 `.bak.sha256`**——删了就等于放弃篡改检测 |
+| `.ioc` 字段读写 / 备份还原 | `scripts/ioc_field.py`、`ioc_backup.py --project <工程根> [--restore\|--list]`。备份会同时落 `<name>.ioc.bak.sha256` 旁路摘要；`--restore` 先校验摘要再原子替换（不一致 → 拒还原、退出码 2、`.ioc` 不动；无摘要的旧备份 → 警告后照常还原）。**不要手删/手改 `.bak.sha256`**——删了就等于放弃篡改检测。0.8.0 起写盘前加 `.cubeone-lock`（`--lock-timeout` 默认 10s，超时 rc=2 且不动文件） |
 
 ### 1.2 工具面：本包 3 工具 与 外部 server（两条通道，别混）
 
